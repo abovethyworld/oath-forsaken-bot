@@ -1,0 +1,1 @@
+{"dependencies":{"discord.js":"^14.16.0","dotenv":"^16.4.0","googleapis":"^185.0.0","luxon":"^3.5.0"},"description":"Custom Discord bot for an OSRS clan: button roles, rules/strike embeds, welcome messages, strike tracking.","license":"MIT","main":"src/index.js","name":"osrs-clan-bot","scripts":{"start":"node src/index.js"},"version":"1.0.0"}
