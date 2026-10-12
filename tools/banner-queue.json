@@ -1,0 +1,41 @@
+{
+  "done": [
+    {
+      "channel": "1558393177726259241",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558667051890114590/fixed-banner-bosses.png",
+      "label": "1-bosses-strike",
+      "message": "1558536256693215234"
+    },
+    {
+      "channel": "1558393177726259241",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558667182488027236/fixed-banner-kril.png",
+      "label": "2-yama-rules",
+      "message": "1558536245787893802"
+    },
+    {
+      "channel": "1558399101454786670",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558662368182018118/final-banner-map.png",
+      "label": "3-map-gameserver",
+      "message": "1558537746665185393"
+    },
+    {
+      "channel": "1558399101454786670",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558662158047387668/final-banner-wom.png",
+      "label": "4-wom-weeklycomps",
+      "message": "1558655457059409961"
+    },
+    {
+      "channel": "1558399101454786670",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558664560083214417/final-banner-lanscape.png",
+      "label": "5-lanscape-interests",
+      "message": "1558655572520214623"
+    },
+    {
+      "channel": "1558399101454786670",
+      "image": "https://cdn.discordapp.com/attachments/1558458301627506788/1558665193716846612/final-banner-gryphon.png",
+      "label": "6-gryphon-events",
+      "message": "1558655339380088863"
+    }
+  ],
+  "pending": []
+}
