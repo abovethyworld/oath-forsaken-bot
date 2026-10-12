@@ -115,7 +115,7 @@ Things Gavin needs to do to unblock the dev team:
 - [x] Invite Ashton as collaborator (done 2026-10-12)
 - [x] Invite Nick as collaborator (done 2026-10-12)
 - [x] Push current bot code to the repo (done 2026-10-12)
-- [ ] Share bot token with Ashton/Nick via Discord DM (never in chat)
+- [x] Share bot token with Ashton/Nick via Discord DM (done 2026-10-12)
 - [ ] Create test bot application in Discord Developer Portal (for test branch workflow)
 - [ ] Create `test` branch in repo
 - [ ] Get clan-holder alt to total level 150 (for CC ownership transfer)
