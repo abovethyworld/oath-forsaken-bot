@@ -116,8 +116,8 @@ Things Gavin needs to do to unblock the dev team:
 - [x] Invite Nick as collaborator (done 2026-10-12)
 - [x] Push current bot code to the repo (done 2026-10-12)
 - [x] Share bot token with Ashton/Nick via Discord DM (done 2026-10-12)
-- [ ] Create test bot application in Discord Developer Portal (for test branch workflow)
-- [ ] Create `test` branch in repo
+- [ ] Create test bot application in Discord Developer Portal (for test branch workflow) — app created 2026-10-12, on oathbreakers team (token + invite URL pending)
+- [x] Create `test` branch in repo (done 2026-10-12)
 - [ ] Get clan-holder alt to total level 150 (for CC ownership transfer)
 - [ ] Create clan Google account (Ashton wants Drive/Calendar access — add him as manager)
 - [ ] Set up Ko-fi page + separate clan PayPal account
