@@ -1,0 +1,95 @@
+# Bot Ideas — Brainstorm (2026-10-12)
+
+Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
+
+## 1. Welcome ping in welcome chat
+
+**Idea:** When someone joins, bot posts in a welcome channel and pings the Staff role so someone reviews them.
+
+**Notes:**
+- Need a dedicated #welcome channel (or reuse #joins-and-leaves?)
+- Ping should be Staff role, not @everyone
+- Could include their join date, account age (alt detection)
+- Risk: ping fatigue if lots of joins. Consider only pinging during certain hours or batching.
+
+## 2. Revisit the auto DM
+
+**Idea:** Review what the bot DMs to new members on join.
+
+**Notes:**
+- Need to see current DM text first (check src/)
+- Should match the new "New here?" flow: apply → approve → grab roles
+- Keep it short. Link #rules, #apply-here.
+- Don't duplicate what's already in #apply-here welcome panel.
+
+## 3. Auto-announce rank ups in general
+
+**Idea:** When someone ranks up (total level), bot announces in #general. Only for ranks above the first one (so no announcement for Wizard, but yes for Necromancer+).
+
+**Notes:**
+- "Above the first time rank" = skip Wizard [0-499], announce everything else
+- Could include their old rank → new rank, total level
+- Cooldown to avoid spam if someone jumps multiple ranks at once
+- This is great for engagement — people love public recognition
+
+## 4. Ticket transcripts
+
+**Idea:** When a ticket closes, export the transcript.
+
+**Notes:**
+- Options: HTML file, plain text, or post to a staff-only #transcripts channel
+- Should include timestamps, usernames, all messages
+- Useful for appeals, disputes, accountability
+- discord-html-transcripts is the standard npm package for this
+
+## 5. WOM total level → auto role
+
+**Idea:** Bot checks Wise Old Man API for a member's total level and auto-assigns the matching rank role.
+
+**Notes:**
+- This is the big one. WOM API is free: https://api.wiseoldman.net/v2/players/{username}
+- Flow: member links RSN → bot polls WOM periodically → assigns role based on total level brackets
+- Need to handle: name changes, unranked players, API downtime
+- Should it remove old rank when they level up? Yes, keep only current.
+- Frequency: daily check is probably enough (not real-time)
+- This replaces manual rank assignment entirely
+
+## 6. Multi-type ticket buttons (like EG)
+
+**Idea:** #contact-staff gets three buttons: Report, Inquiry, Claim Reward — instead of one generic ticket.
+
+**Notes:**
+- Report → for rule violations, goes to mods (Inquisitor+)
+- Inquiry → general questions, goes to all staff
+- Claim Reward → for event/bingo winnings, goes to Ritualist+
+- Each creates a differently-labeled ticket channel
+- Deferred from earlier — needs bot code changes + testing
+- This is a bigger build. Probably after the GitHub migration so Ashton/Nick can help.
+
+## 7. Hidden main channels
+
+**Idea:** When someone applies as a main (Unbound), they get access to hidden main-only channels. One would be for gear collateral/lending.
+
+**Notes:**
+- Need a "Main" flag on the user (from application type)
+- Channels: #main-gear-collat, maybe #main-chat?
+- Gear collat channel: for mains to coordinate lending with collateral (ties into Rule 2)
+- Permissions: only visible to Unbound role holders + staff
+- Could also gate by verification (linked RSN is actually a main?)
+
+---
+
+## Gavin's Todo — For Ashton & Nick (Bot)
+
+Things Gavin needs to do to unblock the dev team:
+
+- [ ] Create private GitHub repo for the bot
+- [ ] Invite Ashton and Nick as collaborators
+- [ ] Push current bot code to the repo
+- [ ] Share bot token with Ashton/Nick via Discord DM (never in chat)
+- [ ] Get clan-holder alt to total level 150 (for CC ownership transfer)
+- [ ] Create clan Google account
+- [ ] Scope bot permissions down from Administrator to read/write text only
+- [ ] Optional: purchase oathforsaken.cc domain
+
+Once the repo is up, Ashton can start the Dockerfile + CI pipeline, and Nikolai can set up hosting.
