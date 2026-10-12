@@ -77,18 +77,50 @@ Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 - Permissions: only visible to Unbound role holders + staff
 - Could also gate by verification (linked RSN is actually a main?)
 
+## 8. Comp history tracker
+
+**Idea:** Record every SOTW/BOTW/ROTW comp with its time period so staff don't repeat events.
+
+**Notes:**
+- Auto-log when comp ends: type, skill/boss/raid, start/end dates, winners
+- `/comp-history` to browse, `/comp-history search [skill]` for "when did we last do X?"
+- Warn when starting a comp if that skill/boss ran recently
+- Open question: auto-log vs manual `/comp-log`? Auto is cleaner, manual is simpler v1
+
+## 9. Ko-fi donations (Ashton's idea 2026-10-12)
+
+**Idea:** Ko-fi page for clan donations → PayPal. Use for bonds (bingo prizes), server costs, event rewards.
+
+**Notes:**
+- Ko-fi takes 0% on tips (PayPal/Stripe take their normal cut)
+- Separate clan PayPal account recommended — keeps clan money clean, trust/transparency
+- ko-fi.com/features
+
+## 10. Test bot + branch workflow (Ashton's idea 2026-10-12)
+
+**Idea:** Test branch + test bot so changes get verified before hitting the real bot.
+
+**Notes:**
+- Workflow: feature branch → PR review → merge to `test` → test bot → merge to `main` → real bot
+- Needs: second bot app in Discord Developer Portal (test bot token), `test` branch, Ashton's Dockerfile + CI
+- AI coding agent handles code + pushes; Gavin approves merges; Ashton handles infra
+
 ---
 
 ## Gavin's Todo — For Ashton & Nick (Bot)
 
 Things Gavin needs to do to unblock the dev team:
 
-- [ ] Create private GitHub repo for the bot
-- [ ] Invite Ashton and Nick as collaborators
-- [ ] Push current bot code to the repo
+- [x] Create private GitHub repo for the bot (done 2026-10-12)
+- [x] Invite Ashton as collaborator (done 2026-10-12)
+- [ ] Invite Nick as collaborator (waiting on his username)
+- [x] Push current bot code to the repo (done 2026-10-12)
 - [ ] Share bot token with Ashton/Nick via Discord DM (never in chat)
+- [ ] Create test bot application in Discord Developer Portal (for test branch workflow)
+- [ ] Create `test` branch in repo
 - [ ] Get clan-holder alt to total level 150 (for CC ownership transfer)
-- [ ] Create clan Google account
+- [ ] Create clan Google account (Ashton wants Drive/Calendar access — add him as manager)
+- [ ] Set up Ko-fi page + separate clan PayPal account
 - [ ] Scope bot permissions down from Administrator to read/write text only
 - [ ] Optional: purchase oathforsaken.cc domain
 
