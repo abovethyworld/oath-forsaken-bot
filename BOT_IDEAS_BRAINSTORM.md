@@ -113,7 +113,7 @@ Things Gavin needs to do to unblock the dev team:
 
 - [x] Create private GitHub repo for the bot (done 2026-10-12)
 - [x] Invite Ashton as collaborator (done 2026-10-12)
-- [ ] Invite Nick as collaborator (waiting on his username)
+- [x] Invite Nick as collaborator (done 2026-10-12)
 - [x] Push current bot code to the repo (done 2026-10-12)
 - [ ] Share bot token with Ashton/Nick via Discord DM (never in chat)
 - [ ] Create test bot application in Discord Developer Portal (for test branch workflow)
