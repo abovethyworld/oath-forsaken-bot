@@ -47,6 +47,15 @@ function storyKey(name) {
   return (name || '').toLowerCase().split(' ')[0]; // "Initiate (Under 1 month)" -> "initiate"
 }
 
+const SENIORITY_ROLE_IDS = {
+  initiate: '1558452023790276659',
+  acolyte: '1558452012797136960',
+  bloodsworn: '1558452002319769631',
+  revenant: '1558451991448129628',
+  heretic: '1558451981562151062',
+  godslayer: '1558451970883453003',
+};
+
 async function postRankUpStory(guild, member, rankName) {
   try {
     const key = storyKey(rankName);
@@ -58,8 +67,9 @@ async function postRankUpStory(guild, member, rankName) {
     const story = isIron ? stories.iron : stories.main;
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
+    const roleId = SENIORITY_ROLE_IDS[key];
     const embed = new EmbedBuilder()
-      .setTitle(`⛧ ${rankName.split(' ')[0]} ⛧`)
+      .setTitle(`⛧ <@&${roleId}> ⛧`)
       .setDescription(`<@${member.id}>\n\n*${story}*`)
       .setColor(ZAMORAK_RED)
       .setThumbnail(member.user.displayAvatarURL());
