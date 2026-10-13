@@ -69,8 +69,7 @@ async function postRankUpStory(guild, member, rankName) {
     if (!channel) return;
     const roleId = SENIORITY_ROLE_IDS[key];
     const embed = new EmbedBuilder()
-      .setTitle(`⛧ ${rankName.split(' ')[0]} ⛧`)
-      .setDescription(`<@${member.id}> — <@&${roleId}>\n\n*${story}*`)
+      .setDescription(`⛧ <@&${roleId}> ⛧\n<@${member.id}>\n\n*${story}*`)
       .setColor(ZAMORAK_RED)
       .setThumbnail(member.user.displayAvatarURL());
     await channel.send({ embeds: [embed] }).catch(() => {});
