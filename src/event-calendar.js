@@ -2,12 +2,27 @@
 // Reads the public "Oath Forsaken Event Calendar" via API key,
 // posts a Zamorak-themed 2-week agenda embed in #event-calendar.
 // Refreshes daily + on /calendar-sync.
-const { EmbedBuilder, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+  EmbedBuilder,
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require('discord.js');
 
 const ZAMORAK_RED = 0x6b0e0e;
 const EVENT_CALENDAR_CHANNEL_ID = '1558399108715118702'; // #event-calendar
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
 const API_KEY = process.env.GCAL_API_KEY || '';
+// Optional: set these env vars to Discord CDN URLs after uploading to #bot-commands
+const THUMBNAIL_URL = process.env.GCAL_THUMBNAIL_URL || '';
+const BANNER_URL = process.env.GCAL_BANNER_URL || '';
+
+function publicCalendarUrl() {
+  if (!CALENDAR_ID) return 'https://calendar.google.com';
+  return `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}`;
+}
 
 async function fetchEvents() {
   if (!CALENDAR_ID || !API_KEY) {
@@ -35,39 +50,60 @@ async function fetchEvents() {
   }
 }
 
-function formatEventDate(ev) {
-  const start = ev.start?.dateTime || ev.start?.date;
-  const end = ev.end?.dateTime || ev.end?.date;
-  if (!start) return 'TBD';
-  const s = new Date(start);
-  const opts = { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-  const dateStr = s.toLocaleDateString('en-US', { month: 'short', day: 'numeric', weekday: 'short' });
-  if (ev.start?.date && !ev.start?.dateTime) return `${dateStr} (all day)`;
-  const timeStr = s.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  return `${dateStr} at ${timeStr}`;
+// Discord timestamp: <t:UNIX:F> renders in each viewer's local timezone.
+function discordTimestamp(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  return `<t:${Math.floor(d.getTime() / 1000)}:F>`;
 }
 
 function buildEmbed(events) {
   const embed = new EmbedBuilder()
-    .setTitle('⛧ Upcoming Events ⛧')
+    .setTitle('Oath Forsaken Event Calendar')
     .setColor(ZAMORAK_RED)
+    .setDescription('*Upcoming Events over the next 2 weeks*')
     .setFooter({ text: 'Oath Forsaken Event Calendar' })
     .setTimestamp();
 
+  if (THUMBNAIL_URL) embed.setThumbnail(THUMBNAIL_URL);
+  if (BANNER_URL) embed.setImage(BANNER_URL);
+
   if (events.length === 0) {
-    embed.setDescription('*No events scheduled for the next two weeks.*');
-    return embed;
+    embed.addFields({ name: '\u200b', value: '*No events scheduled for the next two weeks.*' });
+    return { embed, components: [viewCalendarButton()] };
   }
 
-  const lines = events.slice(0, 10).map((ev) => {
+  for (const ev of events.slice(0, 10)) {
     const name = ev.summary || 'Untitled event';
-    const when = formatEventDate(ev);
-    const desc = ev.description ? `\n${ev.description.slice(0, 100)}` : '';
-    return `**${name}**\n${when}${desc}`;
-  });
+    const startTs = discordTimestamp(ev.start?.dateTime || ev.start?.date);
+    const endTs = discordTimestamp(ev.end?.dateTime || ev.end?.date);
+    const isAllDay = ev.start?.date && !ev.start?.dateTime;
 
-  embed.setDescription(lines.join('\n\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n\n'));
-  return embed;
+    let timeLine;
+    if (isAllDay) {
+      timeLine = startTs ? `**When:** ${startTs} (all day)` : '**When:** TBD';
+    } else {
+      timeLine = `**Starts:** ${startTs || 'TBD'}\n**Ends:** ${endTs || 'TBD'}`;
+    }
+
+    const desc = ev.description ? `\n\n${ev.description.slice(0, 300)}` : '';
+    embed.addFields({
+      name: `⛧ ${name}`,
+      value: `${timeLine}${desc}`,
+    });
+  }
+
+  return { embed, components: [viewCalendarButton()] };
+}
+
+function viewCalendarButton() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('View Calendar')
+      .setStyle(ButtonStyle.Link)
+      .setURL(publicCalendarUrl())
+  );
 }
 
 async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
@@ -79,21 +115,28 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
     return;
   }
   const events = await fetchEvents();
-  const embed = buildEmbed(events);
+  const { embed, components } = buildEmbed(events);
 
   // Find existing calendar message to update, or post new one
   const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
   let existing = null;
   if (messages) {
     existing = messages.find(
-      (m) => m.author.id === client.user.id && m.embeds.some((e) => e.title === '⛧ Upcoming Events ⛧')
+      (m) =>
+        m.author.id === client.user.id &&
+        m.embeds.some(
+          (e) =>
+            e.title === 'Oath Forsaken Event Calendar' ||
+            e.title === '⛧ Upcoming Events ⛧'
+        )
     );
   }
+  const payload = { embeds: [embed], components };
   if (existing) {
-    await existing.edit({ embeds: [embed] }).catch(() => {});
+    await existing.edit(payload).catch(() => {});
     console.log('Calendar: updated existing embed');
   } else {
-    await channel.send({ embeds: [embed] }).catch(() => {});
+    await channel.send(payload).catch(() => {});
     console.log('Calendar: posted new embed');
   }
 }
