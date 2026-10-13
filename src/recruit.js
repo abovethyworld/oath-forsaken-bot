@@ -317,7 +317,13 @@ async function handleDecision(interaction) {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
       if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch(() => {});
     }
-    await target.send(`🎉 Your **${t.label}** application to **${guild.name}** was approved! Head to the roles channel to pick your ping roles and introduce yourself.`).catch(() => {});
+    // Welcome DM tailored to application type
+    const welcomeDMs = {
+      iron: `🎉 Your **Ironman** application to **${guild.name}** was approved! Welcome to the clan.\n\nYou're full crew now: total-level ranks, bingos, WOM comps, all of it. Head to the roles channel to grab your ping roles and introduce yourself.`,
+      main: `🎉 Your **Main** application to **${guild.name}** was approved! Welcome.\n\nAs a main you can hang out, earn seniority, and join casual events. Bingos and WOM comps are ironman-only, but there's plenty going on. Grab your ping roles in the roles channel and say hi.`,
+      guest: `🎉 Your **Guest** application to **${guild.name}** was approved! Welcome.\n\nYou're free to hang out and check things out. If you ever want full membership, just reapply as an ironman or main.`,
+    };
+    await target.send(welcomeDMs[type] || welcomeDMs.guest).catch(() => {});
   } else if (target) {
     await target.send(`Thanks for applying to **${guild.name}** — staff decided not to move forward this time. You're welcome to reapply later.`).catch(() => {});
   }
