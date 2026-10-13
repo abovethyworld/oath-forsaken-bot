@@ -43,6 +43,11 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setTimeout(() => syncSeniority(client), 60 * 1000);
 
+  // Event calendar embed: refresh daily, plus once after startup.
+  const { syncCalendar } = require('./event-calendar');
+  setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
+  setTimeout(() => syncCalendar(client), 90 * 1000);
+
   // Backfill original join dates for existing members (one-time, gaps only).
   setTimeout(async () => {
     const { backfill } = require('./join-dates');
