@@ -13,11 +13,31 @@ const {
 
 const ZAMORAK_RED = 0x6b0e0e;
 const EVENT_CALENDAR_CHANNEL_ID = '1558399108715118702'; // #event-calendar
+const BOT_COMMANDS_CHANNEL_ID = '1558458301627506788'; // #bot-commands
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
 const API_KEY = process.env.GCAL_API_KEY || '';
-// Optional: set these env vars to Discord CDN URLs after uploading to #bot-commands
+// Source messages in #bot-commands holding the embed images (per EMBED_IMAGE_SOURCES.md rule).
+// The bot resolves fresh signed CDN URLs from these on each sync so they never expire.
+const THUMBNAIL_MSG_ID = process.env.GCAL_THUMBNAIL_MSG_ID || '1559170903860846654';
+const BANNER_MSG_ID = process.env.GCAL_BANNER_MSG_ID || '1559122168011292675';
+// Fallback static URLs (will expire if they're signed links — prefer message IDs above)
 const THUMBNAIL_URL = process.env.GCAL_THUMBNAIL_URL || '';
 const BANNER_URL = process.env.GCAL_BANNER_URL || '';
+
+// Fetch a fresh signed attachment URL from a #bot-commands source message.
+async function resolveImageUrl(client, channelId, messageId, fallbackUrl) {
+  if (!messageId) return fallbackUrl;
+  try {
+    const guild = client.guilds.cache.get(require('./config').guildId);
+    const channel = guild?.channels.cache.get(channelId);
+    if (!channel) return fallbackUrl;
+    const msg = await channel.messages.fetch(messageId).catch(() => null);
+    const url = msg?.attachments.first()?.url;
+    return url || fallbackUrl;
+  } catch {
+    return fallbackUrl;
+  }
+}
 
 function publicCalendarUrl() {
   if (!CALENDAR_ID) return 'https://calendar.google.com';
@@ -58,7 +78,7 @@ function discordTimestamp(dateStr) {
   return `<t:${Math.floor(d.getTime() / 1000)}:F>`;
 }
 
-function buildEmbed(events) {
+function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL) {
   const embed = new EmbedBuilder()
     .setTitle('Oath Forsaken Event Calendar')
     .setColor(ZAMORAK_RED)
@@ -66,8 +86,8 @@ function buildEmbed(events) {
     .setFooter({ text: 'Oath Forsaken Event Calendar' })
     .setTimestamp();
 
-  if (THUMBNAIL_URL) embed.setThumbnail(THUMBNAIL_URL);
-  if (BANNER_URL) embed.setImage(BANNER_URL);
+  if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
+  if (bannerUrl) embed.setImage(bannerUrl);
 
   if (events.length === 0) {
     embed.addFields({ name: '\u200b', value: '*No events scheduled for the next two weeks.*' });
@@ -117,7 +137,10 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
     return;
   }
   const events = await fetchEvents();
-  const { embed, components } = buildEmbed(events);
+  // Resolve fresh signed image URLs so embeds never break on expiry.
+  const thumbnailUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, THUMBNAIL_MSG_ID, THUMBNAIL_URL);
+  const bannerUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, BANNER_MSG_ID, BANNER_URL);
+  const { embed, components } = buildEmbed(events, thumbnailUrl, bannerUrl);
 
   // Find existing calendar message to update, or post new one
   const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
