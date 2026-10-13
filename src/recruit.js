@@ -307,6 +307,13 @@ async function handleDecision(interaction) {
 
   if (decision === 'approve' && target) {
     if (t.roleId) await target.roles.add(t.roleId).catch(() => {});
+    // Everyone-ping role: added on every approval regardless of application type
+    try {
+      const pingRole = guild.roles.cache.find((r) => r.name === 'Oath Forsakers');
+      if (pingRole && !target.roles.cache.has(pingRole.id)) {
+        await target.roles.add(pingRole, 'Everyone-ping role on approval');
+      }
+    } catch {}
     // Irons also get their total-level rank role. Mains and guests do not.
     if (type === 'iron' && bracket && bracket !== 'none') {
       const rankRoleId = TOTAL_LEVEL_ROLE_IDS[bracket];
