@@ -7,10 +7,20 @@ Deleting any of these messages will break the embed images (404).
 - RULES banner -> #bot-commands msg 1559270014585020499 (att 1559270014681358356)
 - STRIKE meme -> #bot-commands msg 1559278504221089902 (att 1559278503894188074)
 
-## #clan-ranks (1558481986706870445)
-- Staff Roles banner -> #clan-ranks msg 1559126810468286474 (att 1559127964912717824)
-- MEMBER ROLES banner -> #clan-ranks msg 1559126794123083866 (att 1559130612797800499)
-- CLAN CHAT RANKS banner -> #clan-ranks msg 1559126777446670390 (att 1559130499744534609)
+## #clan-ranks (1558481986706870445) — REBUILT 2026-10-13
+OG banner source files (in repo):
+- assets/banner-art/clan-ranks-og/og-iron-banner.jpg → CLAN CHAT RANKS embed
+- assets/banner-art/clan-ranks-og/og-armor-banner.jpg → MEMBER ROLES embed
+- assets/banner-art/clan-ranks-og/og-staff-banner.jpg → Staff Roles embed
+Discord sources (#bot-commands):
+- OG iron banner -> msg 1559617465619710034
+- OG armor banner -> msg 1559617552244801598
+- OG staff banner -> msg 1559617640719187980
+Live embeds:
+- CLAN CHAT RANKS -> msg 1559617741529288796
+- MEMBER ROLES -> msg 1559617834642964512
+- Staff Roles -> msg 1559617942726123606
+DO NOT DELETE the #bot-commands source messages.
 
 ## #roles (1558399101454786670)
 - WISE OLD MAN WEEKLY COMPS -> #bot-commands msg 1559105357215965195 (att 1559105273610641498)
@@ -22,9 +32,18 @@ Deleting any of these messages will break the embed images (404).
 
 ## Rule
 When updating an embed image:
-1. Upload new image to #bot-commands (keep the message!)
-2. Update embed to point to new URL
-3. NEVER delete the source message
+1. Save the source file to the repo (assets/banner-art/) AND Drive backup
+2. Upload to #bot-commands (keep the message! note the msg ID here)
+3. Update embed to point to new URL
+4. NEVER delete the source message
+5. ALWAYS record: repo path, Drive ID, Discord msg ID, and which embed uses it
+
+## Banner Registry Format
+Every banner must have all four:
+- Repo: assets/banner-art/<file>
+- Drive: <file ID> (backup)
+- Discord: #bot-commands msg <id> (live source)
+- Used in: #<channel> <embed title> msg <id>
 
 ## #donate embed banner
 - Source message: 1559385469605912598 in #bot-commands
