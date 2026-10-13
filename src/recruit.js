@@ -314,11 +314,7 @@ async function handleDecision(interaction) {
         await target.roles.add(pingRole, 'Everyone-ping role on approval');
       }
     } catch {}
-    // Irons also get their total-level rank role. Mains and guests do not.
-    if (type === 'iron' && bracket && bracket !== 'none') {
-      const rankRoleId = TOTAL_LEVEL_ROLE_IDS[bracket];
-      if (rankRoleId) await target.roles.add(rankRoleId, 'Total level rank from application').catch(() => {});
-    }
+    // Total-level ranks removed 2026-10-13 (age-ranks-only overhaul).
     // New members start at the bottom of the tenure ladder (not guests).
     if (type !== 'guest') {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
@@ -407,7 +403,7 @@ async function handleApplyButton(interaction) {
   if (action === 'type') {
     // Prevent members and staff from applying
     const member = interaction.member;
-    const blockedRoleNames = ['Iron Sworn', 'Unbound', 'Guest', 'Friend of the Clan', 'Lord of Chaos', 'Warmonger', 'Ritualist', 'Inquisitor', 'Staff'];
+    const blockedRoleNames = ['Iron Sworn', 'Unbound', 'Guest', 'Friend of the Clan', 'Lord of Chaos', 'Warmonger', 'Ritualist', 'Justicar', 'Staff'];
     const hasBlockedRole = member.roles.cache.some(r => blockedRoleNames.includes(r.name));
     if (hasBlockedRole) {
       await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch(() => {});

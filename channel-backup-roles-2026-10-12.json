@@ -1,0 +1,544 @@
+{
+ "channel": "#roles",
+ "channel_id": "1558399101454786670",
+ "backed_up_at": "2026-10-13T02:55:06.554893+00:00",
+ "panel_order": [
+  "TYPE OF IRON",
+  "PREFERRED GAME SERVER",
+  "PVM ROLES",
+  "SKILLING ROLES",
+  "WISE OLD MAN WEEKLY COMPS",
+  "CLAN ROLES"
+ ],
+ "panels": [
+  {
+   "title": "TYPE OF IRON",
+   "description": "What kind of iron are you?",
+   "color": 12597547,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1558666602256535634/fixed-banner-armor.png?ex=6acee7e4&is=6acd9664&hm=f8b896025139c998845f36dc27a65f9967089e01a564ab6074a79e4d9415822f&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558469085287682088",
+       "style": 4,
+       "label": "Standard Iron",
+       "emoji": {
+        "id": "1558644677886869604",
+        "name": "standard_iron"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558469100139716609",
+       "style": 4,
+       "label": "Hardcore Iron",
+       "emoji": {
+        "id": "1558644444654473256",
+        "name": "hardcore_iron"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558469114903666798",
+       "style": 4,
+       "label": "Ultimate Iron",
+       "emoji": {
+        "id": "1558644481350303874",
+        "name": "ultimate_iron"
+       }
+      },
+      {
+       "type": 2,
+       "id": 5,
+       "custom_id": "role:1558469129650839705",
+       "style": 4,
+       "label": "Group Iron",
+       "emoji": {
+        "id": "1558644518184685628",
+        "name": "group_iron"
+       }
+      }
+     ]
+    },
+    {
+     "type": 1,
+     "id": 6,
+     "components": [
+      {
+       "type": 2,
+       "id": 7,
+       "custom_id": "role:1558469144381362246",
+       "style": 4,
+       "label": "Unranked Group Iron",
+       "emoji": {
+        "id": "1558644555182768259",
+        "name": "unranked_iron"
+       }
+      },
+      {
+       "type": 2,
+       "id": 8,
+       "custom_id": "role:1558469159950614610",
+       "style": 4,
+       "label": "Hardcore Group Iron",
+       "emoji": {
+        "id": "1558644592352436344",
+        "name": "hc_group_iron"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "PREFERRED GAME SERVER",
+   "description": "Please click the button for the region you play in.\n\nThis helps us organize bingos and group events around your timezone.",
+   "color": 12597547,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559096603736801310/85ed1ac7b68ed34b5a5e4895744318099b9585f7cb8734f90c63d309ac6501c1.png?ex=6ace7e1c&is=6acd2c9c&hm=c4142888cac3d67dc6bfa3811e814d43dca91dfec3954845ca1ab7d5c7123adc&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558469175586988115",
+       "style": 4,
+       "label": "US East",
+       "emoji": {
+        "name": "\ud83c\uddfa\ud83c\uddf8"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558469190292209774",
+       "style": 4,
+       "label": "US West",
+       "emoji": {
+        "name": "\ud83c\uddfa\ud83c\uddf8"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558469204318093356",
+       "style": 4,
+       "label": "United Kingdom",
+       "emoji": {
+        "name": "\ud83c\uddec\ud83c\udde7"
+       }
+      },
+      {
+       "type": 2,
+       "id": 5,
+       "custom_id": "role:1558469219799277639",
+       "style": 4,
+       "label": "Germany",
+       "emoji": {
+        "name": "\ud83c\udde9\ud83c\uddea"
+       }
+      },
+      {
+       "type": 2,
+       "id": 6,
+       "custom_id": "role:1558469235158687765",
+       "style": 4,
+       "label": "Australia",
+       "emoji": {
+        "name": "\ud83c\udde6\ud83c\uddfa"
+       }
+      }
+     ]
+    },
+    {
+     "type": 1,
+     "id": 7,
+     "components": [
+      {
+       "type": 2,
+       "id": 8,
+       "custom_id": "role:1558537713123336232",
+       "style": 4,
+       "label": "Singapore",
+       "emoji": {
+        "name": "\ud83c\uddf8\ud83c\uddec"
+       }
+      },
+      {
+       "type": 2,
+       "id": 9,
+       "custom_id": "role:1558537723222958284",
+       "style": 4,
+       "label": "Japan",
+       "emoji": {
+        "name": "\ud83c\uddef\ud83c\uddf5"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "PVM ROLES",
+   "description": "Please click the button with each PvM related role that you would like to have.\n\nKeep in mind that these roles may be pinged for forming bossing teams in <#1558428263322357811>.",
+   "color": 12597547,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559100180370821130/fixed-banner-bosses.png?ex=6ace8171&is=6acd2ff1&hm=b7ff42c1eef957e69b58c1dd86a231bb9228c1d7a4a9833d3c22f4cc0f41c67a&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558469482866024500",
+       "style": 4,
+       "label": "The Fractured Archive",
+       "emoji": {
+        "id": "1558470658260996167",
+        "name": "fracturedarchive"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558468832736190464",
+       "style": 4,
+       "label": "Tombs of Amascut (ToA)",
+       "emoji": {
+        "id": "1558470672986939634",
+        "name": "toa"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558468847369986138",
+       "style": 4,
+       "label": "Chambers of Xeric (CoX)",
+       "emoji": {
+        "id": "1558470688644268187",
+        "name": "cox"
+       }
+      },
+      {
+       "type": 2,
+       "id": 5,
+       "custom_id": "role:1558468862494646372",
+       "style": 4,
+       "label": "Theatre of Blood (ToB)",
+       "emoji": {
+        "id": "1558470703899217945",
+        "name": "tob"
+       }
+      },
+      {
+       "type": 2,
+       "id": 6,
+       "custom_id": "role:1558468877195812905",
+       "style": 4,
+       "label": "The Hueycoatl",
+       "emoji": {
+        "id": "1558470719078146068",
+        "name": "hueycoatl"
+       }
+      }
+     ]
+    },
+    {
+     "type": 1,
+     "id": 7,
+     "components": [
+      {
+       "type": 2,
+       "id": 8,
+       "custom_id": "role:1558468892240781493",
+       "style": 4,
+       "label": "Royal Titans",
+       "emoji": {
+        "id": "1558470734227972227",
+        "name": "royaltitans"
+       }
+      },
+      {
+       "type": 2,
+       "id": 9,
+       "custom_id": "role:1558468907508047962",
+       "style": 4,
+       "label": "Barbarian Assault",
+       "emoji": {
+        "id": "1558470749919125557",
+        "name": "barbarianassault"
+       }
+      },
+      {
+       "type": 2,
+       "id": 10,
+       "custom_id": "role:1558468922456408174",
+       "style": 4,
+       "label": "Yama",
+       "emoji": {
+        "id": "1558470765639372800",
+        "name": "yama"
+       }
+      },
+      {
+       "type": 2,
+       "id": 11,
+       "custom_id": "role:1558469011019272363",
+       "style": 4,
+       "label": "Venenatis",
+       "emoji": {
+        "id": "1558470861126897767",
+        "name": "venenatis"
+       }
+      },
+      {
+       "type": 2,
+       "id": 12,
+       "custom_id": "role:1558469025514786851",
+       "style": 4,
+       "label": "Callisto",
+       "emoji": {
+        "id": "1558470876075270145",
+        "name": "callisto"
+       }
+      }
+     ]
+    },
+    {
+     "type": 1,
+     "id": 13,
+     "components": [
+      {
+       "type": 2,
+       "id": 14,
+       "custom_id": "role:1558469040433799178",
+       "style": 4,
+       "label": "Vet'ion",
+       "emoji": {
+        "id": "1558470891049062400",
+        "name": "vetion"
+       }
+      },
+      {
+       "type": 2,
+       "id": 15,
+       "custom_id": "role:1558469055256731689",
+       "style": 4,
+       "label": "Nex",
+       "emoji": {
+        "id": "1558470907956170923",
+        "name": "nex"
+       }
+      },
+      {
+       "type": 2,
+       "id": 16,
+       "custom_id": "role:1558469070553358446",
+       "style": 4,
+       "label": "Nightmare",
+       "emoji": {
+        "id": "1558470923273637949",
+        "name": "nightmare"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "SKILLING ROLES",
+   "description": "Pick the skilling activities you do. You'll get pinged when people are putting together a group in <#1558428263322357811>.",
+   "color": 12597547,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559105020450967592/d96729d9a37cc0d7e98ae2cfbe3740f3fa1cb7afc7cc03e5ebcdbc18ea7f6591.png?ex=6ace85f3&is=6acd3473&hm=9b3373a920074b4a29824dc1252a73e7e9d2f95b71e3b630ee43a68e6f76a69d&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558468937208041503",
+       "style": 4,
+       "label": "Zalcano",
+       "emoji": {
+        "id": "1558470781946568724",
+        "name": "zalcano"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558468952542285954",
+       "style": 4,
+       "label": "Tempoross",
+       "emoji": {
+        "id": "1558470796752457779",
+        "name": "tempoross"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558468966962429952",
+       "style": 4,
+       "label": "Wintertodt",
+       "emoji": {
+        "id": "1558470813584465960",
+        "name": "wintertodt"
+       }
+      },
+      {
+       "type": 2,
+       "id": 5,
+       "custom_id": "role:1558468981105365024",
+       "style": 4,
+       "label": "Wilderness Agility",
+       "emoji": {
+        "id": "1558470829187006547",
+        "name": "wildyagility"
+       }
+      },
+      {
+       "type": 2,
+       "id": 6,
+       "custom_id": "role:1558468996234481695",
+       "style": 4,
+       "label": "Guardians of the Rift",
+       "emoji": {
+        "id": "1558470845918220318",
+        "name": "gotr"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "WISE OLD MAN WEEKLY COMPS",
+   "description": "Please click the button with each WOM competition you'd like to join.\n\nKeep in mind that these roles may be pinged when competition polls are announced, events start, and winners are announced.\n\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>\n\n_Top 3 in each competition earn the winner role. Discord role held for 6 weeks, CC rank title for 2 weeks._",
+   "color": 12597547,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559105273610641498/32940d0618f9ffccb5b53eb32633940f2abc5a4ee842e456166ae1e184c4dc9e.png?ex=6ace8630&is=6acd34b0&hm=ecac6b1a71fe2d28b7377d026f2d901c75a39a0ae852cea0875ad0bbb5fb85e1&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558399089815724062",
+       "style": 4,
+       "label": "Boss of the Week",
+       "emoji": {
+        "id": "1559070945400987740",
+        "name": "botwwinner"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558399090927083540",
+       "style": 4,
+       "label": "Skill of the Week",
+       "emoji": {
+        "id": "1559070785769967616",
+        "name": "sotwwinner"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558468743779057674",
+       "style": 4,
+       "label": "Raid of the Week",
+       "emoji": {
+        "id": "1559070865851944980",
+        "name": "rotwwinner"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "CLAN ROLES",
+   "description": "Please click the button with each clan related role that you would like to have.\n\nKeep in mind that these roles may be pinged.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.",
+   "color": 7015950,
+   "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559102302902689854/e0caa6e88aa464f647faf401a94fe08cd58fe2a025f0456beb79ff235ba87156.png?ex=6ace836b&is=6acd31eb&hm=102827c597de8d71cddf841d70995ab14075785334e9791f214b328b298c0500&",
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "role:1558399088687587401",
+       "style": 4,
+       "label": "CC Events",
+       "emoji": {
+        "id": "1559104599032594442",
+        "name": "zamoraksymbol"
+       }
+      },
+      {
+       "type": 2,
+       "id": 3,
+       "custom_id": "role:1558399093905293445",
+       "style": 4,
+       "label": "Giveaways",
+       "emoji": {
+        "id": "1559102058555113583",
+        "name": "bluepartyhat"
+       }
+      },
+      {
+       "type": 2,
+       "id": 4,
+       "custom_id": "role:1558468803661135952",
+       "style": 4,
+       "label": "Milestone Parties",
+       "emoji": {
+        "id": "1559102129782657075",
+        "name": "milestonecake"
+       }
+      },
+      {
+       "type": 2,
+       "id": 5,
+       "custom_id": "role:1558468773806084168",
+       "style": 4,
+       "label": "Other Games",
+       "emoji": {
+        "id": "1558634136510537728",
+        "name": "clanfriend"
+       }
+      },
+      {
+       "type": 2,
+       "id": 6,
+       "custom_id": "role:1558468788897452174",
+       "style": 4,
+       "label": "Movies and Shows",
+       "emoji": {
+        "name": "\ud83c\udfac"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
