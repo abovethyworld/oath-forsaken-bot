@@ -24,3 +24,15 @@ When updating an embed image:
 1. Upload new image to #bot-commands (keep the message!)
 2. Update embed to point to new URL
 3. NEVER delete the source message
+
+## #donate embed banner
+- Source message: 1559385469605912598 in #bot-commands
+- File: assets/banner-art/final-banner-donate.gif (Sol Heredit idle, v8 - slow pulse)
+- Used in: #donate embed image
+- DO NOT DELETE the source message
+
+## #donate embed banner (FINAL - locked 2026-10-12)
+- Source message: 1559381372731129898 in #bot-commands (original v8)
+- File: assets/banner-art/final-banner-donate.gif (Sol Heredit idle, locked)
+- Used in: #donate embed image
+- DO NOT DELETE the source message
