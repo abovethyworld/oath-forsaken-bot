@@ -87,6 +87,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.GuildMemberAdd, async (member) => {
   const { recordJoin } = require('./join-dates');
   recordJoin(member.id, member.joinedAt);
+  // Everyone-ping role: assign on join so announcements reach all members
+  try {
+    const pingRole = member.guild.roles.cache.find((r) => r.name === 'Oath Forsakers');
+    if (pingRole && !member.roles.cache.has(pingRole.id)) {
+      await member.roles.add(pingRole);
+    }
+  } catch (e) {
+    console.error('Oath Forsakers auto-assign failed:', e.message);
+  }
   await handleWelcome(member);
   // Join/leave logging handled by Sapphire (2026-10-11)
   await onMemberJoin(member).catch((e) => console.error('Application channel failed:', e.message));
