@@ -74,7 +74,7 @@ function buildEmbed(events) {
     return { embed, components: [viewCalendarButton()] };
   }
 
-  for (const ev of events.slice(0, 10)) {
+  const sections = events.slice(0, 10).map((ev, idx) => {
     const name = ev.summary || 'Untitled event';
     const startTs = discordTimestamp(ev.start?.dateTime || ev.start?.date);
     const endTs = discordTimestamp(ev.end?.dateTime || ev.end?.date);
@@ -88,18 +88,13 @@ function buildEmbed(events) {
     }
 
     const desc = ev.description ? `\n\n${ev.description.slice(0, 300)}` : '';
-    embed.addFields({
-      name: `⛧ ${name}`,
-      value: `${timeLine}${desc}\n\u200b`,
-    });
-    // Spacer divider between events (not after the last one)
-    if (events.indexOf(ev) < Math.min(events.length, 10) - 1) {
-      embed.addFields({
-        name: '\u200b',
-        value: '⛧ ━━━━━━━━━━━━━━━━ ⛧\n\u200b',
-      });
-    }
-  }
+    return `## ⛧ *${name}*\n\n${timeLine}${desc}`;
+  });
+
+  embed.setDescription(
+    '*Upcoming Events over the next 2 weeks*\n\n' +
+      sections.join('\n\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n\n')
+  );
 
   return { embed, components: [viewCalendarButton()] };
 }
