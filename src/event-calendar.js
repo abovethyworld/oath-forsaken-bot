@@ -82,7 +82,7 @@ function buildEmbed(events) {
 
     let timeLine;
     if (isAllDay) {
-      timeLine = startTs ? `**When:** ${startTs} (all day)` : '**When:** TBD';
+      timeLine = startTs ? `**Starts:** ${startTs} (all day)` : '**Starts:** TBD';
     } else {
       timeLine = `**Starts:** ${startTs || 'TBD'}\n**Ends:** ${endTs || 'TBD'}`;
     }
@@ -90,8 +90,15 @@ function buildEmbed(events) {
     const desc = ev.description ? `\n\n${ev.description.slice(0, 300)}` : '';
     embed.addFields({
       name: `⛧ ${name}`,
-      value: `${timeLine}${desc}`,
+      value: `${timeLine}${desc}\n\u200b`,
     });
+    // Spacer divider between events (not after the last one)
+    if (events.indexOf(ev) < Math.min(events.length, 10) - 1) {
+      embed.addFields({
+        name: '\u200b',
+        value: '⛧ ━━━━━━━━━━━━━━━━ ⛧\n\u200b',
+      });
+    }
   }
 
   return { embed, components: [viewCalendarButton()] };
