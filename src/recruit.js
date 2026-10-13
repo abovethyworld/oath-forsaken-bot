@@ -339,10 +339,11 @@ async function handleDecision(interaction) {
     const generalChan = guild.channels.cache.get('1558583385440395476');
     if (generalChan) {
       const { EmbedBuilder } = require('discord.js');
+      const roleMention = type === 'guest' ? '<@&1558540445611728997>' : '<@&1558452023790276659>';
       const wEmbed = new EmbedBuilder()
         .setTitle(welcomeTitles[type] || welcomeTitles.guest)
         .setDescription(
-          `<@${target.id}> — <@&1558452023790276659>\n\n` +
+          `<@${target.id}> — ${roleMention}\n\n` +
           `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
