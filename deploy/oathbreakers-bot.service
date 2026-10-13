@@ -1,15 +1,28 @@
 [Unit]
-Description=OathBreakers OSRS clan Discord bot
-After=network-online.target
+Description=OathBreakers OSRS clan Discord bot (Docker)
+After=docker.service network-online.target
+Requires=docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/oathbreakers-bot
-ExecStart=/usr/bin/node src/index.js
+# Container runs as the image's "node" user (uid 1000); make sure it can write data/.
+ExecStartPre=/bin/mkdir -p /opt/oathbreakers-bot/data
+ExecStartPre=/bin/chown -R 1000:1000 /opt/oathbreakers-bot/data
+ExecStartPre=-/usr/bin/docker rm -f oathbreakers-bot
+# Grab the newest image from GHCR (built by .github/workflows/docker.yml). Leading '-'
+# means a failed pull (e.g. network blip) still starts the last image we have.
+ExecStartPre=-/usr/bin/docker pull ghcr.io/abovethyworld/oath-forsaken-bot:latest
+# Output goes to journald via the attached client, so Docker's own log driver is off.
+ExecStart=/usr/bin/docker run --rm --init --name oathbreakers-bot \
+  --env-file /opt/oathbreakers-bot/.env \
+  -v /opt/oathbreakers-bot/data:/app/data \
+  --log-driver none \
+  ghcr.io/abovethyworld/oath-forsaken-bot:latest
+ExecStop=/usr/bin/docker stop oathbreakers-bot
 Restart=always
 RestartSec=10
-Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
