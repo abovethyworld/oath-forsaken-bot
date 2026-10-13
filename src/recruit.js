@@ -346,7 +346,7 @@ async function handleDecision(interaction) {
           `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
-          `• Ping staff when you're ready for a clan chat invite`
+          `• Ping <@&1558735997922054225> when you're ready for a clan chat invite`
         )
         .setColor(0x6B0E0E)
         .setThumbnail(target.user.displayAvatarURL());
