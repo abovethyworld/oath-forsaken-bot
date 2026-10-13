@@ -16,6 +16,7 @@ Deleting any of these messages will break the embed images (404).
 - WISE OLD MAN WEEKLY COMPS -> #bot-commands msg 1559105357215965195 (att 1559105273610641498)
 - SKILLING ROLES -> #bot-commands msg 1559105108678021191 (att 1559105020450967592)
 - PVM ROLES -> #bot-commands msg 1559104852737531957 (att 1559100180370821130)
+- CLAN ROLES -> #bot-commands msg 1559102303422779402 (att 1559102302902689854)
 - PREFERRED GAME SERVER -> #bot-commands msg 1559101933451743233 (att 1559096603736801310)
 - TYPE OF IRON -> #bot-commands msg 1558536353921106012 (att 1558666602256535634)
 
@@ -36,3 +37,9 @@ When updating an embed image:
 - File: assets/banner-art/final-banner-donate.gif (Sol Heredit idle, locked)
 - Used in: #donate embed image
 - DO NOT DELETE the source message
+
+## #event-calendar embed images (2026-10-13)
+- Thumbnail: source message 1559170903860846654 in #bot-commands (server-icon-helm-animated.gif)
+- Banner: source message 1559122168011292675 in #bot-commands (zamified-iron-banner.png)
+- Used in: #event-calendar auto-updating embed (src/event-calendar.js resolves fresh signed URLs each sync)
+- DO NOT DELETE the source messages
