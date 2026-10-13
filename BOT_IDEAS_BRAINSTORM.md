@@ -105,6 +105,25 @@ Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 - Needs: second bot app in Discord Developer Portal (test bot token), `test` branch, Ashton's Dockerfile + CI
 - AI coding agent handles code + pushes; Gavin approves merges; Ashton handles infra
 
+## 11. Google Calendar → Discord event embed (Gavin's idea 2026-10-12)
+
+**Idea:** Bot reads the "Oath Forsaken Event Calendar" from Google Calendar and posts an auto-updating embed in #event-calendar, like RW's Raven bot does.
+
+**Notes:**
+- Pulls events for next 2 weeks: name, start/end dates, description
+- Zamorak-themed embed (not RW's purple look), "View Calendar" button
+- Auto-updates daily or on `/calendar-sync`
+- Calendar API key obtained 2026-10-12 (restricted to Calendar API only)
+- Needs: Calendar API wired into bot code, embed template, scheduled job
+- V2 — after core bot ideas are done
+
+**Idea:** Test branch + test bot so changes get verified before hitting the real bot.
+
+**Notes:**
+- Workflow: feature branch → PR review → merge to `test` → test bot → merge to `main` → real bot
+- Needs: second bot app in Discord Developer Portal (test bot token), `test` branch, Ashton's Dockerfile + CI
+- AI coding agent handles code + pushes; Gavin approves merges; Ashton handles infra
+
 ---
 
 ## Gavin's Todo — For Ashton & Nick (Bot)
