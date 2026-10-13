@@ -338,7 +338,7 @@ async function handleDecision(interaction) {
       const welcomeHeader = type === 'guest' ? `Welcome our newest ${welcomeRole}!` : `Welcome, newest ${welcomeRole}.`;
       const wEmbed = new EmbedBuilder()
         .setDescription(
-          `**${welcomeHeader}**\n<@${target.id}>\n\n` +
+          `**${welcomeHeader}**\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n<@${target.id}>\n\n` +
           `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
