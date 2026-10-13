@@ -1,0 +1,39 @@
+{
+ "channel": "#rules",
+ "channel_id": "1558393177726259241",
+ "backed_up_at": "2026-10-13T02:56:41.221084+00:00",
+ "messages": [
+  {
+   "message_id": "1559272699422052514",
+   "embeds": [
+    {
+     "title": "RULES",
+     "description": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\n**New here?**\n1. Pick your application in <#1558905814482423818>\n2. Once approved, you'll unlock the rest of the server \u2014 grab your roles in <#1558399101454786670>\n\n**TL;DR:** Be respectful. Iron-first clan. FFA loot.\n\nIf you are in this server you agree to the rules below.\n\n\u26e7 **Be respectful**\nWe're here to have fun together. Please treat everyone with respect. No harassment, hate speech, or drama. Please don't ask others for items or GP. Don't crash others or PK clanmates. Friendly banter is always welcome.\n\n\u26e7 **No scamming**\nTrust matters here. Scamming a fellow clanmate will result in a permanent ban and a report to RuneWatch. If you lend items, please do so at your own risk and always use collateral.\n\n\u26e7 **Keep it clean**\nPlease keep public channels safe for work so everyone feels comfortable here.\n\n\u26e7 **No spam or advertising**\nPlease don't spam or advertise other servers without checking with staff first.\n\n\u26e7 **Iron-first**\nOath Forsaken is an ironman-centric clan. Mains are warmly welcomed in our Discord, can earn seniority ranks, and join casual events. Alts are welcome and earn ranks independently. Our Total Level Ranks, bingos, and WOM competitions are designed for ironmen.\n\n\u26e7 **No poaching**\nPlease don't recruit our members to other clans.\n\n\u26e7 **PvM etiquette**\nWe're an FFA clan, so your drops are yours to keep. If your group would prefer to split, just agree on it before you head out. Screenshots help resolve any disputes.\n\n\u26e7 **Match your RSN**\nPlease set your Discord nickname to match your RuneScape name so we know who's who. Staff are happy to help if you need it.\n\n\u26e7 **Handle disputes maturely**\nIf something comes up, please try to work it out directly first. Staff are here if you need them, but they're the last resort.\n\n\u26e7 **Stay active**\nAfter 90 days of no gains and no Discord activity without notifying staff, you may be removed from the CC and Discord. Doesn't apply to alts.\n\nIf you join but don't apply within 7 days, you'll be removed from the server.\n\n\u26e7 **Keep chat comfortable**\nPlease avoid spoilers for games, shows, books, or movies. We also ask that political discussions stay out of the server to keep things relaxed for everyone.\n\n\u26e7 **Jagex rules apply**\nAll of Jagex's rules apply here as well.\n\n*Our staff team enforces these rules to keep Oath Forsaken a great place to be. Questions? Open a ticket in <#1558399103757717518>.*\n*See <#1558481986706870445> for rank information and <#1558399101454786670> to set up your notifications.*",
+     "color": 12597547,
+     "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559270014681358356/banner-rules.png?ex=6ace76dd&is=6acd255d&hm=5e25a68517bb39d83e448269b310f2b92889e1f0dc64e343887735867947c2f2&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  },
+  {
+   "message_id": "1559272797253931039",
+   "embeds": [
+    {
+     "title": "STRIKE SYSTEM",
+     "description": "We use a three-strike system to keep things fair.\n\n**Strike 1: Warning**\nA staff member will reach out to discuss what happened.\n\n**Strike 2: 24-hour mute**\nThis is your final warning.\n\n**Strike 3: Ban**\nRemoval from the server and the in-game clan.\n\n**Immediate ban (no strikes):**\nHate speech, doxxing, or scamming will result in an immediate permanent ban.\n\n**Appeals**\nWe believe in second chances. If you feel a strike or ban was unfair, please open a ticket in <#1558399103757717518>.\n\u26e7 Staff will review every appeal carefully.\n\u26e7 A successful appeal means a fresh start, though previous strikes will remain on record.\n\u26e7 If issues continue after a successful appeal, the ban will be permanent.\n\n*Strikes expire after 90 days of good behavior. We're all here to enjoy the game together.*",
+     "color": 12597547,
+     "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559278503894188074/strike-meme-final.png?ex=6ace7ec5&is=6acd2d45&hm=af585bb0dbc88784df92ec2496daaa6f057e3da4697fecd425791404a98a8b5a&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  }
+ ]
+}

@@ -1,0 +1,55 @@
+{
+ "channel": "#clan-ranks",
+ "channel_id": "1558481986706870445",
+ "backed_up_at": "2026-10-13T02:56:24.461821+00:00",
+ "messages": [
+  {
+   "message_id": "1559126777446670390",
+   "embeds": [
+    {
+     "title": "CLAN CHAT RANKS",
+     "description": "Power is earned in Oath Forsaken. Here's how.\n\n\u2022 **Total Level Ranks** are for ironmen only. Staff set these from your hiscores total level.\n\u2022 **Seniority Ranks** reward loyalty to chaos. The longer you stay, the higher you rise.\n\u2022 **WOM Winners** \u2014 Top 3 in each competition take the role. Hold it for 6 weeks in Discord, 2 weeks as your clan chat title.\n\n\u26e7 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 \u26e7\n**Total Level Ranks**\n<:maxed:1558454796611100743> <@&1558440214739943505>\n<:zamorakian:1558454806744666182> <@&1558440222029651978>\n<:wrath:1558454818396176394> <@&1558450336665182228>\n<:destroyer:1558454830056476672> <@&1558450347251343481>\n<:unholy:1558454842094256208> <@&1558450357573521465>\n<:skulled:1558454852596531310> <@&1558440247140810772>\n<:death:1558454863149662208> <@&1558440218418221086>\n<:imp:1558454873924833457> <@&1558440250714492999>\n<:goblin:1558454884880089121> <@&1558450368927637504>\n<:necromancer:1558454896095797259> <@&1558440225401999380>\n<:wizard:1558454906803847308> <@&1558450379572781096>\n\n\u26e7 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 \u26e7\n**Seniority Ranks**\n<:godslayer:1558454497515278428> <@&1558451970883453003>\n<:heretic:1558454486014369833> <@&1558451981562151062>\n<:revenant:1558454473813266442> <@&1558451991448129628>\n<:bloodsworn:1558454461930934384> <@&1558452002319769631>\n<:acolyte:1558454450828480583> <@&1558452012797136960>\n<:initiate:1558454439558385706> <@&1558452023790276659>\n\n\u26e7 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 \u26e7\n**WOM Winners**\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>",
+     "color": 12597547,
+     "image_url": "https://cdn.discordapp.com/attachments/1558481986706870445/1559130499744534609/iron-banner.png?ex=6ace9dae&is=6acd4c2e&hm=5f40ac381d7c782fb5c8549672358d9cf550b004e3ebdf0cbf47694670f38645&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  },
+  {
+   "message_id": "1559126794123083866",
+   "embeds": [
+    {
+     "title": "MEMBER ROLES",
+     "description": "Choose your path.\n\n<:ironsworn:1558623401302564996> <@&1558540424048803860> \u2014 You play an ironman. Full member. Ranks, bingos, and WOM competitions are yours to conquer.\n\n<:unbound:1558623453438025828> <@&1558540434652008569> \u2014 You play a main; you can hang out, earn seniority, and join casual events.\n\n<:guest:1558634092185002035> <@&1558540445611728997> \u2014 You're just visiting or here for a friend.\n\n<:clanfriend:1558634136510537728> <@&1558621489283211316> \u2014 Trusted friends, hand-picked by staff.",
+     "color": 12597547,
+     "image_url": "https://cdn.discordapp.com/attachments/1558481986706870445/1559130612797800499/armor-banner.png?ex=6ace9dc9&is=6acd4c49&hm=770f7adc767b38dd85823b8e1a180083c1b46afbee29e3c74e3538437ee11e15&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  },
+  {
+   "message_id": "1559126810468286474",
+   "embeds": [
+    {
+     "title": "Staff Roles",
+     "description": "Those who lead the chaos.\n\n\u26e7 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 \u26e7\n\n<:lordofchaos:1558876846618312795> <@&1558578603359207555>\n\u2022 They oversee the entire clan and make all final decisions regarding leadership, direction, and major changes.\n\n<:warmonger:1558876917803778139> <@&1558578608233119765>\n\u2022 They support the Lord of Chaos by helping guide decisions, overseeing inquisitors and ritualists, and keeping daily operations running smoothly.\n\n<:ritualist:1558876987534221503> <@&1558578610988916736>\n\u2022 They design and run the events you see in Oath Forsaken, maintaining the calendar and keeping activities fun, organized, and engaging.\n\n<:inquisitor:1558877058346520728> <@&1558578613404696596>\n\u2022 They monitor in-game and Discord chats, handle reports and issues, manage ranks, and ensure a positive environment for all Oath Forsaken members.\n\n<:chaosmachinist:1558956048713252984> <@&1558947396065431572>\n\u2022 They keep the Discord running. Bots, integrations, channels, permissions. If it's technical, it's theirs.",
+     "color": 12597547,
+     "image_url": "https://cdn.discordapp.com/attachments/1558481986706870445/1559127964912717824/staff-banner.png?ex=6ace9b52&is=6acd49d2&hm=8857ec35de3e666282415127d7d3e893e8c91b18155a60943f8a9ab54335c981&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  }
+ ]
+}

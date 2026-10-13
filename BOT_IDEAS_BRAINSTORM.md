@@ -126,6 +126,28 @@ Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 
 ---
 
+## 12. CC rank-up checklist (designed 2026-10-13, not built)
+
+**Idea:** Staff can't be expected to remember who needs an in-game CC rank update. The bot keeps a persistent checklist.
+
+**Finalized design (2026-10-13):** The bot's automatic Discord age-rank promotion is the trigger. When tenure crosses a threshold, the bot promotes the member in Discord AND drops a checklist entry in a staff channel: name, RSN (from their application), old rank → new rank. Staff updates the rank in-game, hits a button to clear the entry. A hold button covers exceptions (staff can hold someone so they don't get listed). The bot can't see in-game CC state (no API), so every Discord promotion creates an entry and staff clears it.
+
+**Notes:**
+- Persistent staff-only embed, staff-controlled hold button (simple button, not dropdown — Gavin's call)
+- Awaiting go-ahead to build
+
+---
+
+## 13. WOM-verified total level on approval (tentative 2026-10-13, NOT approved)
+
+**Idea:** When staff approves an ironman application, the bot checks the applicant's total level via Wise Old Man and assigns the right total-level rank automatically.
+
+**Notes:**
+- Tentative only — Gavin has not approved this
+- May be dead if the clan moves to age ranks only (Ashton's one-rank-system push 2026-10-13)
+
+---
+
 ## Gavin's Todo — For Ashton & Nick (Bot)
 
 Things Gavin needs to do to unblock the dev team:
@@ -144,3 +166,22 @@ Things Gavin needs to do to unblock the dev team:
 - [ ] Optional: purchase oathforsaken.cc domain
 
 Once the repo is up, Ashton can start the Dockerfile + CI pipeline, and Nikolai can set up hosting.
+
+## CC rank-up tracking — decision 2026-10-13
+
+Gavin picked the **persistent checklist** approach for tracking in-game CC rank-ups:
+- Bot detects total level rank-up via WOM, updates Discord role, announces in #general
+- Bot adds entry to a persistent checklist embed in a staff channel
+- Staff updates the CC rank in-game, marks it done, bot removes the entry
+- One glance shows everything pending — no hunting through old messages
+- Alternatives considered: per-message button, reaction ✅, threads, daily digest, escalation pings, no tracking
+
+- **Rank hold (2026-10-13):** staff-controlled. If a member wants to stay at their current rank, staff marks them as "held" in the checklist and the bot stops listing them for promotion. Staff can unhold later if they change their mind.
+
+- **Hold UI (2026-10-13):** simple "Hold" button per checklist entry (not a dropdown). Holds are rare, so no need for the extra complexity. Staff clicks Hold, bot stops listing them.
+
+## Onboarding: WOM-verified total level rank on approval (2026-10-13)
+
+Gavin's idea (tentative): during the application, bot does a WOM API lookup on the applicant's RSN. When staff clicks approve, bot auto-assigns the total level rank based on WOM data — not what the applicant typed. Catches liars. If the RSN doesn't exist on WOM, flag it for staff.
+
+- **Build timing (2026-10-13):** Gavin wants the WOM onboarding integration built early while volume is low, so it's tested and ready before applications pick up. Not yet approved to build — waiting on his go-ahead.
