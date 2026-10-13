@@ -119,7 +119,7 @@ Things Gavin needs to do to unblock the dev team:
 - [ ] Create test bot application in Discord Developer Portal (for test branch workflow) — app created 2026-10-12, on oathbreakers team (token + invite URL pending)
 - [x] Create `test` branch in repo (done 2026-10-12)
 - [ ] Get clan-holder alt to total level 150 (for CC ownership transfer)
-- [ ] Create clan Google account (Ashton wants Drive/Calendar access — add him as manager)
+- [x] Create clan Google account (done 2026-10-12 — Drive + Calendar working)
 - [ ] Set up Ko-fi page + separate clan PayPal account
 - [ ] Scope bot permissions down from Administrator to read/write text only
 - [ ] Optional: purchase oathforsaken.cc domain
