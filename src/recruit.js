@@ -332,8 +332,8 @@ async function handleDecision(interaction) {
       guest: 'Welcome our newest Guest!',
     };
     const welcomeLines = {
-      iron: 'You broke your chains. Welcome to the chaos.',
-      main: "You had every reason to stay comfortable. You're here anyway.",
+      iron: 'You stand before the clan with empty hands. No Grand Exchange. No trading. No one to carry you. Kneel.',
+      main: "Zamorak never cared about bloodlines — only strength. You're one of us now. That's all that matters.",
       guest: "The door's open. Come see what the forsaken built.",
     };
     const generalChan = guild.channels.cache.get('1558583385440395476');
