@@ -1,0 +1,53 @@
+{
+ "channel": "#donate",
+ "channel_id": "1559376851334340640",
+ "backed_up_at": "2026-10-13T02:56:57.839138+00:00",
+ "messages": [
+  {
+   "message_id": "1559391641356345355",
+   "embeds": [
+    {
+     "title": "\u26e7 Support the Clan \u26e7",
+     "description": "**\ud83d\udcb0 Where It Goes**\n\u2022 Bingo and event prizes\n\u2022 Bonds for clan members\n\u2022 Server costs and upgrades\n\u2022 New features for the Discord\n___\n**\ud83e\ude78 Blood Tithe**\n\u2022 Every donor gets the Blood Tithe role\n\u2022 Your name in the Hall of the Blood Tithe below\n\u2022 Our eternal gratitude (and maybe first dibs on event spots)\n___\n**\u2753 How It Works**\n\u2022 Click the button below to open our Ko-fi page\n\u2022 Donate any amount via PayPal, card, Apple Pay, or Google Pay",
+     "color": 7015950,
+     "image_url": "https://cdn.discordapp.com/attachments/1558458301627506788/1559381372714360832/donate-banner-v8.gif?ex=6acede93&is=6acd8d13&hm=688c12b325bafcfb5f48b96f43328dda65351719f474989d2895566baa6d096f&",
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [
+    {
+     "type": 1,
+     "id": 1,
+     "components": [
+      {
+       "type": 2,
+       "id": 2,
+       "custom_id": "donate:open",
+       "style": 4,
+       "label": "Donate on Ko-fi"
+      }
+     ]
+    }
+   ],
+   "content": null
+  },
+  {
+   "message_id": "1559393014286393406",
+   "embeds": [
+    {
+     "title": "\u26e7 Hall of the Blood Tithe \u26e7",
+     "description": "*Those who have fed the flame. Their names are etched in shadow.*\n\nNo tithes yet. Be the first to bleed for the clan.",
+     "color": 7015950,
+     "image_url": null,
+     "thumbnail_url": null,
+     "footer": null,
+     "fields": null
+    }
+   ],
+   "components": [],
+   "content": null
+  }
+ ]
+}
