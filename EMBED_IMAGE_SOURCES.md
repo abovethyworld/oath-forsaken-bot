@@ -1,5 +1,18 @@
 # Embed Image Sources — DO NOT DELETE THESE MESSAGES
 
+## Full Discord Backup 2026-10-13
+All important channel images + all 59 custom emoji backed up to Drive:
+Folder: "Discord Image Backup 2026-10-13" (ID: 16IVnJQY3X9ZgvpJSKnQB6TnDwTS3NUtH) in Oath Forsaken Drive
+- 59 emoji files (emoji-<name>-<id>.png/gif)
+- 9 channel images (channel-<name>.png/gif):
+  - rules-RULES.png, rules-STRIKESYSTEM.png
+  - roles-CLANROLES.png, roles-WISEOLDMANWEEKLYCOMP.png, roles-SKILLINGROLES.png
+  - roles-PVMROLES.png, roles-PREFERREDGAMESERVER.png, roles-TYPEOFIRON.png
+  - donate-SupporttheClan.gif
+- Plus 3 OG clan-ranks banners in main Drive folder (og-iron-banner.jpg, og-armor-banner.jpg, og-staff-banner.jpg)
+Local copies: ~/workspace/discord-backup/emoji/ and ~/workspace/discord-backup/channel-images/
+#bot-commands WIP previews are NOT backed up (per Gavin — those are just ideas).
+
 These Discord messages contain attachments that are referenced by embeds.
 Deleting any of these messages will break the embed images (404).
 
