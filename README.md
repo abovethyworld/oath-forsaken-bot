@@ -72,27 +72,35 @@ The bot only answers buttons, tickets, welcomes, and reminders while its process
 **Recommended: Oracle Cloud Always Free** (free forever, no catch beyond signup verification)
 1. Sign up at <https://www.oracle.com/cloud/free/> — it asks for a card for verification but the Always Free tier isn't charged.
 2. Create a VM: **Ampere A1** shape (4 OCPUs / 24 GB free), Ubuntu 24.04. No inbound firewall rules needed — the bot only makes outbound connections.
-3. SSH in and run the setup script:
+3. SSH in and run the setup script (installs Docker):
    ```bash
    curl -fsSLO https://raw.githubusercontent.com/<you>/oathbreakers-bot/main/deploy/setup-vps.sh
    # or just paste its contents — it's in deploy/setup-vps.sh
    sudo bash setup-vps.sh
    ```
    (Simplest: copy the file's contents from your workspace and paste it into the SSH session.)
-4. Upload the tarball from your computer:
+4. Log in to GitHub Container Registry so the VPS can pull the private image. Create a GitHub personal access token (classic) with only the `read:packages` scope, then:
    ```bash
-   scp deploy/oathbreakers-bot.tar.gz ubuntu@<vps-ip>:/tmp/
+   echo <PAT> | sudo docker login ghcr.io -u <github-username> --password-stdin
    ```
-   Then on the VPS: `sudo tar -xzf /tmp/oathbreakers-bot.tar.gz -C /opt/oathbreakers-bot`
-5. Create `/opt/oathbreakers-bot/.env` with your token (same two lines as local `.env`), then:
+5. Create `/opt/oathbreakers-bot/.env` with your token (same lines as local `.env`, but no quotes around values — Docker passes them through literally). Copy `deploy/oathbreakers-bot.service` to the VPS (`scp`), then:
    ```bash
-   cd /opt/oathbreakers-bot && sudo npm install --omit=dev --no-audit --no-fund
-   sudo cp deploy/oathbreakers-bot.service /etc/systemd/system/
+   sudo cp oathbreakers-bot.service /etc/systemd/system/
    sudo systemctl daemon-reload && sudo systemctl enable --now oathbreakers-bot
    ```
 6. Verify: `systemctl status oathbreakers-bot` and `journalctl -u oathbreakers-bot -f`. It auto-restarts on crashes and on reboot.
 
-**Alternative: Raspberry Pi** — same steps minus the Oracle signup: copy the project folder over, `npm install`, drop the `.service` file in `/etc/systemd/system/`, enable it.
+**How it's built:** every push to `main` runs `.github/workflows/docker.yml`, which builds the image for amd64 + arm64 and pushes `ghcr.io/abovethyworld/oath-forsaken-bot:latest` (plus a `sha-<commit>` tag). `config.json` and `src/` are baked in, so config edits ship the same way as code.
+
+**How it runs:** systemd pulls `:latest` and then `docker run`s it (see `deploy/oathbreakers-bot.service`). Secrets come from `/opt/oathbreakers-bot/.env`; `/opt/oathbreakers-bot/data` is mounted at `/app/data`, so strikes, tickets, join dates, and Google tokens survive updates.
+
+**Updating:** push to `main`, wait for the Action to go green, then on the VPS:
+```bash
+sudo systemctl restart oathbreakers-bot
+```
+To roll back, change `:latest` to an older `sha-<commit>` tag on both image lines in the service file (the pull and the run), `daemon-reload`, and restart.
+
+**Alternative: Raspberry Pi** (64-bit OS) — same steps minus the Oracle signup.
 
 ## Part 5 — Run it locally for testing
 
