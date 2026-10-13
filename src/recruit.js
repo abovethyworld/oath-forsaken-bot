@@ -335,7 +335,7 @@ async function handleDecision(interaction) {
     if (generalChan) {
       const { EmbedBuilder } = require('discord.js');
       const welcomeRole = type === 'guest' ? '<@&1558540445611728997>' : '<@&1558452023790276659>';
-      const welcomeHeader = type === 'guest' ? `Welcome our newest ${welcomeRole}` : `Welcome, newest ${welcomeRole}`;
+      const welcomeHeader = type === 'guest' ? `Welcome, ${welcomeRole}` : `Welcome, newest ${welcomeRole}`;
       const wEmbed = new EmbedBuilder()
         .setDescription(
           `**${welcomeHeader}**\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n<@${target.id}>\n\n` +
