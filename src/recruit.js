@@ -326,11 +326,6 @@ async function handleDecision(interaction) {
     await target.send(welcomeDMs[type] || welcomeDMs.guest).catch(() => {});
 
     // Public welcome in #general, pinging the new member (Sapphire-style)
-    const welcomeTitles = {
-      iron: 'Welcome, newest initiate.',
-      main: 'Welcome, newest initiate.',
-      guest: 'Welcome our newest Guest!',
-    };
     const welcomeLines = {
       iron: 'You stand before the clan with empty hands. No Grand Exchange. No trading. No one to carry you. Kneel.',
       main: "Zamorak never cared about bloodlines — only strength. You're one of us now. That's all that matters.",
@@ -339,10 +334,11 @@ async function handleDecision(interaction) {
     const generalChan = guild.channels.cache.get('1558583385440395476');
     if (generalChan) {
       const { EmbedBuilder } = require('discord.js');
+      const welcomeRole = type === 'guest' ? '<@&1558540445611728997>' : '<@&1558452023790276659>';
+      const welcomeHeader = type === 'guest' ? `Welcome our newest ${welcomeRole}!` : `Welcome, newest ${welcomeRole}.`;
       const wEmbed = new EmbedBuilder()
-        .setTitle(welcomeTitles[type] || welcomeTitles.guest)
         .setDescription(
-          `<@${target.id}>\n\n` +
+          `**${welcomeHeader}**\n<@${target.id}>\n\n` +
           `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
