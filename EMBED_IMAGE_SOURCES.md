@@ -7,20 +7,19 @@ Deleting any of these messages will break the embed images (404).
 - RULES banner -> #bot-commands msg 1559270014585020499 (att 1559270014681358356)
 - STRIKE meme -> #bot-commands msg 1559278504221089902 (att 1559278503894188074)
 
-## #clan-ranks (1558481986706870445) — REBUILT 2026-10-13
-OG banner source files (in repo):
-- assets/banner-art/clan-ranks-og/og-iron-banner.jpg → CLAN CHAT RANKS embed
-- assets/banner-art/clan-ranks-og/og-armor-banner.jpg → MEMBER ROLES embed
-- assets/banner-art/clan-ranks-og/og-staff-banner.jpg → Staff Roles embed
-Discord sources (#bot-commands):
-- OG iron banner -> msg 1559617465619710034
-- OG armor banner -> msg 1559617552244801598
-- OG staff banner -> msg 1559617640719187980
-Live embeds:
-- CLAN CHAT RANKS -> msg 1559617741529288796
-- MEMBER ROLES -> msg 1559617834642964512
-- Staff Roles -> msg 1559617942726123606
-DO NOT DELETE the #bot-commands source messages.
+## #clan-ranks (1558481986706870445) — REBUILT 2026-10-13, DRIVE-SOURCED
+OG banner source files (in repo + Drive):
+- assets/banner-art/clan-ranks-og/og-iron-banner.jpg
+  Drive: 1XXmEscIyNFbBVwuEQhObJBoSiV83Q6NQ → https://lh3.googleusercontent.com/d/1XXmEscIyNFbBVwuEQhObJBoSiV83Q6NQ
+  Used in: CLAN CHAT RANKS embed msg 1559617741529288796
+- assets/banner-art/clan-ranks-og/og-armor-banner.jpg
+  Drive: 1MvvEu8vPmGBSuzrKuE10b16-dBbQF5HN → https://lh3.googleusercontent.com/d/1MvvEu8vPmGBSuzrKuE10b16-dBbQF5HN
+  Used in: MEMBER ROLES embed msg 1559617834642964512
+- assets/banner-art/clan-ranks-og/og-staff-banner.jpg
+  Drive: 1RSthBLojAJ-VtBblBrtloa9f2tJMTNjT → https://lh3.googleusercontent.com/d/1RSthBLojAJ-VtBblBrtloa9f2tJMTNjT
+  Used in: Staff Roles embed msg 1559617942726123606
+All Drive files shared as anyone-with-link (reader). Direct image URLs via lh3.googleusercontent.com/d/<id>.
+Backup Discord sources in #bot-commands (msgs 1559617465619710034, 1559617552244801598, 1559617640719187980) — DO NOT DELETE.
 
 ## #roles (1558399101454786670)
 - WISE OLD MAN WEEKLY COMPS -> #bot-commands msg 1559105357215965195 (att 1559105273610641498)
@@ -41,9 +40,11 @@ When updating an embed image:
 ## Banner Registry Format
 Every banner must have all four:
 - Repo: assets/banner-art/<file>
-- Drive: <file ID> (backup)
-- Discord: #bot-commands msg <id> (live source)
+- Drive: <file ID> → https://lh3.googleusercontent.com/d/<file ID> (live source for embeds)
+- Discord: #bot-commands msg <id> (backup source)
 - Used in: #<channel> <embed title> msg <id>
+
+Policy 2026-10-13 (Gavin): embed images source from Drive (lh3.googleusercontent.com), NOT Discord CDN. Drive is the reliable store. Discord #bot-commands copies are backup only.
 
 ## #donate embed banner
 - Source message: 1559385469605912598 in #bot-commands
