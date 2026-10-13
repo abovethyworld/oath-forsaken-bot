@@ -761,25 +761,25 @@
       "color": 8475594
     },
     {
-      "name": "Revenant",
-      "displayName": "Revenant (6-8 months)",
+      "name": "Zealot",
+      "displayName": "Zealot (6-8 months)",
       "roleId": "1558451991448129628",
       "minMonths": 6,
       "maxMonths": 8,
       "emoji": {
-        "name": "revenant",
+        "name": "zealot",
         "id": "1558454473813266442"
       },
       "color": 7358892
     },
     {
-      "name": "Bloodsworn",
-      "displayName": "Bloodsworn (3-5 months)",
+      "name": "Devout",
+      "displayName": "Devout (3-5 months)",
       "roleId": "1558452002319769631",
       "minMonths": 3,
       "maxMonths": 5,
       "emoji": {
-        "name": "bloodsworn",
+        "name": "devout",
         "id": "1558454461930934384"
       },
       "color": 6242190
@@ -813,16 +813,11 @@
     "title": "CLAN RANKS",
     "color": 16766720,
     "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1558492397246087289/banner-ranks.png?ex=6acba2a6&is=6aca5126&hm=81ba7f8c3c7dd9626a3556278ab27422a3d7272dbe626aa971c64d3571840b72&",
-    "intro": "Total level ranks are ironmen only. Everyone earns seniority ranks just by sticking around.",
+    "intro": "",
     "sections": [
       {
-        "heading": "Total Level Ranks",
-        "body": "<:maxed:1558454796611100743> **Maxed [2376]**\n<:zamorakian:1558454806744666182> **Zamorakian [2300-2375]**\n<:wrath:1558454818396176394> **Wrath [2150-2299]**\n<:destroyer:1558454830056476672> **Destroyer [2000-2149]**\n<:unholy:1558454842094256208> **Unholy [1850-1999]**\n<:skulled:1558454852596531310> **Skulled [1650-1849]**\n<:death:1558454863149662208> **Death [1450-1649]**\n<:imp:1558454873924833457> **Imp [1250-1449]**\n<:goblin:1558454884880089121> **Goblin [1000-1249]**\n<:necromancer:1558454896095797259> **Necromancer [500-999]**\n<:wizard:1558454906803847308> **Wizard [0-499]**\n\n_Staff set these from your hiscores total level._",
-        "divider_before": true
-      },
-      {
-        "heading": "Seniority Ranks",
-        "body": "<:godslayer:1558454497515278428> **Godslayer (1 year+)**\n<:heretic:1558454486014369833> **Heretic (9-11 months)**\n<:revenant:1558454473813266442> **Revenant (6-8 months)**\n<:bloodsworn:1558454461930934384> **Bloodsworn (3-5 months)**\n<:acolyte:1558454450828480583> **Acolyte (1-2 months)**\n<:initiate:1558454439558385706> **Initiate (Under 1 month)**\n\n_Automatic. Based on how long you have been in the server._",
+        "heading": "Clan Ranks",
+        "body": "<:zamorakian:1558454806744666182> **Ascendant** (Hand-picked prestige)\n<:destroyer:1558454830056476672> **Godslayer (1 year+)**\n<:unholy:1558454842094256208> **Heretic (9-11 months)**\n<:wrath:1558454818396176394> **Zealot (6-8 months)**\n<:skulled:1558454852596531310> **Devout (3-5 months)**\n<:imp:1558454873924833457> **Acolyte (1-2 months)**\n<:necromancer:1558454896095797259> **Initiate (Under 1 month)**\n\n_Automatic. Based on how long you have been in the server._",
         "divider_before": true
       },
       {

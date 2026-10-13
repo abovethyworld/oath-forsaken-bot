@@ -1,7 +1,7 @@
 // Time-in-service (tenure) ranks, shown as separate groups in the member list.
 // A daily loop assigns each member the seniority role matching their server
-// join date: Initiate (<1 mo) -> Acolyte (1-2) -> Bloodsworn (3-5) ->
-// Revenant (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
+// join date: Initiate (<1 mo) -> Acolyte (1-2) -> Devout (3-5) ->
+// Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
 // On rank-up, the bot pings the member in #general with their story
 // (iron vs main arcs in docs/seniority-stories.md).
@@ -26,11 +26,11 @@ const RANK_STORIES = {
     iron: "You've learned the first truth: everything you own, you bled for. The easy path is still there, waiting. You walk past it every day. That is comfort, forsaken.",
     main: "The novelty wore off. You're still here. That's when it counts.",
   },
-  bloodsworn: {
+  devout: {
     iron: "Your bank is a graveyard of hours. Every bar smelted, every herb cleaned, every drop prayed for. Your blood is on the altar — not as sacrifice, but as proof.",
     main: "You've earned your place the same way everyone does here — by staying. The mode never mattered.",
   },
-  revenant: {
+  zealot: {
     iron: "You've gone a thousand kills dry. You've farmed the same boss for months for one drop. Most people would have quit. You're still here. That's what revenants do — they don't stay down.",
     main: "You've watched people leave. Mains who got bored. Irons who burned out. You stayed.",
   },
@@ -51,8 +51,8 @@ function storyKey(name) {
 const SENIORITY_ROLE_IDS = {
   initiate: '1558452023790276659',
   acolyte: '1558452012797136960',
-  bloodsworn: '1558452002319769631',
-  revenant: '1558451991448129628',
+  devout: '1558452002319769631',
+  zealot: '1558451991448129628',
   heretic: '1558451981562151062',
   godslayer: '1558451970883453003',
 };
