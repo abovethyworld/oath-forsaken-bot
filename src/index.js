@@ -42,6 +42,16 @@ client.once(Events.ClientReady, async (c) => {
   // Seniority (tenure rank) loop: check once a day, plus once after startup.
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setTimeout(() => syncSeniority(client), 60 * 1000);
+
+  // Backfill original join dates for existing members (one-time, gaps only).
+  setTimeout(async () => {
+    const { backfill } = require('./join-dates');
+    const guild = client.guilds.cache.get(config.guildId);
+    if (guild) {
+      const n = await backfill(guild);
+      if (n) console.log(`Join dates: backfilled ${n} member(s).`);
+    }
+  }, 30 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -70,6 +80,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
+  const { recordJoin } = require('./join-dates');
+  recordJoin(member.id, member.joinedAt);
   await handleWelcome(member);
   // Join/leave logging handled by Sapphire (2026-10-11)
   await onMemberJoin(member).catch((e) => console.error('Application channel failed:', e.message));
