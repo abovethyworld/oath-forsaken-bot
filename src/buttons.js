@@ -9,6 +9,13 @@ async function handleButton(interaction) {
   if (kind === 'ticket') return handleTicketButton(interaction);
   if (kind === 'apply') return handleApplyButton(interaction);
   if (kind === 'poll') return handlePollButton(interaction);
+  if (kind === 'donate') {
+    await interaction.reply({
+      content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nEvery bit helps. Chaos takes all.',
+      ephemeral: true,
+    });
+    return;
+  }
   if (kind !== 'role') return;
 
   const role = interaction.guild.roles.cache.get(roleId);
