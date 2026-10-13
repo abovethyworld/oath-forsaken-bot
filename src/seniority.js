@@ -70,7 +70,7 @@ async function postRankUpStory(guild, member, rankName) {
     const roleId = SENIORITY_ROLE_IDS[key];
     const rankShort = rankName.split(' ')[0];
     const embed = new EmbedBuilder()
-      .setDescription(`⛧ <@&${roleId}> ⛧\n<@${member.id}> just became ${rankShort === 'Initiate' ? 'an' : 'a'} ${rankShort}. Drop your gzzz.\n\n*${story}*`)
+      .setDescription(`⛧ <@&${roleId}> ⛧\n<@${member.id}> has risen to ${rankShort}. Power recognizes power.\n\n*${story}*`)
       .setColor(ZAMORAK_RED)
       .setThumbnail(member.user.displayAvatarURL());
     await channel.send({ embeds: [embed] }).catch(() => {});
