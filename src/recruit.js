@@ -324,6 +324,23 @@ async function handleDecision(interaction) {
       guest: `🎉 Your **Guest** application to **${guild.name}** was approved! Welcome.\n\nYou're free to hang out and check things out. If you ever want full membership, just reapply as an ironman or main.`,
     };
     await target.send(welcomeDMs[type] || welcomeDMs.guest).catch(() => {});
+
+    // Public welcome in #general, pinging the new member (Sapphire-style)
+    const welcomeTitles = {
+      iron: 'Welcome our newest Iron Sworn!',
+      main: 'Welcome our newest Unbound!',
+      guest: 'Welcome our newest Guest!',
+    };
+    const generalChan = guild.channels.cache.get('1558583385440395476');
+    if (generalChan) {
+      const { EmbedBuilder } = require('discord.js');
+      const wEmbed = new EmbedBuilder()
+        .setTitle(welcomeTitles[type] || welcomeTitles.guest)
+        .setDescription(`<@${target.id}>\n\nSay hi and make them feel welcome.`)
+        .setColor(0x6B0E0E)
+        .setThumbnail(target.user.displayAvatarURL());
+      await generalChan.send({ embeds: [wEmbed] }).catch(() => {});
+    }
   } else if (target) {
     await target.send(`Thanks for applying to **${guild.name}** — staff decided not to move forward this time. You're welcome to reapply later.`).catch(() => {});
   }
