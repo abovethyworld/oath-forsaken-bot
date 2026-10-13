@@ -7,6 +7,7 @@
 // (iron vs main arcs in docs/seniority-stories.md).
 const { PermissionFlagsBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const config = require('./config');
+const { getOriginalJoinDate, backfill } = require('./join-dates');
 
 const MONTH_MS = 30.44 * 24 * 3600 * 1000;
 const ZAMORAK_RED = 0x6b0e0e;
@@ -102,8 +103,12 @@ async function syncSeniority(client) {
     const now = Date.now();
     let changed = 0;
     for (const m of members.values()) {
-      if (m.user.bot || !m.joinedAt) continue;
-      const months = (now - m.joinedAt.getTime()) / MONTH_MS;
+      if (m.user.bot) continue;
+      // Use original join date (survives leave/rejoin). Fall back to Discord's.
+      const original = getOriginalJoinDate(m.id);
+      const joinedAt = original || m.joinedAt;
+      if (!joinedAt) continue;
+      const months = (now - joinedAt.getTime()) / MONTH_MS;
       const want = rankForMonths(months);
       if (!want) continue;
       const has = m.roles.cache.has(want.roleId);
