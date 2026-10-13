@@ -342,7 +342,7 @@ async function handleDecision(interaction) {
       const wEmbed = new EmbedBuilder()
         .setTitle(welcomeTitles[type] || welcomeTitles.guest)
         .setDescription(
-          `<@${target.id}>\n\n` +
+          `<@${target.id}> — <@&1558452023790276659>\n\n` +
           `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
