@@ -13,6 +13,7 @@ const store = require('./store');
 const tickets = require('./tickets');
 const calendar = require('./calendar');
 const polls = require('./polls');
+const eventCalendar = require('./event-calendar');
 const seniority = require('./seniority');
 const recruit = require('./recruit');
 
@@ -243,6 +244,7 @@ const commands = [
   ...tickets.commands,
   ...calendar.commands,
   ...polls.commands,
+  ...eventCalendar.commands,
   ...seniority.commands,
   ...recruit.commands,
 ];
