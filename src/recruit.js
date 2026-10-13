@@ -327,9 +327,14 @@ async function handleDecision(interaction) {
 
     // Public welcome in #general, pinging the new member (Sapphire-style)
     const welcomeTitles = {
-      iron: 'Welcome our newest Iron Sworn!',
-      main: 'Welcome our newest Unbound!',
+      iron: 'Welcome, newest initiate.',
+      main: 'Welcome, newest initiate.',
       guest: 'Welcome our newest Guest!',
+    };
+    const welcomeLines = {
+      iron: 'You broke your chains. Welcome to the chaos.',
+      main: "You had every reason to stay comfortable. You're here anyway.",
+      guest: "The door's open. Come see what the forsaken built.",
     };
     const generalChan = guild.channels.cache.get('1558583385440395476');
     if (generalChan) {
@@ -338,6 +343,7 @@ async function handleDecision(interaction) {
         .setTitle(welcomeTitles[type] || welcomeTitles.guest)
         .setDescription(
           `<@${target.id}>\n\n` +
+          `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
           `• Ping staff when you're ready for a clan chat invite`
