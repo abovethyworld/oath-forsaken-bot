@@ -111,16 +111,8 @@ async function createTicket(interaction, ticketType) {
       type: ChannelType.PrivateThread,
       reason: `${theme.label} ticket opened by ${interaction.user.tag}`,
     });
-    // Add the user and staff to the thread
+    // Add the ticket creator to the thread (staff see it via the role ping)
     await thread.members.add(interaction.user.id).catch(() => {});
-    for (const roleId of t.staffRoleIds || []) {
-      const role = interaction.guild.roles.cache.get(roleId);
-      if (role) {
-        for (const [, member] of role.members) {
-          await thread.members.add(member.id).catch(() => {});
-        }
-      }
-    }
   } catch (err) {
     await interaction.editReply('Could not create the ticket thread. Make sure I have the **Create Private Threads** permission.');
     return;
