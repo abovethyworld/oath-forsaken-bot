@@ -1,7 +1,6 @@
 // Recruitment applications — three types: ironman, main, guest.
 // On member join: opens a private application channel with three buttons.
-// Iron applicants pick their total level bracket from a dropdown, then fill a modal.
-// Main/guest applicants go straight to a modal (no total level asked).
+// All applicants answer the Discord age question, then fill a modal.
 // Submit -> the bot opens a forum post in the applications forum titled
 // "<Type> App from <username>" with the answers, so staff can discuss in the
 // thread. Approve / Deny buttons live on the post's starter message.
@@ -24,41 +23,6 @@ const store = require('./store');
 
 const DAY_MS = 24 * 3600 * 1000;
 const ZAMORAK_RED = 0x6b0e0e;
-
-// Total-level brackets mirror the clan's rank ladder, with server emoji.
-const TOTAL_LEVEL_BRACKETS = [
-  { value: 'maxed', label: 'Maxed [2376]', emoji: '1558454796611100743' },
-  { value: 'zamorakian', label: 'Zamorakian [2300-2375]', emoji: '1558454806744666182' },
-  { value: 'wrath', label: 'Wrath [2150-2299]', emoji: '1558454818396176394' },
-  { value: 'destroyer', label: 'Destroyer [2000-2149]', emoji: '1558454830056476672' },
-  { value: 'unholy', label: 'Unholy [1850-1999]', emoji: '1558454842094256208' },
-  { value: 'skulled', label: 'Skulled [1650-1849]', emoji: '1558454852596531310' },
-  { value: 'death', label: 'Death [1450-1649]', emoji: '1558454863149662208' },
-  { value: 'imp', label: 'Imp [1250-1449]', emoji: '1558454873924833457' },
-  { value: 'goblin', label: 'Goblin [1000-1249]', emoji: '1558454884880089121' },
-  { value: 'necromancer', label: 'Necromancer [500-999]', emoji: '1558454896095797259' },
-  { value: 'wizard', label: 'Wizard [0-499]', emoji: '1558454906803847308' },
-];
-
-function bracketLabel(value) {
-  const b = TOTAL_LEVEL_BRACKETS.find((x) => x.value === value);
-  return b ? b.label : value;
-}
-
-// Discord role IDs for each total-level rank (assigned on iron approval only).
-const TOTAL_LEVEL_ROLE_IDS = {
-  maxed: '1558440214739943505',
-  zamorakian: '1558440222029651978',
-  wrath: '1558450336665182228',
-  destroyer: '1558450347251343481',
-  unholy: '1558450357573521465',
-  skulled: '1558440247140810772',
-  death: '1558440218418221086',
-  imp: '1558440250714492999',
-  goblin: '1558450368927637504',
-  necromancer: '1558440225401999380',
-  wizard: '1558450379572781096',
-};
 
 function accountAgeDays(user) {
   return Math.floor((Date.now() - user.createdAt.getTime()) / DAY_MS);
@@ -84,8 +48,8 @@ async function postApplicationPanel(channel) {
     .setTitle('📝 Clan Application')
     .setDescription(
       `To join **${guild.name}**, pick the application that fits you.\n\n` +
-        `**Ironman** — you play an ironman and want full clan membership (ranks, bingos, comps).\n` +
-        `**Main** — you play a main; you can hang out, earn seniority, and join casual events.\n` +
+        `**Ironman** — you play an ironman.\n` +
+        `**Main** — you play a main.\n` +
         `**Guest** — you're just visiting or here for a friend.\n\n` +
         `Staff review every application.`
     )
@@ -117,8 +81,8 @@ async function applyCommand(interaction) {
     .setTitle('📝 Clan Application')
     .setDescription(
       `Pick the application that fits you.\n\n` +
-        `**Ironman** — full clan membership (ranks, bingos, comps).\n` +
-        `**Main** — hang out, earn seniority, join casual events.\n` +
+        `**Ironman** — you play an ironman.\n` +
+        `**Main** — you play a main.\n` +
         `**Guest** — just visiting or here for a friend.`
     )
     .setColor(ZAMORAK_RED);
@@ -136,26 +100,6 @@ async function applyCommand(interaction) {
   await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 }
 
-// Iron applicants pick a total-level bracket first (modals can't hold dropdowns).
-async function showTotalLevelSelect(interaction, ageAnswer) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`apply:total:${ageAnswer || 'none'}`)
-    .setPlaceholder('What is your total level?')
-    .addOptions(TOTAL_LEVEL_BRACKETS.map((b) => ({ label: b.label, value: b.value, emoji: b.emoji ? { id: b.emoji } : undefined })));
-  const row = new ActionRowBuilder().addComponents(menu);
-  const replyOpts = {
-    content: 'Pick your total level bracket, then answer a few questions.',
-    components: [row],
-    ephemeral: true,
-  };
-  // If this is a follow-up to the age dropdown, update instead of reply
-  if (interaction.replied || interaction.deferred) {
-    await interaction.editReply(replyOpts).catch(() => {});
-  } else {
-    await interaction.reply(replyOpts);
-  }
-}
-
 // All applicants answer the Discord age question via Yes/No dropdown first.
 async function showAgeSelect(interaction, type) {
   const menu = new StringSelectMenuBuilder()
@@ -163,7 +107,7 @@ async function showAgeSelect(interaction, type) {
     .setPlaceholder('Is your Discord account at least 1 month old?')
     .addOptions([
       { label: 'Yes', value: 'yes', emoji: '✅' },
-      { label: 'No', value: 'no', emoji: '❌' },
+      { label: 'No', value: 'no', emoji: '✖️' },
     ]);
   const row = new ActionRowBuilder().addComponents(menu);
   await interaction.reply({
@@ -199,9 +143,16 @@ async function showApplicationModal(interaction, type, totalBracket, ageAnswer) 
 }
 
 async function handleModalSubmit(interaction) {
-  // customId: apply:modal:<type>:<bracket|none>:<age|none>
+  // customId: apply:modal:<type>:<bracket|none>:<age|none> OR apply:denyreasonmodal:<userId>:<type>:<bracket>
   const parts = interaction.customId.split(':');
-  if (parts[0] !== 'apply' || parts[1] !== 'modal') return;
+  if (parts[0] !== 'apply') return;
+
+  // Deny-with-reason modal from staff
+  if (parts[1] === 'denyreasonmodal') {
+    return handleDenyReasonSubmit(interaction);
+  }
+
+  if (parts[1] !== 'modal') return;
 
   // Prevent multiple submissions
   if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
@@ -236,9 +187,6 @@ async function handleModalSubmit(interaction) {
   }
 
   const lines = [`**Application type:** ${t.label}`];
-  if (type === 'iron' && bracket && bracket !== 'none') {
-    lines.push(`**Total level:** ${bracketLabel(bracket)}`);
-  }
   for (const q of t.questions || []) {
     lines.push(`**${q.label}:** ${answers[q.id]}`);
   }
@@ -259,8 +207,9 @@ async function handleModalSubmit(interaction) {
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Approve').setStyle(ButtonStyle.Success).setEmoji('✅'),
-    new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('❌')
+    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('✅'),
+    new ButtonBuilder().setCustomId(`apply:denyreason:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny with Reason').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
+    new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('✖️')
   );
 
   const postName = `${t.label} App from ${interaction.user.username}`;
@@ -273,11 +222,19 @@ async function handleModalSubmit(interaction) {
     .catch(() => null);
 
   if (thread) {
+    // Staff ping on new applications — quiet until launch (Gavin 2026-10-14).
+    // The mention renders but doesn't notify; flip allowedMentions to ping for real at launch.
+    await thread.send({
+      content: `<@&1558735997922054225> New ${t.label} application from ${interaction.user}.`,
+      allowedMentions: { users: [interaction.user.id] },
+    }).catch(() => {});
     await interaction.editReply('Application submitted! Staff will review it soon.');
   } else {
     await interaction.editReply('Could not open your application thread — tell staff.');
   }
 
+  // Save answers so approval can auto-set the nickname ("Nickname [RSN]")
+  store.setApplicationAnswers(interaction.guildId, interaction.user.id, answers);
   // Mark this channel as submitted so it isn't reused
   store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
 }
@@ -288,6 +245,71 @@ function isStaff(interaction) {
     interaction.member.roles.cache.some((r) => staffIds.includes(r.id)) ||
     interaction.memberPermissions.has(PermissionFlagsBits.Administrator)
   );
+}
+
+async function handleDenyReasonPrompt(interaction) {
+  // customId: apply:denyreason:<userId>:<type>:<bracket>
+  const [, , userId, type, bracket] = interaction.customId.split(':');
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`apply:denyreasonmodal:${userId}:${type}:${bracket || 'none'}`)
+    .setTitle('Deny with Reason');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('reason')
+        .setLabel('Reason for denial')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(500)
+    )
+  );
+  await interaction.showModal(modal);
+}
+
+async function handleDenyReasonSubmit(interaction) {
+  // customId: apply:denyreasonmodal:<userId>:<type>:<bracket>
+  const [, , userId, type, bracket] = interaction.customId.split(':');
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
+  const reason = interaction.fields.getTextInputValue('reason');
+  // Reuse handleDecision by faking a deny interaction customId, then add reason
+  await interaction.deferReply({ ephemeral: true });
+  const guild = interaction.guild;
+  const target = await guild.members.fetch(userId).catch(() => null);
+  const thread = interaction.channel;
+  const types = appTypes();
+  const t = types[type] || {};
+
+  if (thread && thread.isThread()) {
+    const base = thread.name.replace(/ - (Approved|Denied)$/, '');
+    await thread.setName(`${base} - Denied`.slice(0, 100)).catch(() => {});
+    try {
+      const starter = await thread.fetchStarterMessage().catch(() => null);
+      if (starter && starter.embeds.length > 0) {
+        const orig = starter.embeds[0];
+        const updated = EmbedBuilder.from(orig).addFields(
+          { name: 'Denied', value: `by ${interaction.user.tag}` },
+          { name: 'Reason', value: reason }
+        );
+        await starter.edit({ embeds: [updated], components: [] }).catch(() => {});
+      }
+    } catch {}
+    await thread.setLocked(true).catch(() => {});
+    await thread.setArchived(true).catch(() => {});
+  }
+
+  // DM the applicant with the reason
+  if (target) {
+    await target.send(`Your **${t.label || type}** application to **${guild.name}** was denied.\n\nReason: ${reason}`).catch(() => {});
+  }
+
+  await interaction.editReply(`Denied <@${userId}> with reason.`);
 }
 
 async function handleDecision(interaction) {
@@ -320,39 +342,57 @@ async function handleDecision(interaction) {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
       if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch(() => {});
     }
+    // Auto-nickname: "Nickname [RSN]" (Gavin's idea 2026-10-14, all 3 app types)
+    const appAnswers = store.getApplicationAnswers(guild.id, userId);
+    if (appAnswers && appAnswers.nickname && appAnswers.rsn) {
+      const nick = String(appAnswers.nickname).trim();
+      const firstRsn = String(appAnswers.rsn).split(/[,/]/)[0].trim();
+      if (nick && firstRsn) {
+        const rsnPart = ` [${firstRsn}]`;
+        const newNick = nick.length + rsnPart.length > 32
+          ? nick.slice(0, 32 - rsnPart.length).trimEnd() + rsnPart
+          : nick + rsnPart;
+        await target.setNickname(newNick, 'Auto-nickname on approval').catch(() => {});
+      }
+    }
     // Welcome DM tailored to application type
     const welcomeDMs = {
-      iron: `🎉 Your **Ironman** application to **${guild.name}** was approved! Welcome to the clan.\n\nYou're full crew now: total-level ranks, bingos, WOM comps, all of it. Head to the roles channel to grab your ping roles and introduce yourself.`,
-      main: `🎉 Your **Main** application to **${guild.name}** was approved! Welcome.\n\nAs a main you can hang out, earn seniority, and join casual events. Bingos and WOM comps are ironman-only, but there's plenty going on. Grab your ping roles in the roles channel and say hi.`,
-      guest: `🎉 Your **Guest** application to **${guild.name}** was approved! Welcome.\n\nYou're free to hang out and check things out. If you ever want full membership, just reapply as an ironman or main.`,
+      iron: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
+      main: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
+      guest: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
     };
     await target.send(welcomeDMs[type] || welcomeDMs.guest).catch(() => {});
 
-    // Public welcome in #general, pinging the new member (Sapphire-style)
-    const welcomeLines = {
-      iron: 'You stand before the clan with empty hands. No Grand Exchange. No trading. No one to carry you. Kneel.',
-      main: "Zamorak never cared about bloodlines — only strength. You're one of us now. That's all that matters.",
-      guest: "The door's open. Come see what the forsaken built.",
-    };
+    // Public welcome in #general - plain text (finalized 2026-10-13)
+    // Guest gets the guest welcome; iron/main get the Initiate announcement.
+    // This also handles guest-to-member promotions (they get the Initiate post).
     const generalChan = guild.channels.cache.get('1558583385440395476');
     if (generalChan) {
-      const { EmbedBuilder } = require('discord.js');
-      const welcomeRole = type === 'guest' ? '<@&1558540445611728997>' : '<@&1558452023790276659>';
-      const welcomeHeader = type === 'guest' ? `Welcome, ${welcomeRole}` : `Welcome, newest ${welcomeRole}`;
-      const wEmbed = new EmbedBuilder()
-        .setDescription(
-          `**${welcomeHeader}**\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n<@${target.id}>\n\n` +
-          `*${welcomeLines[type] || welcomeLines.guest}*\n\n` +
+      let welcomeMsg;
+      if (type === 'guest') {
+        welcomeMsg =
+          `Welcome, <@&1558540445611728997>\n` +
+          `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
+          `<@${target.id}>\n\n` +
+          `The door's open. Come see what the forsaken built.\n\n` +
           `• Introduce yourself in <#1558428255940378715>\n` +
           `• Grab your roles in <#1558399101454786670>\n` +
-          `• Ping <@&1558735997922054225> when you're ready for a clan chat invite`
-        )
-        .setColor(0x6B0E0E)
-        .setThumbnail(target.user.displayAvatarURL());
-      await generalChan.send({ embeds: [wEmbed] }).catch(() => {});
+          `• Ping <@&1558735997922054225> when you're ready for a clan chat invite\n` +
+          `• Like what you see? To become an official member, hit Become a Member in <#1558399103757717518>`;
+      } else {
+        welcomeMsg =
+          `⛧ <@&1558452023790276659> ⛧\n` +
+          `⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧\n` +
+          `<@${target.id}> has joined Oath Forsaken.\n\n` +
+          `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
+          `• Drop an intro in <#1558428255940378715> so we can get to meet you\n` +
+          `• Grab your roles in <#1558399101454786670>\n` +
+          `• Ping <@&1558735997922054225> when you're ready for a clan chat invite`;
+      }
+      await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch(() => {});
     }
   } else if (target) {
-    await target.send(`Thanks for applying to **${guild.name}** — staff decided not to move forward this time. You're welcome to reapply later.`).catch(() => {});
+    // Simple deny: no DM sent (2026-10-13)
   }
 
   // Rename the post like Raven's Watch: "<Type> App from <user> - Approved"
@@ -403,7 +443,7 @@ async function handleApplyButton(interaction) {
   if (action === 'type') {
     // Prevent members and staff from applying
     const member = interaction.member;
-    const blockedRoleNames = ['Iron Sworn', 'Unbound', 'Guest', 'Friend of the Clan', 'Lord of Chaos', 'Warmonger', 'Ritualist', 'Justicar', 'Staff'];
+    const blockedRoleNames = ['Iron Sworn', 'Unbound', 'Guest', 'Friend of the Clan', 'Lord of Chaos', 'Warmonger', 'Ritualist', 'Inquisitor', 'Staff'];
     const hasBlockedRole = member.roles.cache.some(r => blockedRoleNames.includes(r.name));
     if (hasBlockedRole) {
       await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch(() => {});
@@ -418,6 +458,7 @@ async function handleApplyButton(interaction) {
     return showAgeSelect(interaction, type);
   }
   if (action === 'approve' || action === 'deny') return handleDecision(interaction);
+  if (action === 'denyreason') return handleDenyReasonPrompt(interaction);
 }
 
 async function handleAgeSelect(interaction) {
@@ -426,11 +467,7 @@ async function handleAgeSelect(interaction) {
   if (parts[0] !== 'apply' || parts[1] !== 'age') return;
   const type = parts[2];
   const ageAnswer = interaction.values[0]; // 'yes' or 'no'
-  if (type === 'iron') {
-    await interaction.deferUpdate().catch(() => {});
-    return showTotalLevelSelect(interaction, ageAnswer);
-  }
-  // For main/guest, show modal directly (can't defer before showModal)
+  // All types go straight to modal (total-level bracket removed 2026-10-13)
   return showApplicationModal(interaction, type, null, ageAnswer);
 }
 
