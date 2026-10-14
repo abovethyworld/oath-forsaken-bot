@@ -136,6 +136,17 @@ module.exports = {
     if (data[guildId]) delete data[guildId][userId];
     saveJson(APPS_FILE, data);
   },
+  setApplicationAnswers(guildId, userId, answers) {
+    const data = loadJson(APPS_FILE);
+    data[guildId] ??= {};
+    data[guildId][userId] ??= { channelId: null, submitted: false };
+    data[guildId][userId].answers = answers;
+    saveJson(APPS_FILE, data);
+  },
+  getApplicationAnswers(guildId, userId) {
+    const data = loadJson(APPS_FILE);
+    return (data[guildId] && data[guildId][userId] && data[guildId][userId].answers) || null;
+  },
 
   // ---- Polls: { pollId: poll } ----
   savePoll(poll) {

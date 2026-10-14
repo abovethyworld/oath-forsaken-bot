@@ -123,7 +123,6 @@ const CHANNELS = [
     minAccountAgeDays: 30,
     questions: [
       { id: 'rsn', label: 'OSRS username (RSN)', style: 'short', required: true },
-      { id: 'total', label: 'Total level', style: 'short', required: true },
       { id: 'nickname', label: 'What should we call you?', style: 'short', required: true },
       { id: 'heard', label: 'How did you hear about us?', style: 'paragraph', required: true },
     ],
