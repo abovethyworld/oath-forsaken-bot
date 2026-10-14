@@ -29,7 +29,7 @@ async function handleWelcome(member) {
 }
 
 
-// Sapphire-style join/leave log for the staff #joins-and-leaves channel.
+// Join/leave log for the staff #joins-and-leaves channel.
 // Pings Staff on join so someone reviews the new member.
 async function logMembership(member, joined) {
   const channelId = config.channels.joinsLeaves;
