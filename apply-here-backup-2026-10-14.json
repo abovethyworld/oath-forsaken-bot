@@ -1,0 +1,75 @@
+{
+  "channel": "apply-here",
+  "channelId": "1558905814482423818",
+  "backedUp": "2026-10-14T07:02:57.780Z",
+  "panels": [
+    {
+      "id": "1559134097673158739",
+      "embeds": [
+        {
+          "type": "rich",
+          "title": "📝 Clan Application",
+          "description": "To join **Oath Forsaken**, pick the application that fits you.\n\n<:ironsworn:1558623401302564996> **Ironman** — you play an ironman.\n\n<:unbound:1558623453438025828> **Main** — you play a main.\n\n<:guest:1558634092185002035> **Guest** — you are just visiting or here for a friend.",
+          "color": 7014414,
+          "content_scan_version": 4
+        }
+      ],
+      "components": [
+        {
+          "type": 1,
+          "id": 1,
+          "components": [
+            {
+              "type": 2,
+              "id": 2,
+              "custom_id": "apply:type:iron",
+              "style": 4,
+              "label": "Apply as Ironman",
+              "emoji": {
+                "id": "1558623401302564996",
+                "name": "ironsworn"
+              }
+            },
+            {
+              "type": 2,
+              "id": 3,
+              "custom_id": "apply:type:main",
+              "style": 4,
+              "label": "Apply as Main",
+              "emoji": {
+                "id": "1558623453438025828",
+                "name": "unbound"
+              }
+            },
+            {
+              "type": 2,
+              "id": 4,
+              "custom_id": "apply:type:guest",
+              "style": 4,
+              "label": "Apply as Guest",
+              "emoji": {
+                "id": "1558634092185002035",
+                "name": "guest"
+              }
+            }
+          ]
+        }
+      ],
+      "content": ""
+    },
+    {
+      "id": "1559134082305106014",
+      "embeds": [
+        {
+          "type": "rich",
+          "title": "WELCOME TO OATH FORSAKEN",
+          "description": "⛧ Oath Forsaken is an ironman-centric clan for scapers who love the grind. We PvM together, we skill together, and we hang out.\n\n⛧ Ironmen get the full experience: bingos and WOM competitions.\n\n⛧ Mains are welcome too. Earn seniority, join casual events, be part of the clan.\n\n⛧ Just visiting? Come say hi as a guest.\n\n⛧ Pick the application below that fits you and we will get you sorted.",
+          "color": 7014414,
+          "content_scan_version": 4
+        }
+      ],
+      "components": [],
+      "content": ""
+    }
+  ]
+}
