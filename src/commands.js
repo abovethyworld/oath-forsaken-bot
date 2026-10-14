@@ -15,6 +15,7 @@ const calendar = require('./calendar');
 const polls = require('./polls');
 const eventCalendar = require('./event-calendar');
 const seniority = require('./seniority');
+const ccChecklist = require('./cc-checklist');
 const recruit = require('./recruit');
 
 const STYLE_MAP = {
@@ -246,6 +247,7 @@ const commands = [
   ...polls.commands,
   ...eventCalendar.commands,
   ...seniority.commands,
+  ...ccChecklist.commands,
   ...recruit.commands,
 ];
 
