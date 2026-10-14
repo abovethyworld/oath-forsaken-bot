@@ -28,7 +28,7 @@ Last updated: 2026-10-12
 1. CLAN CHAT RANKS — intro "Power is earned in Oath Forsaken. Here's how."
 2. MEMBER ROLES — intro "Choose your path."
 3. Staff Roles — intro "Those who lead the chaos."
-- All use RW-style clickable role mentions (not bold text).
+- All use clickable role mentions (not bold text).
 - Role colors match emoji icons (brightened for readability on dark bg).
 
 ## #roles Structure

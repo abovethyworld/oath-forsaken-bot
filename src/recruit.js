@@ -395,14 +395,14 @@ async function handleDecision(interaction) {
     // Simple deny: no DM sent (2026-10-13)
   }
 
-  // Rename the post like the other clan: "<Type> App from <user> - Approved"
+  // Rename the post: "<Type> App from <user> - Approved"
   // and stamp "Approved/Denied by <staff>" on the original post.
   if (thread && thread.isThread()) {
     const base = thread.name.replace(/ - (Approved|Denied)$/, '');
     const verdict = decision === 'approve' ? 'Approved' : 'Denied';
     await thread.setName(`${base} - ${verdict}`.slice(0, 100)).catch(() => {});
 
-    // Edit the starter message to show who decided, like the reference.
+    // Edit the starter message to show who decided.
     try {
       const starter = await thread.fetchStarterMessage().catch(() => null);
       if (starter && starter.embeds.length > 0) {
