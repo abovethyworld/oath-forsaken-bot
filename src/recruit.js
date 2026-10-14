@@ -402,7 +402,7 @@ async function handleDecision(interaction) {
     const verdict = decision === 'approve' ? 'Approved' : 'Denied';
     await thread.setName(`${base} - ${verdict}`.slice(0, 100)).catch(() => {});
 
-    // Edit the starter message to show who decided, like the reference.
+    // Edit the starter message to show who decided.
     try {
       const starter = await thread.fetchStarterMessage().catch(() => null);
       if (starter && starter.embeds.length > 0) {
