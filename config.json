@@ -389,7 +389,7 @@
       },
       {
         "heading": "5. Iron first clan",
-        "body": "This is an ironman clan. Mains are welcome in the Discord, you earn seniority ranks and you can join casual stuff like skilling events and weekly PvM nights. But bingos, WOM comps and total level ranks are ironmen only."
+        "body": "This is an ironman clan. Mains are welcome in the Discord, you earn seniority ranks and you can join casual stuff like skilling events and weekly PvM nights. But bingos and WOM comps are ironmen only."
       },
       {
         "heading": "6. No begging",
@@ -494,12 +494,6 @@
             "required": true
           },
           {
-            "id": "total",
-            "label": "What is your account(s) total level?",
-            "style": "short",
-            "required": true
-          },
-          {
             "id": "nickname",
             "label": "What is your preferred name/nickname?",
             "style": "short",
@@ -532,12 +526,6 @@
             "required": true
           },
           {
-            "id": "total",
-            "label": "What is your account(s) total level?",
-            "style": "short",
-            "required": true
-          },
-          {
             "id": "nickname",
             "label": "What is your preferred name/nickname?",
             "style": "short",
@@ -566,12 +554,6 @@
           {
             "id": "rsn",
             "label": "What is your in-game username(s)?",
-            "style": "short",
-            "required": true
-          },
-          {
-            "id": "total",
-            "label": "What is your account(s) total level?",
             "style": "short",
             "required": true
           },
@@ -746,7 +728,7 @@
         "name": "godslayer",
         "id": "1558454497515278428"
       },
-      "color": 9592040
+      "color": 11053224
     },
     {
       "name": "Heretic",
@@ -758,7 +740,7 @@
         "name": "heretic",
         "id": "1558454486014369833"
       },
-      "color": 8475594
+      "color": 8078860
     },
     {
       "name": "Zealot",
@@ -767,10 +749,10 @@
       "minMonths": 6,
       "maxMonths": 8,
       "emoji": {
-        "name": "zealot",
-        "id": "1558454473813266442"
+        "name": "zealoticon",
+        "id": "1559636513279713360"
       },
-      "color": 7358892
+      "color": 12433259
     },
     {
       "name": "Devout",
@@ -782,7 +764,7 @@
         "name": "devout",
         "id": "1558454461930934384"
       },
-      "color": 6242190
+      "color": 15527935
     },
     {
       "name": "Acolyte",
@@ -794,7 +776,7 @@
         "name": "acolyte",
         "id": "1558454450828480583"
       },
-      "color": 5125488
+      "color": 13938432
     },
     {
       "name": "Initiate (Under 1 month)",
@@ -822,7 +804,7 @@
       },
       {
         "heading": "Member Roles",
-        "body": "<:ironsworn:1558623401302564996> **Iron Sworn**\nIronmen. Full members. Total level ranks, bingos, and WOM comps are yours.\n\n<:unbound:1558623453438025828> **Unbound**\nMains. Hang out, earn seniority, and join casual events like skilling nights and PvM.\n\n<:guest:1558634092185002035> **Guest**\nJust visiting or here for a friend. Say hi.\n\n<:clanfriend:1558634136510537728> **Friend of the Clan**\nTrusted friends, hand-picked by staff.",
+        "body": "<:ironsworn:1558623401302564996> **Iron Sworn**\nIronmen. Full members. Bingos and WOM comps are yours.\n\n<:unbound:1558623453438025828> **Unbound**\nMains. Hang out, earn seniority, and join casual events like skilling nights and PvM.\n\n<:guest:1558634092185002035> **Guest**\nJust visiting or here for a friend. Say hi.\n\n<:clanfriend:1558634136510537728> **Friend of the Clan**\nTrusted friends, hand-picked by staff.",
         "divider_before": true
       }
     ],
