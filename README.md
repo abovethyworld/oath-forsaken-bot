@@ -1,172 +1,160 @@
-# OSRS Clan Bot
+# Oath Forsaken Bot
 
-A custom Discord bot for the Oath Forsaken OSRS clan:
+A custom Discord bot for the Oath Forsaken OSRS clan. Handles onboarding, seniority ranks, tickets, events, polls, and strike tracking.
 
-- **Button roles** — `/setup-roles` posts embed panels with clickable role buttons (like the GENERAL / PVM / MINIGAME panels)
-- **Rules + strike system embeds** — `/post-rules` and `/post-strikes` post banner embeds
-- **Welcome messages** — automatic embed when someone joins
-- **Strike tracking** — `/warn`, `/strikes`, `/clear-strikes` with a mod-log channel
-- **Tickets** — `/setup-tickets` posts an "Open a Ticket" panel; each click creates a private channel for that user + staff, with close button and transcript logging
-- **Calendar** — `/event-create` creates a real Discord scheduled event (RSVP in the Events tab) + announcement; `/events` lists; `/event-cancel` removes; automatic reminder pings before each event
-- **Recruitment** — new joins get a private application channel; a modal asks RSN, total level, nickname, how they heard about you; staff get Approve/Deny buttons, under-30-day accounts are flagged
+## Features
+
+- **Button roles** — `/setup-roles` posts embed panels with clickable role buttons
+- **Rules + strike system** — `/post-rules` and `/post-strikes` post themed embeds
+- **Welcome messages** — automatic themed welcome when someone joins
+- **Strike tracking** — `/warn`, `/strikes`, `/clear-strikes` with mod-log channel
+- **Tickets** — `/setup-tickets` posts a panel with four themed ticket types: Report, Inquiry, Claim Reward, Become a Member
+- **Guest-to-member flow** — guests click Become a Member and pick iron or main from a dropdown; the bot handles role assignment automatically, no ticket needed
+- **Applications** — new joins get a private application channel with a modal form; staff approve/deny with buttons; nicknames auto-set to Name [RSN]
+- **Seniority ranks** — automatic tenure-based progression (Initiate through Ascendant) from each member's join date; daily re-check plus `/sync-seniority`
+- **CC Rank Checklist** — `/setup-cc-checklist` creates a persistent tracker; when someone ranks up on Discord, staff get pinged to update the in-game clan chat rank
+- **Calendar** — `/event-create` creates a native Discord scheduled event plus announcement; `/events` lists upcoming; `/event-cancel` removes; automatic reminder pings
+- **Event calendar embed** — auto-updating 2-week embed synced from Google Calendar; `/calendar-sync` forces a refresh
 - **Polls** — `/poll` with live button voting
-- **Seniority ranks** — the bot assigns tenure roles automatically from each member's join date (Unsworn → … → Oathbreaker), re-checks daily, and staff can force it with `/sync-seniority`
-- **Google Calendar sync** — every `/event-create` also lands on a linked Google Calendar (one-time Google setup, see below)
+- **Google Calendar sync** — every `/event-create` also lands on a linked Google Calendar
 
-Everything the bot says is configured in `config.json`. No code changes needed to customize.
+Everything the bot posts is configured in `config.json`. No code changes needed to customize.
 
----
+## Tech Stack
 
-## Part 1 — Create the bot (10 min, one time)
+- Node.js 22
+- discord.js
+- Docker (multi-arch: amd64 + arm64)
 
-1. Go to <https://discord.com/developers/applications> and click **New Application**. Name it whatever you want the bot to be called (you can rename it when the clan name is locked in).
-2. Left sidebar → **Bot** → **Reset Token** → copy the token. **Treat it like a password.**
-3. On the same Bot page, scroll to **Privileged Gateway Intents** and turn ON **Server Members Intent** (needed for welcome messages). Save.
-4. Left sidebar → **General Information** → copy the **Application ID**.
+## Prerequisites
 
-## Part 2 — Invite it to your server
+- Node.js 22+
+- A Discord application with bot token ([Discord Developer Portal](https://discord.com/developers/applications))
+- Docker (for production deployment)
 
-Build an invite link in the portal: **OAuth2 → URL Generator**, tick scopes `bot` and `applications.commands`, and tick these bot permissions:
-
-- Manage Roles
-- Manage Channels (tickets)
-- Manage Events (calendar)
-- Send Messages
-- Embed Links
-- Attach Files (ticket transcripts)
-- Read Message History
-- View Channels
-
-Open the generated URL, pick your server, authorize.
-
-> **Critical:** in Server Settings → Roles, drag the bot's role **above** every role it hands out. Discord won't let a bot assign roles above its own — this is the #1 reason role bots "don't work."
-
-## Part 3 — Configure
+## Installation
 
 ```bash
-cd osrs-clan-bot
+git clone https://github.com/abovethyworld/oath-forsaken-bot.git
+cd oath-forsaken-bot
 npm install
 cp .env.example .env
 ```
 
-1. Edit `.env`: paste your bot token and application ID.
-2. Edit `config.json`:
-   - `guildId` — your server ID (Developer Mode: Settings → Advanced → Developer Mode ON, then right-click server → Copy Server ID).
-   - `channels.*` — right-click each channel → Copy Channel ID.
-   - `rolePanels` — create the ping roles in your server first, then paste each role's ID. Edit labels, emoji, and button colors freely.
-   - `rules`, `strikeSystem`, `welcome` — write your actual text. `banner` is an optional image URL (upload to imgur and paste the link — Discord attachment links expire) that appears at the top of the embed, like the RULES / GENERAL banners.
-   - `tickets` — create a category (e.g. "Tickets") and your staff roles first, then paste the IDs. `staffRoleIds` is a list — add all mod/admin roles.
-   - `calendar` — set your timezone (IANA name like `America/Chicago`), the events announcement channel, and the role to ping for event announcements/reminders.
-3. Run it:
+Edit `.env` with your bot token and application ID. Edit `config.json` with your server, channel, and role IDs (see Configuration below).
 
 ```bash
 node src/index.js
 ```
 
-You should see `Logged in as <name>` and `Registered 11 slash commands`. In your server, run `/setup-roles`, `/post-rules`, `/post-strikes`, and `/setup-tickets` to post the panels.
+You should see `Logged in as <name>` and the registered slash commands. In your server, run the setup commands below to post the panels.
 
-## Part 4 — Run it 24/7
+## Configuration
 
-The bot only answers buttons, tickets, welcomes, and reminders while its process is running. Everything in `deploy/` preps a free VPS for that:
+`config.json` holds everything the bot posts. Replace every `PASTE_*` value:
 
-**Recommended: Oracle Cloud Always Free** (free forever, no catch beyond signup verification)
-1. Sign up at <https://www.oracle.com/cloud/free/> — it asks for a card for verification but the Always Free tier isn't charged.
-2. Create a VM: **Ampere A1** shape (4 OCPUs / 24 GB free), Ubuntu 24.04. No inbound firewall rules needed — the bot only makes outbound connections.
-3. SSH in and run the setup script (installs Docker):
-   ```bash
-   curl -fsSLO https://raw.githubusercontent.com/<you>/oathbreakers-bot/main/deploy/setup-vps.sh
-   # or just paste its contents — it's in deploy/setup-vps.sh
-   sudo bash setup-vps.sh
-   ```
-   (Simplest: copy the file's contents from your workspace and paste it into the SSH session.)
-4. Log in to GitHub Container Registry so the VPS can pull the private image. Create a GitHub personal access token (classic) with only the `read:packages` scope, then:
-   ```bash
-   echo <PAT> | sudo docker login ghcr.io -u <github-username> --password-stdin
-   ```
-5. Create `/opt/oathbreakers-bot/.env` with your token (same lines as local `.env`, but no quotes around values — Docker passes them through literally). Copy `deploy/oathbreakers-bot.service` to the VPS (`scp`), then:
-   ```bash
-   sudo cp oathbreakers-bot.service /etc/systemd/system/
-   sudo systemctl daemon-reload && sudo systemctl enable --now oathbreakers-bot
-   ```
-6. Verify: `systemctl status oathbreakers-bot` and `journalctl -u oathbreakers-bot -f`. It auto-restarts on crashes and on reboot.
+- `guildId` — your server ID (Developer Mode: Settings > Advanced > Developer Mode ON, then right-click server > Copy Server ID)
+- `channels.*` — right-click each channel > Copy Channel ID
+- `rolePanels` — create the roles in your server first, then paste each role's ID
+- `rules`, `strikeSystem`, `welcome` — your text and banner image URLs
+- `tickets` — ticket category ID and staff role IDs
+- `calendar` — timezone (IANA name like `America/Chicago`), events channel, ping role
 
-**How it's built:** every push to `main` runs `.github/workflows/docker.yml`, which builds the image for amd64 + arm64 and pushes `ghcr.io/abovethyworld/oath-forsaken-bot:latest` (plus a `sha-<commit>` tag). `config.json` and `src/` are baked in, so config edits ship the same way as code.
+## Setup Commands
 
-**How it runs:** systemd pulls `:latest` and then `docker run`s it (see `deploy/oathbreakers-bot.service`). Secrets come from `/opt/oathbreakers-bot/.env`; `/opt/oathbreakers-bot/data` is mounted at `/app/data`, so strikes, tickets, join dates, and Google tokens survive updates.
+Run these once in your server to post the panels:
 
-**Updating:** push to `main`, wait for the Action to go green, then on the VPS:
-```bash
-sudo systemctl restart oathbreakers-bot
-```
-To roll back, change `:latest` to an older `sha-<commit>` tag on both image lines in the service file (the pull and the run), `daemon-reload`, and restart.
-
-**Alternative: Raspberry Pi** (64-bit OS) — same steps minus the Oracle signup.
-
-## Part 5 — Run it locally for testing
-
-`node src/index.js` runs the bot on your own machine. Fine for testing, but it dies when the PC sleeps — Part 5 above is the real 24/7 answer. (Running it from Muse's workspace doesn't work: this machine can't hold Discord's live connection.)
+| Command | What it posts |
+|---|---|
+| `/setup-roles` | Button-role panels |
+| `/post-rules` | Rules embed |
+| `/post-ranks` | Clan ranks embed |
+| `/post-strikes` | Strike system embed |
+| `/setup-tickets` | Ticket panel (Report, Inquiry, Claim Reward, Become a Member) |
+| `/setup-applications` | Application panel |
+| `/setup-cc-checklist` | CC Rank Checklist tracker |
 
 ## Commands
 
 | Command | What it does | Who can use it |
 |---|---|---|
-| `/setup-roles` | Posts the button-role panels | Admins |
-| `/post-rules` | Posts the rules embed | Admins |
-| `/post-strikes` | Posts the strike-system embed | Admins |
-| `/warn @user reason` | Adds a strike, logs it to the mod channel | Mods (Manage Messages) |
+| `/warn @user reason` | Adds a strike, logs it to the mod channel | Mods |
 | `/strikes @user` | Shows a user's strikes | Mods |
 | `/clear-strikes @user` | Clears a user's strikes | Mods |
-| `/setup-tickets` | Posts the ticket panel | Admins |
 | `/close` | Closes the current ticket (posts transcript, deletes channel) | Staff or ticket owner |
-| `/event-create` | Creates a Discord scheduled event + announces it. Date `YYYY-MM-DD`, time `HH:MM` 24h in your configured timezone | Manage Events |
-| `/events` | Lists upcoming clan events | Everyone |
+| `/event-create` | Creates a Discord scheduled event + announcement. Date `YYYY-MM-DD`, time `HH:MM` 24h in your configured timezone | Manage Events |
+| `/events` | Lists upcoming events | Everyone |
 | `/event-cancel` | Cancels an event by name | Manage Events |
+| `/calendar-sync` | Forces a refresh of the event calendar embed | Manage Events |
 | `/poll` | Creates a poll (up to 4 options) with live button voting | Everyone |
 | `/sync-seniority` | Re-checks everyone's tenure rank now | Manage Roles |
+| `/apply` | Starts an application manually | Everyone |
+| `/reset-application @user` | Resets a user's application so they can reapply | Staff |
 
-## Recruitment — how it works
+## Deployment
 
-1. Someone joins the server → the bot opens a private `#application-username` channel (just them + staff) with a **Start Application** button. The normal welcome embed still posts in `#welcome` too.
-2. The button pops a form asking: OSRS username (RSN), total level, what to call them, how they heard about the clan.
-3. Submitting posts the application to the staff-only `#applications` channel with Approve ✅ / Deny ❌ buttons. Accounts under 30 days old are flagged automatically (`config.recruit.minAccountAgeDays`).
-4. Approve assigns the **Member** role plus the entry tenure rank (**Unsworn (Under 1 month)**), DMs them, and closes the channel. Deny DMs them and closes it. Both are logged.
+Every push to `main` triggers a GitHub Actions build (`.github/workflows/docker.yml`) that builds the image for amd64 + arm64 and pushes `ghcr.io/abovethyworld/oath-forsaken-bot:latest`.
 
-## Google Calendar — one-time setup (10 min)
+**Running with Docker:**
 
-The code is ready; Google needs you to approve the link once:
+```bash
+docker run -d --name oath-forsaken-bot \
+  --env-file /path/to/.env \
+  -v /path/to/data:/app/data \
+  ghcr.io/abovethyworld/oath-forsaken-bot:latest
+```
 
-1. <https://console.cloud.google.com> → new project → **APIs & Services** → enable **Google Calendar API**.
-2. **OAuth consent screen** → External → fill in app name + your email → add yourself as a test user.
-3. **Credentials** → Create Credentials → **OAuth client ID** → Desktop app. Under the new client, add Authorized redirect URI: `http://localhost:53682/callback`
-4. Copy the client ID + secret into `.env` as `GCAL_CLIENT_ID` / `GCAL_CLIENT_SECRET`.
-5. On your own machine (not the VPS): `node src/gcal-auth.js` → open the printed URL → approve → done. Tokens save to `data/gcal-tokens.json` (copy that file to the VPS too, or re-run auth there with a browser handy).
+- Secrets come from `--env-file` (bot token, Google credentials)
+- `/app/data` is mounted as a volume so join dates, tickets, strikes, and checklist state survive updates
+- `config.json` and `src/` are baked into the image, so config edits ship the same way as code
 
-After that, every `/event-create` is mirrored to the calendar in `config.gcal.calendarId` (`primary` = your main calendar).
+**Updating:** push to `main`, wait for the Actions build to go green, then restart the container to pull the latest image.
 
-Strikes are stored in `data/strikes.json`, tickets in `data/tickets.json`, reminder state in `data/reminders.json` — back up the `data/` folder if you move hosts.
+**systemd example** (`deploy/oathbreakers-bot.service`):
 
-## Tickets — how it works
+```ini
+[Service]
+ExecStartPre=/usr/bin/docker pull ghcr.io/abovethyworld/oath-forsaken-bot:latest
+ExecStart=/usr/bin/docker run --rm --name oath-forsaken-bot \
+  --env-file /opt/oathbreakers-bot/.env \
+  -v /opt/oathbreakers-bot/data:/app/data \
+  ghcr.io/abovethyworld/oath-forsaken-bot:latest
+```
 
-1. Run `/setup-tickets` once. It posts the panel wherever `tickets.panelChannelId` points.
-2. A member clicks **Open a Ticket** → the bot creates a private `#ticket-username` channel under your ticket category, visible only to them and your staff roles.
-3. Staff help them in the channel. Anyone with the staff role (or the ticket owner) clicks **Close Ticket** or runs `/close`.
-4. The bot DMs nothing — it posts a `.txt` transcript to your log channel, then deletes the ticket channel.
+## Google Calendar Setup
 
-One ticket per person: if they already have one open, the button just links them to it.
+1. [Google Cloud Console](https://console.cloud.google.com) > new project > enable **Google Calendar API**
+2. **OAuth consent screen** > External > fill in app name + your email > add yourself as a test user
+3. **Credentials** > Create Credentials > **OAuth client ID** > Desktop app. Add redirect URI: `http://localhost:53682/callback`
+4. Copy client ID + secret into `.env` as `GCAL_CLIENT_ID` / `GCAL_CLIENT_SECRET`
+5. Run `node src/gcal-auth.js` > open the printed URL > approve. Tokens save to `data/gcal-tokens.json`
 
-## Calendar — how it works
+After that, every `/event-create` is mirrored to the calendar in `config.gcal.calendarId`.
 
-Events are **native Discord scheduled events**, so members see them in the server's Events tab with Interested/Going buttons and get Discord's own notifications.
+## Data Storage
 
-- `/event-create name:"Friday ToA learner raid" date:2026-10-17 time:19:00 description:"Bring blowpipe..."` — creates the event, posts an announcement in your events channel with a timestamp every member sees in their own timezone, and pings your event role.
-- Add the optional `voice` channel to attach it to voice (otherwise it's listed as in-game).
-- `/events` shows the next 10 upcoming events. `/event-cancel name:toa` finds it by partial name.
-- The bot checks every 5 minutes and pings your event role at the configured reminders before start (default 60 and 15 minutes — edit `calendar.reminders`).
-- Times are interpreted in `calendar.timezone`. The announcement uses Discord timestamps, so a 19:00 Chicago event shows correctly for a member in any timezone.
+All state lives in `data/` as JSON files. Back up this folder if you move hosts.
+
+| File | Contents |
+|---|---|
+| `join-dates.json` | Member join dates for seniority tracking |
+| `tickets.json` | Open ticket state |
+| `cc-checklist.json` | Pending CC rank updates |
+| `applications.json` | Application state |
+| `polls.json` | Active poll state |
+| `gcal-tokens.json` | Google Calendar OAuth tokens |
 
 ## Troubleshooting
 
-- **Role buttons do nothing when clicked** → the bot's role sits below the role it's trying to assign; check the role hierarchy fix in Part 2.
-- **Slash commands don't appear** → they register per-server on startup; restart the bot and wait a minute, then type `/` in your server.
-- **No welcome message** → Server Members Intent isn't enabled (Part 1, step 3), or the welcome channel ID is wrong.
-- **"Config problems found" on startup** → a `PASTE_*` placeholder is still in `config.json`; the error tells you exactly which one.
+- **Role buttons do nothing when clicked** — the bot's role sits below the role it's trying to assign. In Server Settings > Roles, drag the bot's role above every role it hands out.
+- **Slash commands don't appear** — they register per-server on startup. Restart the bot and wait a minute, then type `/` in your server.
+- **No welcome message** — Server Members Intent isn't enabled (Developer Portal > Bot > Privileged Gateway Intents), or the welcome channel ID is wrong.
+- **"Config problems found" on startup** — a `PASTE_*` placeholder is still in `config.json`. The error tells you which one.
+
+## Contributing
+
+Pull requests are welcome. Keep commits focused and messages professional.
+
+## License
+
+All rights reserved. This bot is built for the Oath Forsaken clan.
