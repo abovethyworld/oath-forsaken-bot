@@ -33,7 +33,7 @@ Last updated: 2026-10-12
 
 ## #roles Structure
 - 6 panels: TYPE OF IRON → PREFERRED GAME SERVER → CLAN ROLES → PVM ROLES → SKILLING ROLES → WISE OLD MAN WEEKLY COMPS
-- EG-style descriptions ("Please click the button...").
+- Button descriptions ("Please click the button...").
 
 ## Channel Rules
 - View-only channels allow emoji reactions for @everyone (even when SEND_MESSAGES denied).
