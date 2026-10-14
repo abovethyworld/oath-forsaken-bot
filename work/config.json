@@ -1,0 +1,848 @@
+{
+  "_comment": "Everything the bot posts is configured here. No code changes needed to customize. Replace every PASTE_* value. To copy an ID: Discord Settings > Advanced > Developer Mode ON, then right-click > Copy ID.",
+  "channels": {
+    "roles": "1558399101454786670",
+    "rules": "1558393177726259241",
+    "modLog": "1558425855859097611",
+    "joinsLeaves": "1558460761074962434",
+    "clanRanks": "1558481986706870445",
+    "clanChat": "1558534964608245850"
+  },
+  "guildId": "1558390769746845718",
+  "rolePanels": [
+    {
+      "title": "TYPE OF IRON",
+      "color": 7015950,
+      "description": "What kind of iron are you?",
+      "buttons": [
+        {
+          "label": "Standard Iron",
+          "emoji": "<:standard_iron:1558644677886869604>",
+          "roleId": "1558469085287682088",
+          "style": "Danger"
+        },
+        {
+          "label": "Hardcore Iron",
+          "emoji": "<:hardcore_iron:1558644444654473256>",
+          "roleId": "1558469100139716609",
+          "style": "Danger"
+        },
+        {
+          "label": "Ultimate Iron",
+          "emoji": "<:ultimate_iron:1558644481350303874>",
+          "roleId": "1558469114903666798",
+          "style": "Danger"
+        },
+        {
+          "label": "Group Iron",
+          "emoji": "<:group_iron:1558644518184685628>",
+          "roleId": "1558469129650839705",
+          "style": "Danger"
+        },
+        {
+          "label": "Unranked Group Iron",
+          "emoji": "<:unranked_iron:1558644555182768259>",
+          "roleId": "1558469144381362246",
+          "style": "Danger"
+        },
+        {
+          "label": "Hardcore Group Iron",
+          "emoji": "<:hc_group_iron:1558644592352436344>",
+          "roleId": "1558469159950614610",
+          "style": "Danger"
+        }
+      ],
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1558538111615639603/final-banner-iron.png?ex=6acbcd3a&is=6aca7bba&hm=926b56b2139b9173cf92a7f82c41c815aeb4ce4c994d6e6aa6d6496a47879e32&"
+    },
+    {
+      "title": "PREFERRED GAME SERVER",
+      "color": 12597547,
+      "description": "Please click the button for the region you play in.\n\nThis helps us organize bingos and group events around your timezone.",
+      "buttons": [
+        {
+          "label": "US East",
+          "emoji": "\ud83c\uddfa\ud83c\uddf8",
+          "roleId": "1558469175586988115",
+          "style": "Danger"
+        },
+        {
+          "label": "US West",
+          "emoji": "\ud83c\uddfa\ud83c\uddf8",
+          "roleId": "1558469190292209774",
+          "style": "Danger"
+        },
+        {
+          "label": "United Kingdom",
+          "emoji": "\ud83c\uddec\ud83c\udde7",
+          "roleId": "1558469204318093356",
+          "style": "Danger"
+        },
+        {
+          "label": "Germany",
+          "emoji": "\ud83c\udde9\ud83c\uddea",
+          "roleId": "1558469219799277639",
+          "style": "Danger"
+        },
+        {
+          "label": "Australia",
+          "emoji": "\ud83c\udde6\ud83c\uddfa",
+          "roleId": "1558469235158687765",
+          "style": "Danger"
+        },
+        {
+          "label": "Singapore",
+          "emoji": "\ud83c\uddf8\ud83c\uddec",
+          "roleId": "1558537713123336232",
+          "style": "Danger"
+        },
+        {
+          "label": "Japan",
+          "emoji": "\ud83c\uddef\ud83c\uddf5",
+          "roleId": "1558537723222958284",
+          "style": "Danger"
+        }
+      ],
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1559096603736801310/85ed1ac7b68ed34b5a5e4895744318099b9585f7cb8734f90c63d309ac6501c1.png?ex=6acdd55c&is=6acc83dc&hm=d6edb80d650ca2808d75f9cf1f7da7c693a628d630fafd996a18d1057b8d5cef&"
+    },
+    {
+      "title": "CLAN ROLES",
+      "color": 12597547,
+      "description": "Please click the button with each clan related role that you would like to have.\n\nKeep in mind that these roles may be pinged.\n\n<@&1558399088687587401> - Get notifications for all clan events!\n<@&1558399093905293445> - Get pinged when we run giveaways.\n<@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<@&1558468773806084168> - Unlocks hidden channels for RS3, Dragonwilds, WoW, and more.\n<@&1558468788897452174> - Chat about movies, shows, and other games.",
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1559102302902689854/e0caa6e88aa464f647faf401a94fe08cd58fe2a025f0456beb79ff235ba87156.png?ex=6acddaab&is=6acc892b&hm=f1d23d651ffe83122b0ec5222465c6976963dc93d2219ab6eada0a923077c4ca&",
+      "buttons": [
+        {
+          "label": "CC Events",
+          "emoji": {
+            "id": "1559104599032594442",
+            "name": "zamoraksymbol"
+          },
+          "roleId": "1558399088687587401",
+          "style": "Danger"
+        },
+        {
+          "label": "Giveaways",
+          "emoji": {
+            "id": "1559102058555113583",
+            "name": "bluepartyhat"
+          },
+          "roleId": "1558399093905293445",
+          "style": "Danger"
+        },
+        {
+          "label": "Milestone Parties",
+          "emoji": {
+            "id": "1559102129782657075",
+            "name": "milestonecake"
+          },
+          "roleId": "1558468803661135952",
+          "style": "Danger"
+        },
+        {
+          "label": "Other Games",
+          "emoji": "\ud83c\udfae",
+          "roleId": "1558468773806084168",
+          "style": "Danger"
+        },
+        {
+          "label": "Movies and Shows",
+          "emoji": "\ud83c\udfac",
+          "roleId": "1558468788897452174",
+          "style": "Danger"
+        }
+      ]
+    },
+    {
+      "title": "PVM ROLES",
+      "color": 12597547,
+      "description": "Please click the button with each PvM related role that you would like to have.\n\nKeep in mind that these roles may be pinged for forming bossing teams in <#1558428263322357811>.",
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1559100180370821130/fixed-banner-bosses.png?ex=6acdd8b1&is=6acc8731&hm=66b388da34aa339f3e6ebfc36a2e06b6a5b44983b26877821c3bd4eef557d905&",
+      "buttons": [
+        {
+          "label": "The Fractured Archive",
+          "emoji": {
+            "id": "1558470658260996167",
+            "name": "fracturedarchive"
+          },
+          "roleId": "1558469482866024500",
+          "style": "Danger"
+        },
+        {
+          "label": "Tombs of Amascut (ToA)",
+          "emoji": {
+            "id": "1558470672986939634",
+            "name": "toa"
+          },
+          "roleId": "1558468832736190464",
+          "style": "Danger"
+        },
+        {
+          "label": "Chambers of Xeric (CoX)",
+          "emoji": {
+            "id": "1558470688644268187",
+            "name": "cox"
+          },
+          "roleId": "1558468847369986138",
+          "style": "Danger"
+        },
+        {
+          "label": "Theatre of Blood (ToB)",
+          "emoji": {
+            "id": "1558470703899217945",
+            "name": "tob"
+          },
+          "roleId": "1558468862494646372",
+          "style": "Danger"
+        },
+        {
+          "label": "The Hueycoatl",
+          "emoji": {
+            "id": "1558470719078146068",
+            "name": "hueycoatl"
+          },
+          "roleId": "1558468877195812905",
+          "style": "Danger"
+        },
+        {
+          "label": "Royal Titans",
+          "emoji": {
+            "id": "1558470734227972227",
+            "name": "royaltitans"
+          },
+          "roleId": "1558468892240781493",
+          "style": "Danger"
+        },
+        {
+          "label": "Barbarian Assault",
+          "emoji": {
+            "id": "1558470749919125557",
+            "name": "barbarianassault"
+          },
+          "roleId": "1558468907508047962",
+          "style": "Danger"
+        },
+        {
+          "label": "Yama",
+          "emoji": {
+            "id": "1558470765639372800",
+            "name": "yama"
+          },
+          "roleId": "1558468922456408174",
+          "style": "Danger"
+        },
+        {
+          "label": "Venenatis",
+          "emoji": {
+            "id": "1558470861126897767",
+            "name": "venenatis"
+          },
+          "roleId": "1558469011019272363",
+          "style": "Danger"
+        },
+        {
+          "label": "Callisto",
+          "emoji": {
+            "id": "1558470876075270145",
+            "name": "callisto"
+          },
+          "roleId": "1558469025514786851",
+          "style": "Danger"
+        },
+        {
+          "label": "Vet'ion",
+          "emoji": {
+            "id": "1558470891049062400",
+            "name": "vetion"
+          },
+          "roleId": "1558469040433799178",
+          "style": "Danger"
+        },
+        {
+          "label": "Nex",
+          "emoji": {
+            "id": "1558470907956170923",
+            "name": "nex"
+          },
+          "roleId": "1558469055256731689",
+          "style": "Danger"
+        },
+        {
+          "label": "Nightmare",
+          "emoji": {
+            "id": "1558470923273637949",
+            "name": "nightmare"
+          },
+          "roleId": "1558469070553358446",
+          "style": "Danger"
+        }
+      ]
+    },
+    {
+      "title": "SKILLING ROLES",
+      "color": 12597547,
+      "description": "Pick the skilling activities you do. You'll get pinged when people are putting together a group in <#1558428263322357811>.",
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1559105020450967592/d96729d9a37cc0d7e98ae2cfbe3740f3fa1cb7afc7cc03e5ebcdbc18ea7f6591.png?ex=6acddd33&is=6acc8bb3&hm=b9863fdd808d0b84df6ed6bdb2dfb9664a8e8a479808f3f44ec036b1a79ad91b&",
+      "buttons": [
+        {
+          "label": "Zalcano",
+          "emoji": {
+            "id": "1558470781946568724",
+            "name": "zalcano"
+          },
+          "roleId": "1558468937208041503",
+          "style": "Danger"
+        },
+        {
+          "label": "Tempoross",
+          "emoji": {
+            "id": "1558470796752457779",
+            "name": "tempoross"
+          },
+          "roleId": "1558468952542285954",
+          "style": "Danger"
+        },
+        {
+          "label": "Wintertodt",
+          "emoji": {
+            "id": "1558470813584465960",
+            "name": "wintertodt"
+          },
+          "roleId": "1558468966962429952",
+          "style": "Danger"
+        },
+        {
+          "label": "Wilderness Agility",
+          "emoji": {
+            "id": "1558470829187006547",
+            "name": "wildyagility"
+          },
+          "roleId": "1558468981105365024",
+          "style": "Danger"
+        },
+        {
+          "label": "Guardians of the Rift",
+          "emoji": {
+            "id": "1558470845918220318",
+            "name": "gotr"
+          },
+          "roleId": "1558468996234481695",
+          "style": "Danger"
+        }
+      ]
+    },
+    {
+      "title": "WISE OLD MAN WEEKLY COMPS",
+      "color": 12597547,
+      "description": "Please click the button with each WOM competition you'd like to join.\n\nKeep in mind that these roles may be pinged when competition polls are announced, events start, and winners are announced.\n\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>\n\n_Top 3 in each competition earn the winner role. Discord role held for 6 weeks, CC rank title for 2 weeks._",
+      "buttons": [
+        {
+          "label": "Boss of the Week",
+          "emoji": {
+            "id": "1559070945400987740",
+            "name": "botwwinner"
+          },
+          "roleId": "1558399089815724062",
+          "style": "Danger"
+        },
+        {
+          "label": "Skill of the Week",
+          "emoji": {
+            "id": "1559070785769967616",
+            "name": "sotwwinner"
+          },
+          "roleId": "1558399090927083540",
+          "style": "Danger"
+        },
+        {
+          "label": "Raid of the Week",
+          "emoji": {
+            "id": "1559070865851944980",
+            "name": "rotwwinner"
+          },
+          "roleId": "1558468743779057674",
+          "style": "Danger"
+        }
+      ],
+      "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1559105273610641498/32940d0618f9ffccb5b53eb32633940f2abc5a4ee842e456166ae1e184c4dc9e.png?ex=6acddd70&is=6acc8bf0&hm=cb8b0e4b81ab92b5bd03ba6db71741a971927598f0ca9fc5e1d1658b963d03e5&"
+    }
+  ],
+  "rules": {
+    "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1558490947933966517/banner-rules.png?ex=6acba14d&is=6aca4fcd&hm=a969f785daa5c2a68b09be6684bd64e049c7f876ffd11be7e7d4b5efbb0f4c50&",
+    "color": 7015950,
+    "footer": "Staff enforce the rules. If you are not sure about something just ask a mod.\nSee <#1558481986706870445> for the rank ladders.",
+    "intro": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\nIf you are in this server you agree to the rules below.",
+    "sections": [
+      {
+        "heading": "1. Be respectful",
+        "body": "Don't be a jerk. No harassment, no hate speech, no drama. Banter is fine."
+      },
+      {
+        "heading": "2. No scamming",
+        "body": "Scam a clanmate and you are banned. No second chances."
+      },
+      {
+        "heading": "3. Keep it SFW",
+        "body": "Keep public channels clean. Keep it classy."
+      },
+      {
+        "heading": "4. No spam or ads",
+        "body": "No spam. Don't advertise other servers unless staff says it is ok."
+      },
+      {
+        "heading": "5. Iron first clan",
+        "body": "This is an ironman clan. Mains are welcome in the Discord, you earn seniority ranks and you can join casual stuff like skilling events and weekly PvM nights. But bingos and WOM comps are ironmen only."
+      },
+      {
+        "heading": "6. No begging",
+        "body": "Don't ask clanmates for handouts, items or GP."
+      },
+      {
+        "heading": "7. No poaching",
+        "body": "Don't try to recruit our members to other clans."
+      },
+      {
+        "heading": "8. Pvm etiquette",
+        "body": "We are an FFA clan. You keep your own drops. If your group wants to split instead, agree on it before you go. Bring screenshots if there is a dispute."
+      },
+      {
+        "heading": "9. Discord name matches RSN",
+        "body": "Match your Discord name to your RSN so we know who is who. Ask staff if you need help."
+      },
+      {
+        "heading": "10. Alt accounts",
+        "body": "Alts are welcome but they earn ranks on their own like everyone else."
+      },
+      {
+        "heading": "11. Be an adult",
+        "body": "Handle your own disputes first like an adult. Staff are the last resort, not the first stop."
+      },
+      {
+        "heading": "12. Stay active",
+        "body": "Gone a long time with no word and you might get removed from the clan."
+      }
+    ],
+    "title": "RULES"
+  },
+  "strikeSystem": {
+    "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1558488067495436458/banner-strikes.png?ex=6acb9e9e&is=6aca4d1e&hm=22203a0ee198e9c28ae672d2952e12330e61803d754a4ed028dd70fb13f5ea5f&",
+    "color": 7015950,
+    "footer": "Strikes go away after 90 days of good behavior. Staff decisions are final. Got an issue, bring it up in private, not in public channels.",
+    "intro": "Staff keep track of strikes. 3 strikes and you are out.",
+    "levels": [
+      {
+        "heading": "Strike 1: verbal warning",
+        "body": "Staff DMs you about what went wrong."
+      },
+      {
+        "heading": "Strike 2: muted 24 hours",
+        "body": "Last chance to shape up."
+      },
+      {
+        "heading": "Strike 3: banned",
+        "body": "Removed from the server and the in-game clan."
+      },
+      {
+        "heading": "Immediate ban, no strikes",
+        "body": "Hate speech, doxxing, or scamming gets you banned on the spot. No warnings."
+      }
+    ],
+    "title": "STRIKE SYSTEM"
+  },
+  "welcome": {
+    "banner": "",
+    "color": 5763719,
+    "message": "Welcome {user} to **{server}**!\n\nGrab your roles, read the rules and drop your RSN in introductions. See you in Gielinor.",
+    "title": "Welcome to the clan! \u2694\ufe0f"
+  },
+  "tickets": {
+    "panelChannelId": "1558399103757717518",
+    "categoryId": "1558399100263604258",
+    "logChannelId": "1558425855859097611",
+    "staffRoleIds": [
+      "1558578603359207555",
+      "1558578608233119765",
+      "1558735997922054225"
+    ],
+    "title": "Need help?",
+    "color": 5793266,
+    "banner": "",
+    "description": "Click the button to open a private ticket with staff. One ticket per person. If you already have one open, just use that.",
+    "buttonLabel": "Open a Ticket",
+    "introMessage": "Staff will be with you soon. Say what is going on below."
+  },
+  "calendar": {
+    "timezone": "America/Chicago",
+    "eventsChannelId": "1558428257114923019",
+    "pingRoleId": "1558399088108642366",
+    "reminders": [
+      60,
+      15
+    ]
+  },
+  "recruit": {
+    "applicationsChannelId": "1558577965057450007",
+    "minAccountAgeDays": 30,
+    "types": {
+      "iron": {
+        "label": "Ironman",
+        "buttonLabel": "Apply as Ironman",
+        "emoji": "\u2694\ufe0f",
+        "roleId": "1558540424048803860",
+        "questions": [
+          {
+            "id": "rsn",
+            "label": "What is your in-game username(s)?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "nickname",
+            "label": "What is your preferred name/nickname?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "heard",
+            "label": "How did you hear about/find us?",
+            "style": "paragraph",
+            "required": true
+          },
+          {
+            "id": "age",
+            "label": "Is your Discord account at least 1 month old?",
+            "style": "short",
+            "required": true
+          }
+        ]
+      },
+      "main": {
+        "label": "Main",
+        "buttonLabel": "Apply as Main",
+        "emoji": "\ud83d\udee1\ufe0f",
+        "roleId": "1558540434652008569",
+        "questions": [
+          {
+            "id": "rsn",
+            "label": "What is your in-game username(s)?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "nickname",
+            "label": "What is your preferred name/nickname?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "heard",
+            "label": "How did you hear about/find us?",
+            "style": "paragraph",
+            "required": true
+          },
+          {
+            "id": "age",
+            "label": "Is your Discord account at least 1 month old?",
+            "style": "short",
+            "required": true
+          }
+        ]
+      },
+      "guest": {
+        "label": "Guest",
+        "buttonLabel": "Apply as Guest",
+        "emoji": "\ud83d\udc4b",
+        "roleId": "1558540445611728997",
+        "questions": [
+          {
+            "id": "rsn",
+            "label": "What is your in-game username(s)?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "nickname",
+            "label": "What is your preferred name/nickname?",
+            "style": "short",
+            "required": true
+          },
+          {
+            "id": "heard",
+            "label": "How did you hear about/find us?",
+            "style": "paragraph",
+            "required": true
+          },
+          {
+            "id": "age",
+            "label": "Is your Discord account at least 1 month old?",
+            "style": "short",
+            "required": true
+          }
+        ]
+      }
+    }
+  },
+  "gcal": {
+    "calendarId": "primary",
+    "enabled": true
+  },
+  "ranks": [
+    {
+      "name": "Maxed",
+      "displayName": "Maxed [2376]",
+      "roleId": "1558440214739943505",
+      "minTotal": 2376,
+      "maxTotal": 2376,
+      "emoji": {
+        "name": "maxed",
+        "id": "1558454796611100743"
+      },
+      "color": 16730955
+    },
+    {
+      "name": "Zamorakian",
+      "displayName": "Zamorakian [2300-2375]",
+      "roleId": "1558440222029651978",
+      "minTotal": 2300,
+      "maxTotal": 2375,
+      "emoji": {
+        "name": "zamorakian",
+        "id": "1558454806744666182"
+      },
+      "color": 15943238
+    },
+    {
+      "name": "Wrath",
+      "displayName": "Wrath [2150-2299]",
+      "roleId": "1558450336665182228",
+      "minTotal": 2150,
+      "maxTotal": 2299,
+      "emoji": {
+        "name": "wrath",
+        "id": "1558454818396176394"
+      },
+      "color": 14827841
+    },
+    {
+      "name": "Destroyer",
+      "displayName": "Destroyer [2000-2149]",
+      "roleId": "1558450347251343481",
+      "minTotal": 2000,
+      "maxTotal": 2149,
+      "emoji": {
+        "name": "destroyer",
+        "id": "1558454830056476672"
+      },
+      "color": 13712444
+    },
+    {
+      "name": "Unholy",
+      "displayName": "Unholy [1850-1999]",
+      "roleId": "1558450357573521465",
+      "minTotal": 1850,
+      "maxTotal": 1999,
+      "emoji": {
+        "name": "unholy",
+        "id": "1558454842094256208"
+      },
+      "color": 12597047
+    },
+    {
+      "name": "Skulled",
+      "displayName": "Skulled [1650-1849]",
+      "roleId": "1558440247140810772",
+      "minTotal": 1650,
+      "maxTotal": 1849,
+      "emoji": {
+        "name": "skulled",
+        "id": "1558454852596531310"
+      },
+      "color": 11481650
+    },
+    {
+      "name": "Death",
+      "displayName": "Death [1450-1649]",
+      "roleId": "1558440218418221086",
+      "minTotal": 1450,
+      "maxTotal": 1649,
+      "emoji": {
+        "name": "death",
+        "id": "1558454863149662208"
+      },
+      "color": 10366253
+    },
+    {
+      "name": "Imp",
+      "displayName": "Imp [1250-1449]",
+      "roleId": "1558440250714492999",
+      "minTotal": 1250,
+      "maxTotal": 1449,
+      "emoji": {
+        "name": "imp",
+        "id": "1558454873924833457"
+      },
+      "color": 9250856
+    },
+    {
+      "name": "Goblin",
+      "displayName": "Goblin [1000-1249]",
+      "roleId": "1558450368927637504",
+      "minTotal": 1000,
+      "maxTotal": 1249,
+      "emoji": {
+        "name": "goblin",
+        "id": "1558454884880089121"
+      },
+      "color": 8135459
+    },
+    {
+      "name": "Necromancer",
+      "displayName": "Necromancer [500-999]",
+      "roleId": "1558440225401999380",
+      "minTotal": 500,
+      "maxTotal": 999,
+      "emoji": {
+        "name": "necromancer",
+        "id": "1558454896095797259"
+      },
+      "color": 7020062
+    },
+    {
+      "name": "Wizard",
+      "displayName": "Wizard [0-499]",
+      "roleId": "1558450379572781096",
+      "minTotal": 0,
+      "maxTotal": 499,
+      "emoji": {
+        "name": "wizard",
+        "id": "1558454906803847308"
+      },
+      "color": 5904922
+    }
+  ],
+  "seniorityRanks": [
+    {
+      "name": "Godslayer",
+      "displayName": "Godslayer (1 year+)",
+      "roleId": "1558451970883453003",
+      "minMonths": 12,
+      "maxMonths": null,
+      "emoji": {
+        "name": "godslayer",
+        "id": "1558454497515278428"
+      },
+      "color": 11053224
+    },
+    {
+      "name": "Heretic",
+      "displayName": "Heretic (9-11 months)",
+      "roleId": "1558451981562151062",
+      "minMonths": 9,
+      "maxMonths": 11,
+      "emoji": {
+        "name": "heretic",
+        "id": "1558454486014369833"
+      },
+      "color": 8078860
+    },
+    {
+      "name": "Zealot",
+      "displayName": "Zealot (6-8 months)",
+      "roleId": "1558451991448129628",
+      "minMonths": 6,
+      "maxMonths": 8,
+      "emoji": {
+        "name": "zealoticon",
+        "id": "1559636513279713360"
+      },
+      "color": 12433259
+    },
+    {
+      "name": "Devout",
+      "displayName": "Devout (3-5 months)",
+      "roleId": "1558452002319769631",
+      "minMonths": 3,
+      "maxMonths": 5,
+      "emoji": {
+        "name": "devout",
+        "id": "1558454461930934384"
+      },
+      "color": 15527935
+    },
+    {
+      "name": "Acolyte",
+      "displayName": "Acolyte (1-2 months)",
+      "roleId": "1558452012797136960",
+      "minMonths": 1,
+      "maxMonths": 2,
+      "emoji": {
+        "name": "acolyte",
+        "id": "1558454450828480583"
+      },
+      "color": 13938432
+    },
+    {
+      "name": "Initiate (Under 1 month)",
+      "displayName": "Initiate (Under 1 month)",
+      "roleId": "1558452023790276659",
+      "minMonths": 0,
+      "maxMonths": 1,
+      "emoji": {
+        "name": "initiate",
+        "id": "1558454439558385706"
+      },
+      "color": 4008786
+    }
+  ],
+  "rankInfo": {
+    "title": "CLAN RANKS",
+    "color": 16766720,
+    "banner": "https://cdn.discordapp.com/attachments/1558458301627506788/1558492397246087289/banner-ranks.png?ex=6acba2a6&is=6aca5126&hm=81ba7f8c3c7dd9626a3556278ab27422a3d7272dbe626aa971c64d3571840b72&",
+    "intro": "",
+    "sections": [
+      {
+        "heading": "Clan Ranks",
+        "body": "<:zamorakian:1558454806744666182> **Ascendant** (Hand-picked prestige)\n<:destroyer:1558454830056476672> **Godslayer (1 year+)**\n<:unholy:1558454842094256208> **Heretic (9-11 months)**\n<:wrath:1558454818396176394> **Zealot (6-8 months)**\n<:skulled:1558454852596531310> **Devout (3-5 months)**\n<:imp:1558454873924833457> **Acolyte (1-2 months)**\n<:necromancer:1558454896095797259> **Initiate (Under 1 month)**\n\n_Automatic. Based on how long you have been in the server._",
+        "divider_before": true
+      },
+      {
+        "heading": "Member Roles",
+        "body": "<:ironsworn:1558623401302564996> **Iron Sworn**\nIronmen. Full members. Bingos and WOM comps are yours.\n\n<:unbound:1558623453438025828> **Unbound**\nMains. Hang out, earn seniority, and join casual events like skilling nights and PvM.\n\n<:guest:1558634092185002035> **Guest**\nJust visiting or here for a friend. Say hi.\n\n<:clanfriend:1558634136510537728> **Friend of the Clan**\nTrusted friends, hand-picked by staff.",
+        "divider_before": true
+      }
+    ],
+    "footer": "Questions about ranks, ask a mod."
+  },
+  "categories": {
+    "staff": "1558456075248996454"
+  },
+  "winnerRoles": [
+    {
+      "name": "SOTW Winner",
+      "roleId": "1558539205527732306",
+      "color": 16766720
+    },
+    {
+      "name": "BOTW Winner",
+      "roleId": "1558539218496786513",
+      "color": 16766720
+    },
+    {
+      "name": "ROTW Winner",
+      "roleId": "1558539229414559806",
+      "color": 16766720
+    }
+  ],
+  "memberRoles": [
+    {
+      "name": "Iron Sworn",
+      "roleId": "1558540424048803860"
+    },
+    {
+      "name": "Unbound",
+      "roleId": "1558540434652008569"
+    },
+    {
+      "name": "Guest",
+      "roleId": "1558540445611728997"
+    }
+  ]
+}

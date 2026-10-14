@@ -1,6 +1,6 @@
 # OSRS Clan Bot
 
-A custom Discord bot for your clan, in the style of "The Raven":
+A custom Discord bot for the Oath Forsaken OSRS clan:
 
 - **Button roles** — `/setup-roles` posts embed panels with clickable role buttons (like the GENERAL / PVM / MINIGAME panels)
 - **Rules + strike system embeds** — `/post-rules` and `/post-strikes` post banner embeds

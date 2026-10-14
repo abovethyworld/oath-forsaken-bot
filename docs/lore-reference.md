@@ -257,7 +257,6 @@ Not out of hate. Out of truth. We looked at the easy path they offered and chose
 We are the Oath Forsaken. We broke our vows to follow something real."
 
 Notes:
-- NOT about leaving Raven's Watch (Gavin still there, good terms)
 - Works for mains and irons (everyone made the same choice)
 - "Oath Forsaken" is literal: they forsook oaths to other gods
 - Ties to oathplate imagery (the oath made visible)
