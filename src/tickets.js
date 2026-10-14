@@ -14,6 +14,13 @@ const {
 const config = require('./config');
 const store = require('./store');
 
+// Per-button ticket themes (Alex 2026-10-14 — every ticket themed to the button clicked)
+const TICKET_TYPES = {
+  report: { label: 'Report', emoji: '⚠️', intro: 'Tell staff what happened. Include names, dates, and any proof.' },
+  inquiry: { label: 'Inquiry', emoji: '💬', intro: 'Ask your question below and staff will get back to you.' },
+  claim: { label: 'Reward Claim', emoji: '🏆', intro: 'Tell staff what you won and which event it was from.' },
+};
+
 async function setupTickets(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const t = config.tickets;
@@ -23,23 +30,49 @@ async function setupTickets(interaction) {
     return;
   }
   const embed = new EmbedBuilder()
-    .setTitle(t.title)
-    .setDescription(t.description)
-    .setColor(t.color ?? 0x5865f2);
-  if (t.banner) embed.setImage(t.banner);
+    .setTitle('⛧ Contact Staff ⛧')
+    .setDescription(
+      `**⚠️ Report**\n` +
+      `⛧ Got something for staff to look into.\n\n` +
+      `**💬 Inquiry**\n` +
+      `⛧ Got a question.\n\n` +
+      `**🏆 Claim Reward**\n` +
+      `⛧ Won an event? Claim your reward here.\n\n` +
+      `**⬆️ Become a Member**\n` +
+      `⛧ Click the button and pick your account type to become an official member.\n\n` +
+      `Click a button below to get started.`
+    )
+    .setColor(ZAMORAK_RED);
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('ticket:create')
-      .setLabel(t.buttonLabel || 'Open a Ticket')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('🎫')
+      .setCustomId('ticket:create:report')
+      .setLabel('Report')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('⚠️'),
+    new ButtonBuilder()
+      .setCustomId('ticket:create:inquiry')
+      .setLabel('Inquiry')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('💬'),
+    new ButtonBuilder()
+      .setCustomId('ticket:create:claim')
+      .setLabel('Claim Reward')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('🏆'),
+    new ButtonBuilder()
+      .setCustomId('ticket:create:member')
+      .setLabel('Become a Member')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji('⬆️')
   );
   await channel.send({ embeds: [embed], components: [row] });
   await interaction.editReply(`Ticket panel posted in ${channel}.`);
 }
 
-async function createTicket(interaction) {
+async function createTicket(interaction, ticketType) {
   const t = config.tickets;
+  const theme = TICKET_TYPES[ticketType] || TICKET_TYPES.inquiry;
 
   const existingId = store.getTicket(interaction.guildId, interaction.user.id);
   if (existingId) {
@@ -72,11 +105,11 @@ async function createTicket(interaction) {
   const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
   let thread;
   try {
-    // Create a private thread (like the other clan)
+    // Create a private thread (like the other clan) — named for the ticket type
     thread = await ticketsChannel.threads.create({
-      name: `Ticket with ${safeName}`,
+      name: `${theme.label} — ${safeName}`.slice(0, 100),
       type: ChannelType.PrivateThread,
-      reason: `Ticket opened by ${interaction.user.tag}`,
+      reason: `${theme.label} ticket opened by ${interaction.user.tag}`,
     });
     // Add the user and staff to the thread
     await thread.members.add(interaction.user.id).catch(() => {});
@@ -95,22 +128,10 @@ async function createTicket(interaction) {
 
   store.setTicket(interaction.guildId, interaction.user.id, thread.id);
 
-  const staffPings = (t.staffRoleIds || []).map((r) => `<@&${r}>`).join(' ');
   const embed = new EmbedBuilder()
-    .setTitle('Ticket opened')
-    .setDescription((t.introMessage || 'Staff will be with you shortly.') + '\n\nPick a category below so staff knows what this is about.')
+    .setTitle(`${theme.emoji} ${theme.label}`)
+    .setDescription(theme.intro + (theme.noCloser ? '' : '\n\nStaff will be with you shortly.'))
     .setColor(t.color ?? 0x5865f2);
-
-  const categoryRow = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('ticket:category')
-      .setPlaceholder('What is this about?')
-      .addOptions([
-        { label: 'General Query', value: 'general', emoji: '💬' },
-        { label: 'Report a Member', value: 'report', emoji: '🚨' },
-        { label: 'Bot/Plugin Help', value: 'bothelp', emoji: '🔧' },
-      ])
-  );
 
   const closeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -120,9 +141,12 @@ async function createTicket(interaction) {
       .setEmoji('🔒')
   );
   await thread.send({
-    content: `${interaction.user} ${staffPings}`.trim(),
+    // Only tag Staff on tickets (Alex 2026-10-14) — quiet until launch (no notify, just the visible mention).
+    // Flip allowedMentions to include roles for legit pings at launch.
+    content: `${interaction.user} <@&1558735997922054225>`.trim(),
     embeds: [embed],
-    components: [categoryRow, closeRow],
+    components: [closeRow],
+    allowedMentions: { users: [interaction.user.id] },
   });
 
   await interaction.editReply(`Ticket created: ${thread}`);
@@ -144,8 +168,8 @@ async function closeTicket(interaction) {
     await interaction.reply({ content: 'This only works inside a ticket thread.', ephemeral: true });
     return;
   }
-  if (interaction.user.id !== ownerId && !isStaff(interaction)) {
-    await interaction.reply({ content: 'Only staff or the ticket owner can close this.', ephemeral: true });
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Only staff can close tickets.', ephemeral: true });
     return;
   }
 
@@ -153,36 +177,91 @@ async function closeTicket(interaction) {
 
   store.removeTicket(interaction.guildId, ownerId);
   // Archive and lock the thread instead of deleting (like the reference)
-  setTimeout(() => {
-    thread.setArchived(true).catch(() => {});
-    thread.setLocked(true).catch(() => {});
-  }, 3000);
+  try {
+    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch(() => {});
+    await thread.setLocked(true);
+    await thread.setArchived(true);
+    await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch(() => {});
+  } catch (err) {
+    await interaction.followUp({ content: 'Could not archive the thread: ' + (err.message || err), ephemeral: true }).catch(() => {});
+  }
 }
 
 async function handleTicketButton(interaction) {
-  const [, action] = interaction.customId.split(':');
-  if (action === 'create') return createTicket(interaction);
+  const parts = interaction.customId.split(':');
+  const action = parts[1];
+  if (action === 'create') {
+    const ticketType = parts[2] || 'inquiry';
+    // Become a Member is direct promotion, not a ticket (Alex 2026-10-14)
+    if (ticketType === 'member') return showMemberSelect(interaction);
+    return createTicket(interaction, ticketType);
+  }
   if (action === 'close') return closeTicket(interaction);
 }
 
-async function handleTicketSelect(interaction) {
-  if (interaction.customId !== 'ticket:category') return;
-  const category = interaction.values[0];
-  const labels = {
-    general: 'General Query',
-    report: 'Report a Member',
-    bothelp: 'Bot/Plugin Help',
-  };
-  const label = labels[category] || category;
+// Become a Member: guest picks iron/main, bot promotes instantly (Alex 2026-10-14)
+async function showMemberSelect(interaction) {
+  const types = config.recruit?.types || {};
+  const member = interaction.member;
+  const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
+  if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
+    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
+    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId('member:select')
+    .setPlaceholder('I play an…')
+    .addOptions([
+      { label: 'Ironman', value: 'iron', emoji: '1558623401302564996' },
+      { label: 'Main', value: 'main', emoji: '1558623453438025828' },
+    ]);
+  await interaction.reply({
+    content: 'Pick your account type.',
+    components: [new ActionRowBuilder().addComponents(menu)],
+    ephemeral: true,
+  }).catch(() => {});
+}
 
-  // Rename the thread to include the category
-  const thread = interaction.channel;
-  if (thread && thread.isThread()) {
-    const base = thread.name.replace(/ \[(General Query|Report a Member|Bot\/Plugin Help)\]$/, '');
-    await thread.setName(`${base} [${label}]`.slice(0, 100)).catch(() => {});
+async function handleMemberSelect(interaction) {
+  if (interaction.customId !== 'member:select') return;
+  const choice = interaction.values[0]; // 'iron' or 'main'
+  const types = config.recruit?.types || {};
+  const t = types[choice];
+  if (!t || !t.roleId) {
+    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const member = interaction.member;
+  const guild = interaction.guild;
+  await interaction.deferReply({ ephemeral: true });
+
+  // Swap Guest for the member role + Initiate
+  if (types.guest?.roleId && member.roles.cache.has(types.guest.roleId)) {
+    await member.roles.remove(types.guest.roleId, 'Guest to member promotion').catch(() => {});
+  }
+  await member.roles.add(t.roleId, 'Guest to member promotion').catch(() => {});
+  const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
+  if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch(() => {});
+
+  // Initiate welcome in #general, same as an approval
+  const generalChan = guild.channels.cache.get('1558583385440395476');
+  if (generalChan) {
+    const welcomeMsg =
+      `⛧ <@&1558452023790276659> ⛧\n` +
+      `⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧\n` +
+      `<@${member.id}> has joined Oath Forsaken.\n\n` +
+      `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
+      `• Drop an intro in <#1558428255940378715> so we can get to meet you\n` +
+      `• Grab your roles in <#1558399101454786670>\n` +
+      `• Ping <@&1558735997922054225> when you're ready for a clan chat invite`;
+    await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch(() => {});
   }
 
-  await interaction.reply({ content: `Category set to **${label}**. Staff will be with you shortly.`, ephemeral: true }).catch(() => {});
+  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch(() => {});
 }
 
 const commands = [
@@ -196,9 +275,9 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('close')
-      .setDescription('Close this ticket (staff or ticket owner)'),
+      .setDescription('Close this ticket (staff only)'),
     run: closeTicket,
   },
 ];
 
-module.exports = { commands, handleTicketButton, handleTicketSelect };
+module.exports = { commands, handleTicketButton, handleMemberSelect };
