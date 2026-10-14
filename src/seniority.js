@@ -3,44 +3,77 @@
 // join date: Initiate (<1 mo) -> Acolyte (1-2) -> Devout (3-5) ->
 // Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
-// On rank-up, the bot pings the member in #general with their story
-// (iron vs main arcs in docs/seniority-stories.md).
-const { PermissionFlagsBits, SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+// On rank-up, the bot pings the member in #general with their story.
+// Stories finalized 2026-10-13: unified single arc (no iron/main split).
+// Format is PLAIN TEXT (not embeds) because Discord doesn't render role
+// mentions in embed titles.
+const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const config = require('./config');
 const { getOriginalJoinDate, backfill } = require('./join-dates');
+const { addEntry: addCcEntry } = require('./cc-checklist');
 
 const MONTH_MS = 30.44 * 24 * 3600 * 1000;
-const ZAMORAK_RED = 0x6b0e0e;
 const GENERAL_CHANNEL_ID = '1558583385440395476';
 const IRON_ROLE_ID = '1558540424048803860'; // Iron Sworn
 const MAIN_ROLE_ID = '1558540434652008569'; // Unbound
 
-// Rank-up stories, keyed by normalized rank name then account type.
-// Finalized 2026-10-13. Source: docs/seniority-stories.md
-const RANK_STORIES = {
+// Channel IDs for Initiate welcome
+const INTRODUCE_CHANNEL_ID = '1558428255940378715';
+const ROLES_CHANNEL_ID = '1558399101454786670';
+const STAFF_ROLE_ID = '1558735997922054225';
+
+// Rank-up announcements, finalized 2026-10-13.
+// Each has: header (with role mention), divider (matched to header length),
+// tagline, and story. Plain text format for working @mentions.
+const RANK_ANNOUNCEMENTS = {
   initiate: {
-    iron: 'You stand before the clan with empty hands. No Grand Exchange. No trading. No one to carry you. Kneel.',
-    main: "Zamorak never cared about bloodlines — only strength. You're one of us now. That's all that matters.",
+    roleId: '1558452023790276659',
+    header: '⛧ <@&1558452023790276659> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has joined Oath Forsaken.`,
+    story: `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n• Drop an intro in <#${INTRODUCE_CHANNEL_ID}> so we can meet you\n• Grab your roles in <#${ROLES_CHANNEL_ID}>\n• Ping <@&${STAFF_ROLE_ID}> when you're ready for a clan chat invite`,
   },
   acolyte: {
-    iron: "You've learned the first truth: everything you own, you bled for. The easy path is still there, waiting. You walk past it every day. That is comfort, forsaken.",
-    main: "The novelty wore off. You're still here. That's when it counts.",
+    roleId: '1558452012797136960',
+    header: '⛧ <@&1558452012797136960> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has risen to Acolyte. The first step is taken.`,
+    story: `You'd heard about the Chaos altar in south-east Varrock. Zamorak's altar. You went to see it. You knelt and took off your old god's amulet, setting it on the floor. Said 'Zamorak' out loud for the first time. The flames leaned toward you. You didn't know the prayers yet. But you'd started.`,
   },
   devout: {
-    iron: "Your bank is a graveyard of hours. Every bar smelted, every herb cleaned, every drop prayed for. Your blood is on the altar — not as sacrifice, but as proof.",
-    main: "You've earned your place the same way everyone does here — by staying. The mode never mattered.",
+    roleId: '1558452002319769631',
+    header: '⛧ <@&1558452002319769631> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has risen to Devout. Faith, proven daily.`,
+    story: `The flames stayed with you. You'd close your eyes and see them leaning toward you, the way they did at the altar. So you went back. Every night. You picked up the prayers from the others kneeling there. Your knees learned the stone floor. You weren't curious anymore. You were devoted.`,
   },
   zealot: {
-    iron: "You've gone a thousand kills dry. You've farmed the same boss for months for one drop. Most people would have quit. You're still here. That's what revenants do — they don't stay down.",
-    main: "You've watched people leave. Mains who got bored. Irons who burned out. You stayed.",
+    roleId: '1558451991448129628',
+    header: '⛧ <@&1558451991448129628> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has risen to Zealot. Power recognizes power.`,
+    story: `The others at the altar talked about Yama. A demon in the Chasm of Fire who trades armor for oaths. You'd heard what happens to people who go looking for him. You packed what you needed and left everything else behind.`,
   },
   heretic: {
-    iron: "You don't just play ironman. You believe in it. The old gods of convenience mean nothing to you now.",
-    main: "Someone asked why a main stays in an ironman clan. You didn't have an answer. You didn't need one.",
+    roleId: '1558451981562151062',
+    header: '⛧ <@&1558451981562151062> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has risen to Heretic. The oath is sealed.`,
+    story: `You went down into the Chasm of Fire and found Yama on his throne. He offered you a contract \u2014 fight his weakened form, and the oathplate is yours if you win. You signed. Swore to the fire, swore you'd never kneel again. Then he stood, teleported to the middle of the room, axe in hand. The floor split into lava. You jumped stone to stone. Twice he sent his Judge to test you \u2014 his executioner, there to end anyone unworthy. You killed them both and went back for him. You barely walked out alive. But the oathplate was yours.`,
   },
   godslayer: {
-    iron: "Zamorak was a general who looked at eternity under Zaros and chose treachery, a staff, and godhood. You chose the harder path and walked it. The gods should be afraid.",
-    main: "No mode bound you. No rule chained you. You stayed because you chose to. The gods should be afraid.",
+    roleId: '1558451970883453003',
+    header: '⛧ <@&1558451970883453003> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has risen to Godslayer. A general has fallen.`,
+    story: `You walked into Zamorak's fortress wearing the oathplate. You'd spent months preparing \u2014 tracked down Emberlight, the demonbane blade, because you knew what was waiting. Past the bloodvelds and werewolves, forty kills deep. The chamber goes dark \u2014 the kind of dark that swallows torchlight. Then you hear him. K'ril Tsutsaroth. Zamorak's general. He screams and his next hit smashes straight through your prayer. You didn't flinch. When he fell, you stood over his corpse with his spear in your hands.`,
+  },
+  ascendant: {
+    roleId: '1559619699493437482',
+    header: '⛧ <@&1559619699493437482> ⛧',
+    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⛧',
+    tagline: (uid) => `<@${uid}> has ascended. Zamorak has noticed.`,
+    story: `K'ril is dead. His massive frame still radiates heat on the stone \u2014 demon blood steams in the cold dark. His spear is in your hands. His bodyguards lie broken around you, their armor still warm from the fight. The chamber is silent.\n\nThen the dark moves.\n\nNot a figure \u2014 a presence. The air gets heavy, like the moment before lightning. You feel it in your chest first, a pressure, then in your skull. His voice doesn't come through your ears. It's inside you.\n\n**Zamorak:** 'You killed my general.'\n\nIt's so loud you want to kneel, to cover your head, to run. But you don't. You stand. And something shifts \u2014 the pressure eases, just slightly. Approval.\n\n**Zamorak:** 'He was strong. You were stronger. That is the only law I know.'\n\nThe presence wraps around you like heat from a forge. Not burning. Forging.\n\n**Zamorak:** 'You did not come because I called. You came because you chose.'\n\nA pause. The weight settles, then lifts.\n\n**Zamorak:** 'Ascend.'`,
   },
 };
 
@@ -60,21 +93,15 @@ const SENIORITY_ROLE_IDS = {
 async function postRankUpStory(guild, member, rankName) {
   try {
     const key = storyKey(rankName);
-    const stories = RANK_STORIES[key];
-    if (!stories) return;
+    const ann = RANK_ANNOUNCEMENTS[key];
+    if (!ann) return;
     const isIron = member.roles.cache.has(IRON_ROLE_ID);
     const isMain = member.roles.cache.has(MAIN_ROLE_ID);
-    if (!isIron && !isMain) return; // guests don't get stories
-    const story = isIron ? stories.iron : stories.main;
+    if (!isIron && !isMain) return; // guests don't get rank-up stories
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
-    const roleId = SENIORITY_ROLE_IDS[key];
-    const rankShort = rankName.split(' ')[0];
-    const embed = new EmbedBuilder()
-      .setDescription(`⛧ <@&${roleId}> ⛧\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n<@${member.id}> has risen to ${rankShort}. Power recognizes power.\n\n*${story}*`)
-      .setColor(ZAMORAK_RED)
-      .setThumbnail(member.user.displayAvatarURL());
-    await channel.send({ embeds: [embed] }).catch(() => {});
+    const message = `${ann.header}\n${ann.divider}\n${ann.tagline(member.id)}\n\n${ann.story}`;
+    await channel.send({ content: message, allowedMentions: { parse: ['users'] } }).catch(() => {});
   } catch (err) {
     console.error('Rank-up story failed:', err.message);
   }
@@ -104,6 +131,9 @@ async function syncSeniority(client) {
     let changed = 0;
     for (const m of members.values()) {
       if (m.user.bot) continue;
+      // Guests and Friends of the Clan never get seniority roles (Alex 2026-10-14)
+      const skipIds = [config.recruit?.types?.guest?.roleId, '1558621489283211316'].filter(Boolean);
+      if (skipIds.some((id) => m.roles.cache.has(id))) continue;
       // Use original join date (survives leave/rejoin). Fall back to Discord's.
       const original = getOriginalJoinDate(m.id);
       const joinedAt = original || m.joinedAt;
@@ -124,6 +154,10 @@ async function syncSeniority(client) {
       // Ping their story on rank-up (not on initial assignment)
       if (isRankUp) {
         await postRankUpStory(guild, m, want.name);
+        // Add to CC checklist for in-game rank update
+        const oldRankName = oldRank ? oldRank.name.split(' ')[0] : 'None';
+        const newRankName = want.name.split(' ')[0];
+        await addCcEntry(guild, m.id, oldRankName, newRankName).catch(() => {});
         // Pace it out
         await new Promise((r) => setTimeout(r, 2000));
       }
@@ -150,4 +184,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, syncSeniority, rankForMonths };
+module.exports = { commands, syncSeniority, rankForMonths, RANK_ANNOUNCEMENTS, postRankUpStory };

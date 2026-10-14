@@ -8,7 +8,8 @@ const { handleWelcome } = require('./welcome');
 const { checkReminders } = require('./calendar');
 const { syncSeniority } = require('./seniority');
 const { onMemberJoin, handleModalSubmit, handleTotalSelect, handleAgeSelect } = require('./recruit');
-const { handleTicketSelect } = require('./tickets');
+// tickets handled via buttons.js; member select needs direct wiring
+const { handleMemberSelect } = require('./tickets');
 
 if (!process.env.DISCORD_TOKEN || !process.env.CLIENT_ID) {
   console.error('\nMissing DISCORD_TOKEN or CLIENT_ID. Copy .env.example to .env and fill it in.\n');
@@ -66,8 +67,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isButton()) {
       await handleButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
-      if (interaction.customId === 'ticket:category') {
-        await handleTicketSelect(interaction);
+      if (interaction.customId === 'member:select') {
+        await handleMemberSelect(interaction);
       } else if (interaction.customId.startsWith('apply:age:')) {
         await handleAgeSelect(interaction);
       } else {
