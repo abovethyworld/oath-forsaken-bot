@@ -105,7 +105,7 @@ async function createTicket(interaction, ticketType) {
   const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
   let thread;
   try {
-    // Create a private thread (like the other clan) — named for the ticket type
+    // Create a private thread — named for the ticket type
     thread = await ticketsChannel.threads.create({
       name: `${theme.label} — ${safeName}`.slice(0, 100),
       type: ChannelType.PrivateThread,
@@ -176,7 +176,7 @@ async function closeTicket(interaction) {
   await interaction.reply({ content: 'Closing ticket…', ephemeral: true });
 
   store.removeTicket(interaction.guildId, ownerId);
-  // Archive and lock the thread instead of deleting (like the reference)
+  // Archive and lock the thread instead of deleting
   try {
     await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch(() => {});
     await thread.setLocked(true);
