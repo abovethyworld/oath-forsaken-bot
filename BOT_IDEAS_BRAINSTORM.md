@@ -2,35 +2,28 @@
 
 Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 
-## 1. Welcome ping in welcome chat
+## 1. Welcome ping in welcome chat — PARTIALLY LIVE (2026-10-13)
 
-**Idea:** When someone joins, bot posts in a welcome channel and pings the Staff role so someone reviews them.
+**Status:** Welcome embed posts in #general on join (live). Oath Forsakers role auto-assign on join (live). BUT the Staff ping on join is NOT live: `logMembership()` in welcome.js has the code (join/leave embed + Staff ping in #joins-and-leaves) but index.js never calls it — it defers to Sapphire, and Sapphire's #joins-and-leaves logs do NOT ping Staff (verified 2026-10-13: 10 recent Sapphire join/leave embeds, zero pings).
+
+**To finish:** wire `logMembership(member, true)` into the GuildMemberAdd handler in index.js (one line). Then Staff gets pinged on every join.
+
+**DECLINED 2026-10-13 (Gavin):** he doesn't want join pings — staff already gets pinged when someone submits an application, so a join ping is redundant noise. Leaving as-is.
 
 **Notes:**
-- Need a dedicated #welcome channel (or reuse #joins-and-leaves?)
 - Ping should be Staff role, not @everyone
-- Could include their join date, account age (alt detection)
+- Could include their join date, account age (alt detection) — already in the embed
 - Risk: ping fatigue if lots of joins. Consider only pinging during certain hours or batching.
 
-## 2. Revisit the auto DM
+## 2. Revisit the auto DM — DONE (2026-10-13)
 
-**Idea:** Review what the bot DMs to new members on join.
+**Outcome:** Reworked by simplification. The welcome DM is now unified across all types and minimal: "⛧ Welcome to Oath Forsaken ⛧ / Your application was approved." The #general post carries the channel links and impact instead.
 
-**Notes:**
-- Need to see current DM text first (check src/)
-- Should match the new "New here?" flow: apply → approve → grab roles
-- Keep it short. Link #rules, #apply-here.
-- Don't duplicate what's already in #apply-here welcome panel.
+**Standing rule (Gavin's words):** the bot never DMs anyone without his explicit permission. Approved DMs: application-approved welcome, deny-with-reason. (Saved to MEMORY.md Boundaries.)
 
-## 3. Auto-announce rank ups in general
+## 3. Auto-announce rank ups in general — DEAD (2026-10-13)
 
-**Idea:** When someone ranks up (total level), bot announces in #general. Only for ranks above the first one (so no announcement for Wizard, but yes for Necromancer+).
-
-**Notes:**
-- "Above the first time rank" = skip Wizard [0-499], announce everything else
-- Could include their old rank → new rank, total level
-- Cooldown to avoid spam if someone jumps multiple ranks at once
-- This is great for engagement — people love public recognition
+**Killed by the age-ranks-only decision.** No gem ranks, no announcements for them.
 
 ## 4. Ticket transcripts
 
@@ -42,29 +35,13 @@ Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 - Useful for appeals, disputes, accountability
 - discord-html-transcripts is the standard npm package for this
 
-## 5. WOM total level → auto role
+## 5. WOM total level → auto role — DEAD (2026-10-13)
 
-**Idea:** Bot checks Wise Old Man API for a member's total level and auto-assigns the matching rank role.
+**Killed by the age-ranks-only decision.** No WOM polling, no total-level roles.
 
-**Notes:**
-- This is the big one. WOM API is free: https://api.wiseoldman.net/v2/players/{username}
-- Flow: member links RSN → bot polls WOM periodically → assigns role based on total level brackets
-- Need to handle: name changes, unranked players, API downtime
-- Should it remove old rank when they level up? Yes, keep only current.
-- Frequency: daily check is probably enough (not real-time)
-- This replaces manual rank assignment entirely
+## 6. Multi-type ticket buttons (like EG) — DONE (built 2026-10-11)
 
-## 6. Multi-type ticket buttons (like EG)
-
-**Idea:** #contact-staff gets three buttons: Report, Inquiry, Claim Reward — instead of one generic ticket.
-
-**Notes:**
-- Report → for rule violations, goes to mods (Inquisitor+)
-- Inquiry → general questions, goes to all staff
-- Claim Reward → for event/bingo winnings, goes to Ritualist+
-- Each creates a differently-labeled ticket channel
-- Deferred from earlier — needs bot code changes + testing
-- This is a bigger build. Probably after the GitHub migration so Ashton/Nick can help.
+**Live:** #contact-staff panel has four buttons (Report, Inquiry, Claim Reward, Become a Member). Each opens a private thread; a category dropdown inside the thread labels it (Report a Member, General Query, Bot/Plugin Help) and renames the thread.
 
 ## 7. Hidden main channels
 
@@ -138,13 +115,9 @@ Gavin's ideas, fleshed out. No actions taken — all need his go-ahead.
 
 ---
 
-## 13. WOM-verified total level on approval (tentative 2026-10-13, NOT approved)
+## 13. WOM-verified total level on approval — DEAD (2026-10-13)
 
-**Idea:** When staff approves an ironman application, the bot checks the applicant's total level via Wise Old Man and assigns the right total-level rank automatically.
-
-**Notes:**
-- Tentative only — Gavin has not approved this
-- May be dead if the clan moves to age ranks only (Ashton's one-rank-system push 2026-10-13)
+**Killed by the age-ranks-only decision.**
 
 ---
 
@@ -170,7 +143,7 @@ Once the repo is up, Ashton can start the Dockerfile + CI pipeline, and Nikolai 
 ## CC rank-up tracking — decision 2026-10-13
 
 Gavin picked the **persistent checklist** approach for tracking in-game CC rank-ups:
-- Bot detects total level rank-up via WOM, updates Discord role, announces in #general
+- Bot detects seniority (age) rank-up, updates the Discord role, announces in #general with the rank story
 - Bot adds entry to a persistent checklist embed in a staff channel
 - Staff updates the CC rank in-game, marks it done, bot removes the entry
 - One glance shows everything pending — no hunting through old messages
@@ -185,3 +158,61 @@ Gavin picked the **persistent checklist** approach for tracking in-game CC rank-
 Gavin's idea (tentative): during the application, bot does a WOM API lookup on the applicant's RSN. When staff clicks approve, bot auto-assigns the total level rank based on WOM data — not what the applicant typed. Catches liars. If the RSN doesn't exist on WOM, flag it for staff.
 
 - **Build timing (2026-10-13):** Gavin wants the WOM onboarding integration built early while volume is low, so it's tested and ready before applications pick up. Not yet approved to build — waiting on his go-ahead.
+
+## 14. Auto-nickname on approval — BUILT (2026-10-14, Gavin's idea)
+
+**Live:** when staff approves an application, the bot auto-sets the member's nickname to `{nickname} [{first RSN}]` (e.g. `Gavin [PTstud]`). Answers are saved at submit time and read on approval. Trims the nickname part if the combo exceeds Discord's 32-char limit; fails silently if the bot can't rename (owner, higher roles).
+- **Emoji fix 2026-10-14:** the ❌ (U+274C) on the Deny button rendered as invisible text on some clients. Adding U+FE0F made Discord's API reject it outright (broke the apply button with Invalid Form Body). Switched both spots to ✖️ (U+2716+FE0F), which Discord accepts and renders as a proper X. Tested via API before deploying.
+
+## 15. Staff pings on applications + tickets — BUILT, QUIET UNTIL LAUNCH (2026-10-14, Gavin's call)
+
+- New application submitted → bot posts "@Staff New Ironman application from @user" in the forum thread.
+- Ticket opened → @Staff added to the ticket ping list (was already pinging Lord of Chaos + Warmonger). Staff role added to tickets.staffRoleIds, so Staff members also get added to ticket threads and count as staff for ticket buttons.
+- **Quiet until launch (Gavin 2026-10-14):** no legit (notifying) pings till live. The mentions render in the messages but allowedMentions doesn't parse roles, so nobody gets buzzed. At launch, flip allowedMentions to include roles for real pings.
+
+## Application flow testing — ALL PASS (2026-10-14)
+
+Tested with turtlepace7 alt, all 3 types:
+- Ironman → Accept: roles (Iron Sworn + Initiate) assigned, Initiate welcome in #general, auto-nickname set (gavin [ptstud])
+- Main → Deny with Reason: reason stamped on post, DM sent to applicant, thread locked/archived
+- Guest → Deny: quiet deny, no DM
+- Quiet Staff pings render in forum threads without notifying
+
+## Ticket theming — BUILT (2026-10-14, Gavin's call)
+
+Every ticket is themed to the button clicked:
+- Report → "⚠️ Report", thread named "Report — user", intro asks for names/dates/proof
+- Inquiry → "💬 Inquiry", thread named "Inquiry — user"
+- Claim Reward → "🏆 Reward Claim", thread named "Reward Claim — user", intro asks what event
+- Become a Member → "⬆️ Membership Request", thread named "Membership Request — user", intro asks ironman or main, skips the category picker
+
+## Ticket patch 2026-10-14 (after testing all 4 types)
+
+- Category picker removed from all ticket types (redundant now that the button picks the type). Dead handleTicketSelect code cleaned out.
+- Membership Request now guides the user: "Reply with: Your in-game name / Ironman or main / How you found us"
+- Close Ticket button fixed: was silently swallowing archive errors after a 3s delay. Now archives immediately and reports errors.
+- Closing is staff-only (Gavin's call 2026-10-14). Ticket owners can no longer close their own.
+
+## Become a Member direct promotion — BUILT (2026-10-14, Gavin's call)
+
+No ticket. Guest clicks Become a Member → dropdown (Ironman/Main) → bot strips Guest, adds Iron Sworn/Unbound + Initiate, posts Initiate welcome in #general. Staff sees the #general post and meets them in-game for the CC invite. Non-guests get told they're already members. If someone plays both, they pick their primary; staff can add the second role by hand.
+- Guest welcome now ends: "Like what you see? To become an official member, hit Become a Member in #contact-staff"
+- #contact-staff panel rewritten in his voice (straightforward lines, no ticket language for Become a Member)
+
+## Guest seniority bug — FIXED (2026-10-14, Gavin caught it)
+
+The seniority sync was assigning Initiate to guests based on join date. Guests should never have seniority roles. Fixed syncSeniority to skip anyone with the Guest role. Cleaned the one affected guest (turtlepace7).
+
+## Become a Member promotion testing — ALL PASS (2026-10-14)
+
+- Main path: Guest → Unbound + Initiate, #general welcome posted ✓
+- Ironman path: Guest → Iron Sworn + Initiate, #general welcome posted ✓
+- Dropdown uses Iron Sworn / Unbound custom emojis ✓
+- Warm verbiage: "so we can get to meet you" (Gavin's call — warmth over tightness in welcomes)
+
+## Ticket system testing — ALL PASS (2026-10-14)
+
+- All 4 buttons open themed threads, no category picker ✓
+- Close button: staff-only, posts "Staff has closed this ticket. Don't be afraid to reach out if you need anything else." in thread, archives/locks, staff gets quiet "Ticket closed." ✓
+- Become a Member: direct promotion, no ticket (iron → Iron Sworn, main → Unbound, both + Initiate, #general welcome) ✓
+- Test threads cleaned up ✓
