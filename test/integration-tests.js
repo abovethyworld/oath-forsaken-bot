@@ -108,7 +108,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({ roles: [role] });
     const member = mockMember({ guild, roleIds: [] });
     const interaction = mockInteraction({ customId: 'role:role1', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     assert.ok(member._added.includes('role1'), 'role should be added');
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('Added'), `expected "Added", got: ${reply.content}`);
@@ -119,7 +119,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({ roles: [role] });
     const member = mockMember({ guild, roleIds: ['role1'] });
     const interaction = mockInteraction({ customId: 'role:role1', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     assert.ok(member._removed.includes('role1'), 'role should be removed');
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('Removed'), `expected "Removed", got: ${reply.content}`);
@@ -129,7 +129,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({ roles: [] });
     const member = mockMember({ guild });
     const interaction = mockInteraction({ customId: 'role:dead-role', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('no longer exists'), `expected missing-role message, got: ${reply.content}`);
   });
@@ -139,7 +139,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({ roles: [role], botHighestPosition: 5 });
     const member = mockMember({ guild });
     const interaction = mockInteraction({ customId: 'role:role1', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes("can't assign"), `expected hierarchy error, got: ${reply.content}`);
     assert.ok(!member._added.includes('role1'), 'role should NOT be added');
@@ -149,7 +149,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({});
     const member = mockMember({ guild });
     const interaction = mockInteraction({ customId: 'donate:x', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('ko-fi.com'), `expected Ko-fi link, got: ${reply.content}`);
   });
@@ -158,7 +158,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const guild = mockGuild({});
     const member = mockMember({ guild });
     const interaction = mockInteraction({ customId: 'bogus:xyz', member, guild });
-    await buttons.handleButton(interaction);
+    await buttons.routeButton(interaction);
     assert.strictEqual(interaction._replies.length, 0, 'should not reply');
   });
 

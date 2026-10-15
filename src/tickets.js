@@ -224,13 +224,24 @@ async function handleMemberSelect(interaction) {
     await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
+  const member = interaction.member;
+  // Re-verify guest status: they may have been approved via normal application
+  // between opening the menu and picking. Prevents double promotion.
+  const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
+  if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
+    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    return;
+  }
+  if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
+    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    return;
+  }
   // Verify the role still exists (config could have changed since the menu was shown)
   const role = interaction.guild.roles.cache.get(t.roleId);
   if (!role) {
     await interaction.reply({ content: 'That member role no longer exists. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
-  const member = interaction.member;
   const guild = interaction.guild;
   await interaction.deferReply({ ephemeral: true });
 

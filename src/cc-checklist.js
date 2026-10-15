@@ -14,10 +14,9 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config');
-const { safeFetch } = require('./utils');
+const { safeFetch, ZAMORAK_RED } = require('./utils');
 const { atomicWrite } = require('./store');
 
-const ZAMORAK_RED = 0x6b0e0e;
 // All IDs from config.json — no hardcoded IDs in this file.
 const CC = config.ccChecklist || {};
 const STAFF_CHAT_ID = CC.staffChatId;

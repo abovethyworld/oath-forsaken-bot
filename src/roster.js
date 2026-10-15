@@ -10,6 +10,7 @@ const {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } = require('discord.js');
+const crypto = require('node:crypto');
 const store = require('./store');
 const { ZAMORAK_RED } = require('./utils');
 
@@ -64,7 +65,7 @@ function rosterButtons(rosterId) {
 }
 
 async function postRoster(channel, eventName, eventId) {
-  const rosterId = eventId || `${Date.now().toString(36)}`;
+  const rosterId = eventId || crypto.randomBytes(8).toString('hex');
   const roster = {};
   store.saveRoster(rosterId, { eventName, roster, channelId: channel.id, messageId: null });
   const msg = await channel.send({
@@ -121,6 +122,11 @@ async function handleRosterButton(interaction) {
 
 async function rosterCommand(interaction) {
   const eventName = interaction.options.getString('event');
+  // Embed title limit is 256 chars — "⛧ {name} — Roster" prefix takes ~12
+  if (eventName.length > 200) {
+    await interaction.reply({ content: 'Keep the event name under 200 characters.', ephemeral: true });
+    return;
+  }
   const channel = interaction.channel;
   await interaction.deferReply({ ephemeral: true });
   await postRoster(channel, eventName);

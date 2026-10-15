@@ -71,7 +71,7 @@ function findDrift(guild, expectedIds) {
  * Run the drift check. Returns array of drifted channel names (empty = all clear).
  * Logs the result; posts to the drift log channel only if drift is found.
  */
-async function checkDrift(client, { silent = false } = {}) {
+async function syncDrift(client, { silent = false } = {}) {
   try {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) {
@@ -108,7 +108,7 @@ async function checkDrift(client, { silent = false } = {}) {
 
 async function checkCommand(interaction) {
   await interaction.deferReply({ ephemeral: true });
-  const drifted = await checkDrift(interaction.client, { silent: true });
+  const drifted = await syncDrift(interaction.client, { silent: true });
   if (drifted === null) {
     await interaction.editReply('Could not run the check. See console.');
   } else if (drifted.length === 0) {
@@ -131,4 +131,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, everyoneCanView, findDrift, checkDrift };
+module.exports = { commands, everyoneCanView, findDrift, syncDrift };

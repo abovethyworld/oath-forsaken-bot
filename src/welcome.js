@@ -29,27 +29,4 @@ async function handleWelcome(member) {
 }
 
 
-// Join/leave log for the staff #joins-and-leaves channel.
-// Pings Staff on join so someone reviews the new member.
-async function logMembership(member, joined) {
-  const channelId = config.channels.joinsLeaves;
-  if (!channelId) return;
-  const channel = member.guild.channels.cache.get(channelId);
-  if (!channel) return;
-
-  const accountAge = Math.floor((Date.now() - member.user.createdTimestamp) / 86400000);
-  const embed = new EmbedBuilder()
-    .setTitle(joined ? 'Member joined' : 'Member left')
-    .setDescription(`<@${member.id}> (${member.user.tag})\nAccount age: ${accountAge} days`)
-    .setColor(joined ? 0x57f287 : 0xed4245)
-    .setThumbnail(member.user.displayAvatarURL())
-    .setTimestamp()
-    .setFooter({ text: `ID: ${member.id}` });
-
-  const content = joined ? `<@&${config.tickets.staffRoleIds[0]}> New member to review.` : null;
-  await channel.send({ content, embeds: [embed] }).catch((err) => {
-    console.error('Failed to send join/leave log:', err.message);
-  });
-}
-
-module.exports = { handleWelcome, logMembership };
+module.exports = { handleWelcome };

@@ -5,8 +5,10 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  PermissionFlagsBits,
   SlashCommandBuilder,
 } = require('discord.js');
+const crypto = require('node:crypto');
 const store = require('./store');
 
 const MAX_OPTIONS = 4;
@@ -43,10 +45,15 @@ function pollRows(pollId, options) {
 
 async function createPoll(interaction) {
   const question = interaction.options.getString('question');
+  // Discord embed title limit is 256 chars — fail friendly instead of API error
+  if (question.length > 200) {
+    await interaction.reply({ content: 'Keep the question under 200 characters.', ephemeral: true });
+    return;
+  }
   const options = [];
   for (let i = 1; i <= MAX_OPTIONS; i++) {
     const o = interaction.options.getString(`option${i}`);
-    if (o) options.push(o);
+    if (o) options.push(o.slice(0, 80));
   }
   if (options.length < 2) {
     await interaction.reply({ content: 'Give at least 2 options.', ephemeral: true });
@@ -54,7 +61,6 @@ async function createPoll(interaction) {
   }
 
   await interaction.deferReply();
-  const crypto = require('node:crypto');
   const pollId = crypto.randomBytes(8).toString('hex');
   const poll = {
     id: pollId,
@@ -62,8 +68,11 @@ async function createPoll(interaction) {
     options,
     votes: {},
     authorTag: interaction.user.tag,
+    authorId: interaction.user.id,
     channelId: interaction.channelId,
     messageId: null,
+    createdAt: Date.now(),
+    closed: false,
   };
   const msg = await interaction.editReply({
     embeds: [pollEmbed(poll)],
@@ -80,6 +89,10 @@ async function handlePollButton(interaction) {
   const poll = store.getPoll(pollId);
   if (!poll) {
     await interaction.reply({ content: 'This poll has expired.', ephemeral: true });
+    return;
+  }
+  if (poll.closed) {
+    await interaction.reply({ content: 'This poll is closed.', ephemeral: true });
     return;
   }
   const idx = parseInt(idxStr, 10);
@@ -101,6 +114,29 @@ async function handlePollButton(interaction) {
   });
 }
 
+async function closePollCommand(interaction) {
+  const mine = store.findOpenPolls(interaction.user.id, interaction.channelId);
+  if (mine.length === 0) {
+    await interaction.reply({ content: 'No open polls by you in this channel.', ephemeral: true });
+    return;
+  }
+  // Close the most recent one
+  mine.sort((a, b) => b.createdAt - a.createdAt);
+  const poll = mine[0];
+  store.closePoll(poll.id);
+  // Update the message to show it's closed
+  try {
+    const channel = interaction.guild.channels.cache.get(poll.channelId);
+    const msg = channel ? await channel.messages.fetch(poll.messageId).catch(() => null) : null;
+    if (msg) {
+      const embed = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Poll by ${poll.authorTag} — closed` });
+      await msg.edit({ embeds: [embed], components: [] }).catch(() => {});
+    }
+  } catch {}
+  const total = Object.keys(poll.votes).length;
+  await interaction.reply({ content: `Closed **${poll.question}** with ${total} vote${total === 1 ? '' : 's'}.`, ephemeral: true });
+}
+
 const commands = [
   {
     data: (() => {
@@ -112,6 +148,12 @@ const commands = [
       return b;
     })(),
     run: createPoll,
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('poll-close')
+      .setDescription('Close your most recent open poll in this channel'),
+    run: closePollCommand,
   },
 ];
 
