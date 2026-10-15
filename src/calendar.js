@@ -69,7 +69,7 @@ async function createEvent(interaction) {
       .setTitle(`📅 ${name}`)
       .setDescription(`${description}\n\nStarts <t:${unix}:F> (<t:${unix}:R>)`)
       .setColor(0x5865f2);
-    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed] }).catch(() => {});
+    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed] }).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
   }
 
   await interaction.editReply(`Event created: **${name}** — <t:${unix}:F>\nMembers can RSVP from the server's Events tab.`);
@@ -128,7 +128,7 @@ async function cancelEvent(interaction) {
     await interaction.reply({ content: 'No matching event found.', ephemeral: true });
     return;
   }
-  await match.delete().catch(() => {});
+  await match.delete().catch((e) => console.error("[calendar.js] Silent failure:", e.message));
   store.clearReminders(match.id);
   await interaction.reply({ content: `Cancelled **${match.name}**.`, ephemeral: true });
 }
@@ -154,7 +154,7 @@ async function checkReminders(client) {
       for (const r of config.calendar.reminders || [60, 15]) {
         if (minsLeft <= r && !store.wasReminded(e.id, r)) {
           store.markReminded(e.id, r);
-          await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch(() => {});
+          await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
         }
       }
     }
