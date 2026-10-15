@@ -10,6 +10,9 @@ const APPS_FILE = path.join(__dirname, '..', 'data', 'applications.json');
 const APP_STATS_FILE = path.join(__dirname, '..', 'data', 'application-stats.json');
 const POLLS_FILE = path.join(__dirname, '..', 'data', 'polls.json');
 const ROSTERS_FILE = path.join(__dirname, '..', 'data', 'rosters.json');
+const HOLDS_FILE = path.join(__dirname, '..', 'data', 'seniority-holds.json');
+
+const STRIKE_EXPIRY_DAYS = 90;
 
 function load() {
   try {
@@ -56,7 +59,10 @@ module.exports = {
 
   getStrikes(guildId, userId) {
     const data = load();
-    return (data[guildId] && data[guildId][userId]) || [];
+    const all = (data[guildId] && data[guildId][userId]) || [];
+    // Strikes expire after 90 days — the system is about recent behavior
+    const cutoff = Date.now() - STRIKE_EXPIRY_DAYS * 24 * 3600 * 1000;
+    return all.filter((s) => new Date(s.at).getTime() > cutoff);
   },
 
   clearStrikes(guildId, userId) {
@@ -65,29 +71,48 @@ module.exports = {
     save(data);
   },
 
-  // ---- Tickets: { guildId: { userId: channelId } } ----
+  // ---- Tickets: { guildId: { byUser: { userId: channelId }, byChannel: { channelId: userId } } } ----
+  // Dual index: forward for "does this user have a ticket", reverse for "who owns this channel".
+  // Old format { guildId: { userId: channelId } } migrates automatically on first write.
+  _migrateTickets(data) {
+    for (const [guildId, guild] of Object.entries(data)) {
+      if (guild.byUser) continue; // already new format
+      const byUser = {};
+      const byChannel = {};
+      for (const [userId, channelId] of Object.entries(guild)) {
+        byUser[userId] = channelId;
+        byChannel[channelId] = userId;
+      }
+      data[guildId] = { byUser, byChannel };
+    }
+    return data;
+  },
+  _loadTickets() {
+    return this._migrateTickets(loadJson(TICKETS_FILE));
+  },
   getTicket(guildId, userId) {
-    const data = loadJson(TICKETS_FILE);
-    return (data[guildId] && data[guildId][userId]) || null;
+    const data = this._loadTickets();
+    return (data[guildId] && data[guildId].byUser[userId]) || null;
   },
   setTicket(guildId, userId, channelId) {
-    const data = loadJson(TICKETS_FILE);
-    data[guildId] ??= {};
-    data[guildId][userId] = channelId;
+    const data = this._loadTickets();
+    data[guildId] ??= { byUser: {}, byChannel: {} };
+    data[guildId].byUser[userId] = channelId;
+    data[guildId].byChannel[channelId] = userId;
     saveJson(TICKETS_FILE, data);
   },
   removeTicket(guildId, userId) {
-    const data = loadJson(TICKETS_FILE);
-    if (data[guildId]) delete data[guildId][userId];
+    const data = this._loadTickets();
+    if (data[guildId]) {
+      const channelId = data[guildId].byUser[userId];
+      delete data[guildId].byUser[userId];
+      if (channelId) delete data[guildId].byChannel[channelId];
+    }
     saveJson(TICKETS_FILE, data);
   },
   getTicketOwner(guildId, channelId) {
-    const data = loadJson(TICKETS_FILE);
-    const guild = data[guildId] || {};
-    for (const [userId, chId] of Object.entries(guild)) {
-      if (chId === channelId) return userId;
-    }
-    return null;
+    const data = this._loadTickets();
+    return (data[guildId] && data[guildId].byChannel[channelId]) || null;
   },
 
   // ---- Event reminders: { eventId: [minutesAlreadySent] } ----
@@ -175,6 +200,23 @@ module.exports = {
     return (data[guildId] || []).filter((e) => e.decidedAt >= sinceMs);
   },
 
+  // ---- Seniority holds: { guildId: { userId: true } } ----
+  // Staff can hold a member's seniority rank (honorary/exception). Sync skips them.
+  isSeniorityHeld(guildId, userId) {
+    const data = loadJson(HOLDS_FILE);
+    return !!(data[guildId] && data[guildId][userId]);
+  },
+  setSeniorityHold(guildId, userId, held) {
+    const data = loadJson(HOLDS_FILE);
+    data[guildId] ??= {};
+    if (held) {
+      data[guildId][userId] = true;
+    } else {
+      delete data[guildId][userId];
+    }
+    saveJson(HOLDS_FILE, data);
+  },
+
   // ---- Polls: { pollId: poll } ----
   savePoll(poll) {
     const data = loadJson(POLLS_FILE);
@@ -183,6 +225,35 @@ module.exports = {
   },
   getPoll(pollId) {
     return loadJson(POLLS_FILE)[pollId] || null;
+  },
+  // Find open polls by author in a channel (for /poll-close)
+  findOpenPolls(authorId, channelId) {
+    return Object.values(loadJson(POLLS_FILE)).filter(
+      (p) => !p.closed && p.authorId === authorId && p.channelId === channelId
+    );
+  },
+  closePoll(pollId) {
+    const data = loadJson(POLLS_FILE);
+    if (data[pollId]) {
+      data[pollId].closed = true;
+      saveJson(POLLS_FILE, data);
+      return true;
+    }
+    return false;
+  },
+  // Delete polls closed more than 30 days ago, or open polls older than 90 days
+  prunePolls() {
+    const data = loadJson(POLLS_FILE);
+    const now = Date.now();
+    let changed = false;
+    for (const [id, poll] of Object.entries(data)) {
+      const age = now - (poll.createdAt || now);
+      if ((poll.closed && age > 30 * 24 * 3600 * 1000) || age > 90 * 24 * 3600 * 1000) {
+        delete data[id];
+        changed = true;
+      }
+    }
+    if (changed) saveJson(POLLS_FILE, data);
   },
 
   // ---- Rosters: { rosterId: { eventName, roster: { userId: role|null }, channelId, messageId } } ----
