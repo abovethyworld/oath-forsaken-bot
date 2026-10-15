@@ -25,16 +25,30 @@ const BANNER_MSG_ID = process.env.GCAL_BANNER_MSG_ID || config.eventCalendar?.ba
 const THUMBNAIL_URL = process.env.GCAL_THUMBNAIL_URL || '';
 const BANNER_URL = process.env.GCAL_BANNER_URL || '';
 
+// Cache resolved image URLs for 12h — signed CDN URLs last ~24h,
+// so no need to re-fetch the source message on every daily sync.
+let imageUrlCache = { thumbnail: null, banner: null, at: 0 };
+const IMAGE_CACHE_TTL = 12 * 3600 * 1000;
+
 // Fetch a fresh signed attachment URL from a #bot-commands source message.
-async function resolveImageUrl(client, channelId, messageId, fallbackUrl) {
+async function resolveImageUrl(client, channelId, messageId, fallbackUrl, cacheKey) {
   if (!messageId) return fallbackUrl;
+  const now = Date.now();
+  if (cacheKey && imageUrlCache[cacheKey] && now - imageUrlCache.at < IMAGE_CACHE_TTL) {
+    return imageUrlCache[cacheKey];
+  }
   try {
-    const guild = client.guilds.cache.get(require('./config').guildId);
+    const guild = client.guilds.cache.get(config.guildId);
     const channel = guild?.channels.cache.get(channelId);
     if (!channel) return fallbackUrl;
     const msg = await safeFetch(channel.messages.fetch(messageId), 'event-calendar fetch');
     const url = msg?.attachments.first()?.url;
-    return url || fallbackUrl;
+    const resolved = url || fallbackUrl;
+    if (cacheKey && resolved) {
+      imageUrlCache[cacheKey] = resolved;
+      imageUrlCache.at = now;
+    }
+    return resolved;
   } catch {
     return fallbackUrl;
   }
@@ -130,7 +144,7 @@ function viewCalendarButton() {
 }
 
 async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
-  const guild = client.guilds.cache.get(require('./config').guildId);
+  const guild = client.guilds.cache.get(config.guildId);
   if (!guild) return;
   const channel = guild.channels.cache.get(channelId);
   if (!channel) {
@@ -139,8 +153,8 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
   }
   const events = await fetchEvents();
   // Resolve fresh signed image URLs so embeds never break on expiry.
-  const thumbnailUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, THUMBNAIL_MSG_ID, THUMBNAIL_URL);
-  const bannerUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, BANNER_MSG_ID, BANNER_URL);
+  const thumbnailUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, THUMBNAIL_MSG_ID, THUMBNAIL_URL, 'thumbnail');
+  const bannerUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, BANNER_MSG_ID, BANNER_URL, 'banner');
   const { embed, components } = buildEmbed(events, thumbnailUrl, bannerUrl);
 
   // Find existing calendar message to update, or post new one

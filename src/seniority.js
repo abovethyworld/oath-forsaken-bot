@@ -9,6 +9,7 @@
 // mentions in embed titles.
 const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const config = require('./config');
+const store = require('./store');
 const { getOriginalJoinDate, backfill } = require('./join-dates');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getMembers } = require('./guild-cache');
@@ -86,9 +87,6 @@ function storyKey(name) {
   return (name || '').toLowerCase().split(' ')[0]; // "Initiate (Under 1 month)" -> "initiate"
 }
 
-// Deprecated: use RANK_IDS from config instead
-const SENIORITY_ROLE_IDS = RANK_IDS;
-
 async function postRankUpStory(guild, member, rankName) {
   try {
     const key = storyKey(rankName);
@@ -116,28 +114,35 @@ function rankForMonths(months) {
   return best;
 }
 
-async function syncSeniority(client) {
+async function syncSeniority(client, { dryRun = false } = {}) {
+  const changes = []; // collected for dry-run reporting
   try {
     const ranks = config.seniorityRanks || [];
-    if (ranks.length === 0) return;
+    if (ranks.length === 0) return changes;
     const guild = client.guilds.cache.get(config.guildId);
-    if (!guild) return;
+    if (!guild) return changes;
     const rankIds = ranks.map((r) => r.roleId);
     const members = await getMembers(guild);
-    if (!members) return;
+    if (!members) return changes;
 
     const now = Date.now();
-    let changed = 0;
+    const rankUps = []; // stories to send after all role changes (batched, not interleaved)
+
     for (const m of members.values()) {
       if (m.user.bot) continue;
+      // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
+      if (store.isSeniorityHeld(guild.id, m.id)) continue;
       // Guests and Friends of the Clan never get seniority roles (Gavin 2026-10-14)
       // Strip any they already have, then skip.
       const skipIds = [config.recruit?.types?.guest?.roleId, SEN.friendOfClanRoleId].filter(Boolean);
       if (skipIds.some((id) => m.roles.cache.has(id))) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
-          await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
-          changed++;
+          if (dryRun) {
+            changes.push(`${m.user.tag}: strip seniority (guest/friend)`);
+          } else {
+            await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+          }
         }
         continue;
       }
@@ -159,31 +164,50 @@ async function syncSeniority(client) {
       // Detect actual rank-up (had a different seniority role before)
       const oldRank = ranks.find((r) => r.roleId !== want.roleId && m.roles.cache.has(r.roleId));
       const isRankUp = !!oldRank;
+      const oldRankName = oldRank ? oldRank.name.split(' ')[0] : 'None';
+      const newRankName = want.name.split(' ')[0];
+
+      if (dryRun) {
+        changes.push(`${m.user.tag}: ${oldRankName} → ${newRankName}${isRankUp ? '' : ' (initial)'}`);
+        continue;
+      }
+
       const remove = rankIds.filter((id) => id !== want.roleId);
       if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
       if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
-      changed++;
-      // Ping their story on rank-up (not on initial assignment)
-      if (isRankUp) {
-        await postRankUpStory(guild, m, want.name);
-        // Add to CC checklist for in-game rank update
-        const oldRankName = oldRank ? oldRank.name.split(' ')[0] : 'None';
-        const newRankName = want.name.split(' ')[0];
-        await addCcEntry(guild, m.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
-        // Pace it out
-        await new Promise((r) => setTimeout(r, 2000));
-      }
+      // Queue the story — sent after all role changes to avoid interleaved rate limits
+      if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
     }
-    if (changed) console.log(`Seniority sync: updated ${changed} member(s).`);
+
+    // Second pass: stories + CC checklist entries, paced
+    for (const { member, rankName, oldRankName, newRankName } of rankUps) {
+      await postRankUpStory(guild, member, rankName);
+      await addCcEntry(guild, member.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    const totalChanged = changes.length + rankUps.length;
+    if (totalChanged && !dryRun) console.log(`Seniority sync: updated ${totalChanged} member(s).`);
+    return changes;
   } catch (err) {
     console.error('Seniority sync failed:', err.message);
+    return changes;
   }
 }
 
 async function syncCommand(interaction) {
+  const dryRun = interaction.options.getBoolean('dryrun') || false;
   await interaction.deferReply({ ephemeral: true });
-  await syncSeniority(interaction.client);
-  await interaction.editReply('Seniority ranks synced.');
+  const changes = await syncSeniority(interaction.client, { dryRun });
+  if (dryRun) {
+    if (changes.length === 0) {
+      await interaction.editReply('Dry run: no changes would be made.');
+    } else {
+      await interaction.editReply(`Dry run — ${changes.length} change(s) would be made:\n${changes.slice(0, 20).join('\n')}${changes.length > 20 ? `\n…(${changes.length - 20} more)` : ''}`);
+    }
+  } else {
+    await interaction.editReply('Seniority ranks synced.');
+  }
 }
 
 const commands = [
@@ -191,8 +215,28 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('sync-seniority')
       .setDescription('Re-check tenure ranks now (Manage Roles only)')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+      .addBooleanOption((o) => o.setName('dryrun').setDescription('Show what would change without changing anything')),
     run: syncCommand,
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('seniority-hold')
+      .setDescription('Hold/unhold a member\'s seniority rank (Manage Roles only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+      .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
+      .addBooleanOption((o) => o.setName('hold').setDescription('Hold their rank (true) or release (false)').setRequired(true)),
+    run: async (interaction) => {
+      const user = interaction.options.getUser('user');
+      const hold = interaction.options.getBoolean('hold');
+      store.setSeniorityHold(interaction.guildId, user.id, hold);
+      await interaction.reply({
+        content: hold
+          ? `${user.tag}'s seniority rank is now held. Sync will skip them.`
+          : `${user.tag}'s seniority hold released. Sync will resume.`,
+        ephemeral: true,
+      });
+    },
   },
 ];
 

@@ -20,10 +20,9 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole } = require('./utils');
+const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole, ZAMORAK_RED } = require('./utils');
 
 const DAY_MS = 24 * 3600 * 1000;
-const ZAMORAK_RED = 0x6b0e0e;
 
 // In-progress decision locks: userId -> true. Prevents double-decision races
 // when two staff click approve/deny on the same application simultaneously.
@@ -40,11 +39,8 @@ function appTypes() {
   return config.recruit?.types || {};
 }
 
-async function onMemberJoin(member) {
-  // No longer creates a private channel (2026-10-11).
-  // Users apply via the #apply-here channel or /apply command.
-  return;
-}
+// (member-join application channels removed 2026-10-11;
+// users apply via #apply-here or /apply — no join hook needed)
 
 // Posts the 3-button application panel to a channel.
 // Used by /setup-applications and for the #apply-here channel.
@@ -231,10 +227,10 @@ async function handleModalSubmit(interaction) {
   );
 
   // Anti-spoof: user ID is unspoofable, username alone can impersonate staff
-  const postName = `${t.label} App from ${interaction.user.username} [${interaction.user.id}]`;
+  const threadName = `${t.label} App from ${interaction.user.username} [${interaction.user.id}]`;
   const thread = await forum.threads
     .create({
-      name: postName.slice(0, 100),
+      name: threadName.slice(0, 100),
       message: { embeds: [embed], components: [row] },
       reason: `Application from ${interaction.user.tag}`,
     })
@@ -343,13 +339,19 @@ async function handleDecision(interaction) {
     await interaction.reply({ content: 'Someone else is already handling this application.', ephemeral: true });
     return;
   }
+  // Idempotency: if the thread was already decided (e.g. bot restarted mid-decision),
+  // don't process again. The verdict is in the thread name.
+  const thread = interaction.channel;
+  if (thread && thread.isThread() && / - (Approved|Denied)/.test(thread.name)) {
+    await interaction.reply({ content: 'This application was already decided.', ephemeral: true });
+    return;
+  }
   decisionLocks.add(lockKey);
   try {
   const types = appTypes();
   const t = types[type] || {};
   const guild = interaction.guild;
   const target = await guild.members.fetch(userId).catch(() => null);
-  const thread = interaction.channel;
 
   await interaction.deferReply({ ephemeral: true });
 
@@ -396,13 +398,8 @@ async function handleDecision(interaction) {
         await target.setNickname(newNick, 'Auto-nickname on approval').catch((e) => console.error("[recruit.js] Silent failure:", e.message));
       }
     }
-    // Welcome DM tailored to application type
-    const welcomeDMs = {
-      iron: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
-      main: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
-      guest: `⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`,
-    };
-    await target.send(welcomeDMs[type] || welcomeDMs.guest).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    // Welcome DM on approval
+    await target.send(`⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
 
     // Public welcome in #general - plain text (finalized 2026-10-13)
     // Guest gets the guest welcome; iron/main get the Initiate announcement.
@@ -480,10 +477,18 @@ async function handleApplyButton(interaction) {
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'type') {
-    // Prevent members and staff from applying
+    // Prevent members and staff from applying (IDs from config, not names —
+    // name lookups break silently on rename)
+    const types = appTypes();
+    const memberRoleIds = [
+      types.iron?.roleId,
+      types.main?.roleId,
+      types.guest?.roleId,
+      config.seniority?.friendOfClanRoleId,
+      ...(config.tickets?.staffRoleIds || []),
+    ].filter(Boolean);
     const member = interaction.member;
-    const blockedRoleNames = ['Iron Sworn', 'Unbound', 'Guest', 'Friend of the Clan', 'Lord of Chaos', 'Warmonger', 'Ritualist', 'Inquisitor', 'Staff'];
-    const hasBlockedRole = member.roles.cache.some(r => blockedRoleNames.includes(r.name));
+    const hasBlockedRole = member.roles.cache.some((r) => memberRoleIds.includes(r.id)) || isStaff(interaction);
     if (hasBlockedRole) {
       await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
       return;
@@ -510,18 +515,7 @@ async function handleAgeSelect(interaction) {
   return showApplicationModal(interaction, type, null, ageAnswer);
 }
 
-async function handleTotalSelect(interaction) {
-  // customId: apply:total:<ageAnswer>
-  const parts = interaction.customId.split(':');
-  if (parts[0] !== 'apply' || parts[1] !== 'total') return;
-  const ageAnswer = parts[2] === 'none' ? null : parts[2];
-  const bracket = interaction.values[0];
-  // Don't defer — showModal must be the initial response
-  await showApplicationModal(interaction, 'iron', bracket, ageAnswer);
-}
-
-const { SlashCommandBuilder } = require('discord.js');
-const { PermissionFlagsBits: PFB } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits: PFB } = require('discord.js');
 
 const commands = [
   {
@@ -605,4 +599,4 @@ async function applyStatsCommand(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-module.exports = { onMemberJoin, handleApplyButton, handleModalSubmit, handleTotalSelect, handleAgeSelect, commands };
+module.exports = { handleApplyButton, handleModalSubmit, handleAgeSelect, commands };
