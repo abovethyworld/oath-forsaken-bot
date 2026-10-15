@@ -313,6 +313,36 @@ console.log('\nrun async tests...');
     assert.strictEqual(perms.everyoneCanView(channel), true);
   });
 
+
+  // ─── New feature tests (round 2) ───
+  console.log('\nnew features');
+
+  await atest('safeFetch: returns value on success', async () => {
+    const result = await utils.safeFetch(Promise.resolve('hello'), 'test');
+    assert.strictEqual(result, 'hello');
+  });
+
+  await atest('safeFetch: returns null silently on 404', async () => {
+    const err = new Error('Unknown Message');
+    err.code = 10008;
+    const result = await utils.safeFetch(Promise.reject(err), 'test');
+    assert.strictEqual(result, null);
+  });
+
+  await atest('safeFetch: returns null but logs on real error', async () => {
+    const err = new Error('Rate limited');
+    err.code = 0;
+    const result = await utils.safeFetch(Promise.reject(err), 'test-label');
+    assert.strictEqual(result, null);
+  });
+
+  test('buildGuestWelcome: contains guest role and channel links', () => {
+    const msg = utils.buildGuestWelcome('777');
+    assert.ok(msg.includes('<@777>'), 'should mention user');
+    assert.ok(msg.includes("The door's open"), 'should have tagline');
+    assert.ok(msg.includes('Become a Member'), 'should have member CTA');
+  });
+
   // ─── Summary ───
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);

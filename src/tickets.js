@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { isStaff, buildInitiateWelcome } = require('./utils');
+const { isStaff, buildInitiateWelcome, safeFetch } = require('./utils');
 
 // Per-button ticket themes (Alex 2026-10-14 — every ticket themed to the button clicked)
 const TICKET_TYPES = {
@@ -85,7 +85,7 @@ async function createTicket(interaction, ticketType) {
     }
     // Also check threads
     try {
-      const thread = await interaction.guild.channels.fetch(existingId).catch(() => null);
+      const thread = await safeFetch(interaction.guild.channels.fetch(existingId), 'ticket channel fetch');
       if (thread) {
         await interaction.reply({ content: `You already have an open ticket: ${thread}`, ephemeral: true });
         return;
