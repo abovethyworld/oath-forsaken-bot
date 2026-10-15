@@ -200,7 +200,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
   } catch {}
 }
 
-async function handleButton(interaction) {
+async function handleCcButton(interaction) {
   const parts = interaction.customId.split(':');
   if (parts[0] !== 'cc') return false;
   const action = parts[1];
@@ -319,4 +319,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleButton, addEntry, refreshChecklist };
+module.exports = { commands, handleCcButton, addEntry, refreshChecklist };

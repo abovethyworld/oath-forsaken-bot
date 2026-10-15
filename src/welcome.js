@@ -46,7 +46,7 @@ async function logMembership(member, joined) {
     .setTimestamp()
     .setFooter({ text: `ID: ${member.id}` });
 
-  const content = joined ? '<@&1558735997922054225> New member to review.' : null;
+  const content = joined ? `<@&${config.tickets.staffRoleIds[0]}> New member to review.` : null;
   await channel.send({ content, embeds: [embed] }).catch((err) => {
     console.error('Failed to send join/leave log:', err.message);
   });

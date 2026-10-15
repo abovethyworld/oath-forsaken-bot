@@ -7,7 +7,9 @@ const FILE = path.join(__dirname, '..', 'data', 'strikes.json');
 const TICKETS_FILE = path.join(__dirname, '..', 'data', 'tickets.json');
 const REMINDERS_FILE = path.join(__dirname, '..', 'data', 'reminders.json');
 const APPS_FILE = path.join(__dirname, '..', 'data', 'applications.json');
+const APP_STATS_FILE = path.join(__dirname, '..', 'data', 'application-stats.json');
 const POLLS_FILE = path.join(__dirname, '..', 'data', 'polls.json');
+const ROSTERS_FILE = path.join(__dirname, '..', 'data', 'rosters.json');
 
 function load() {
   try {
@@ -116,15 +118,19 @@ module.exports = {
     if (changed) saveJson(REMINDERS_FILE, data);
   },
 
-  // ---- Applications: { guildId: { userId: { channelId, submitted } } } ----
+  // ---- Applications: { guildId: { userId: { channelId, submitted, submittedAt } } } ----
   getApplication(guildId, userId) {
     const data = loadJson(APPS_FILE);
     return (data[guildId] && data[guildId][userId] && data[guildId][userId].channelId) || null;
   },
+  getApplicationFull(guildId, userId) {
+    const data = loadJson(APPS_FILE);
+    return (data[guildId] && data[guildId][userId]) || null;
+  },
   setApplication(guildId, userId, channelId) {
     const data = loadJson(APPS_FILE);
     data[guildId] ??= {};
-    data[guildId][userId] = { channelId, submitted: false };
+    data[guildId][userId] = { channelId, submitted: false, submittedAt: Date.now() };
     saveJson(APPS_FILE, data);
   },
   setApplicationSubmitted(guildId, userId) {
@@ -155,6 +161,20 @@ module.exports = {
     return (data[guildId] && data[guildId][userId] && data[guildId][userId].answers) || null;
   },
 
+  // ---- Application stats: { guildId: [ { userId, type, decision, decidedBy, submittedAt, decidedAt } ] } ----
+  recordApplicationDecision(guildId, entry) {
+    const data = loadJson(APP_STATS_FILE);
+    data[guildId] ??= [];
+    data[guildId].push({ ...entry, decidedAt: Date.now() });
+    // Keep last 500 to bound file size
+    if (data[guildId].length > 500) data[guildId] = data[guildId].slice(-500);
+    saveJson(APP_STATS_FILE, data);
+  },
+  getApplicationStats(guildId, sinceMs = 0) {
+    const data = loadJson(APP_STATS_FILE);
+    return (data[guildId] || []).filter((e) => e.decidedAt >= sinceMs);
+  },
+
   // ---- Polls: { pollId: poll } ----
   savePoll(poll) {
     const data = loadJson(POLLS_FILE);
@@ -163,5 +183,15 @@ module.exports = {
   },
   getPoll(pollId) {
     return loadJson(POLLS_FILE)[pollId] || null;
+  },
+
+  // ---- Rosters: { rosterId: { eventName, roster: { userId: role|null }, channelId, messageId } } ----
+  saveRoster(rosterId, data) {
+    const all = loadJson(ROSTERS_FILE);
+    all[rosterId] = data;
+    saveJson(ROSTERS_FILE, all);
+  },
+  getRoster(rosterId) {
+    return loadJson(ROSTERS_FILE)[rosterId] || null;
   },
 };
