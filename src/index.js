@@ -22,7 +22,7 @@ const config = require('./config'); // validates config.json on load
 const { commands, handleCommand } = require('./commands');
 const { handleButton } = require('./buttons');
 const { handleWelcome } = require('./welcome');
-const { checkReminders } = require('./calendar');
+const { syncReminders } = require('./calendar');
 const { syncSeniority } = require('./seniority');
 const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
@@ -60,31 +60,36 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`Registered ${commands.length} slash commands for guild ${config.guildId}.`);
   console.log('Bot is running. Leave this process on 24/7 (see README for hosting).');
 
-  // Event reminder loop: check every 5 minutes.
-  setInterval(() => checkReminders(client), 5 * 60 * 1000);
-  setTimeout(() => checkReminders(client), 30 * 1000); // one quick check after startup
-
-  // Seniority (tenure rank) loop: check once a day, plus once after startup.
-  setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
-  setTimeout(() => syncSeniority(client), 60 * 1000);
-
-  // Permission drift check: once a day, plus once after startup.
-  // Only posts to mod-log if drift is actually found (no noise on clean runs).
-  setInterval(() => checkDrift(client), 24 * 3600 * 1000);
-  setTimeout(() => checkDrift(client), 120 * 1000);
-
-  // Event calendar embed: refresh daily, plus once after startup.
-  setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
-  setTimeout(() => syncCalendar(client), 90 * 1000);
-
-  // Backfill original join dates for existing members (one-time, gaps only).
+  // Startup sweep: single shared guild fetch, then run all one-time jobs.
+  // Previously 5 staggered jobs each fetched guild data independently.
   setTimeout(async () => {
     const guild = client.guilds.cache.get(config.guildId);
-    if (guild) {
-      const n = await backfill(guild);
+    if (!guild) return;
+    try {
+      const { getMembers } = require('./guild-cache');
+      const members = await getMembers(guild, true); // force fresh, populates cache
+
+      // Backfill join dates (uses shared member list)
+      const n = await backfill(guild, members);
       if (n) console.log(`Join dates: backfilled ${n} member(s).`);
+
+      // Seniority sync (uses cached members)
+      await syncSeniority(client);
+
+      // Other one-time checks (don't need member list)
+      await syncReminders(client);
+      await checkDrift(client);
+      await syncCalendar(client);
+    } catch (err) {
+      console.error('[startup] Sweep failed:', err.message);
     }
   }, 30 * 1000);
+
+  // Recurring loops (use cached data where possible)
+  setInterval(() => syncReminders(client), 5 * 60 * 1000);
+  setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
+  setInterval(() => checkDrift(client), 24 * 3600 * 1000);
+  setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

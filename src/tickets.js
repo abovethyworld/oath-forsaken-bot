@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { isStaff, buildInitiateWelcome, safeFetch } = require('./utils');
+const { isStaff, buildInitiateWelcome, safeFetch, ZAMORAK_RED } = require('./utils');
 
 // Per-button ticket themes (Gavin 2026-10-14 — every ticket themed to the button clicked)
 const TICKET_TYPES = {
@@ -106,9 +106,11 @@ async function createTicket(interaction, ticketType) {
   const safeName = interaction.user.username.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) || 'user';
   let thread;
   try {
-    // Create a private thread — named for the ticket type
+    // Create a private thread — named for the ticket type.
+    // Append user ID suffix to avoid collisions (two "johndoe"s).
+    const threadName = `${theme.label} — ${safeName}-${interaction.user.id.slice(-4)}`.slice(0, 100);
     thread = await ticketsChannel.threads.create({
-      name: `${theme.label} — ${safeName}`.slice(0, 100),
+      name: threadName,
       type: ChannelType.PrivateThread,
       reason: `${theme.label} ticket opened by ${interaction.user.tag}`,
     });
@@ -136,7 +138,7 @@ async function createTicket(interaction, ticketType) {
   await thread.send({
     // Only tag Staff on tickets (Gavin 2026-10-14) — quiet until launch (no notify, just the visible mention).
     // Flip allowedMentions to include roles for legit pings at launch.
-    content: `${interaction.user} <@&1558735997922054225>`.trim(),
+    content: `${interaction.user} <@&${config.tickets.staffRoleIds[0]}>`.trim(),
     embeds: [embed],
     components: [closeRow],
     allowedMentions: { users: [interaction.user.id] },
@@ -203,8 +205,8 @@ async function showMemberSelect(interaction) {
     .setCustomId('member:select')
     .setPlaceholder('I play an…')
     .addOptions([
-      { label: 'Ironman', value: 'iron', emoji: '1558623401302564996' },
-      { label: 'Main', value: 'main', emoji: '1558623453438025828' },
+      { label: 'Ironman', value: 'iron', emoji: config.recruit?.ironEmojiId },
+      { label: 'Main', value: 'main', emoji: config.recruit?.mainEmojiId },
     ]);
   await interaction.reply({
     content: 'Pick your account type.',
@@ -222,6 +224,12 @@ async function handleMemberSelect(interaction) {
     await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
+  // Verify the role still exists (config could have changed since the menu was shown)
+  const role = interaction.guild.roles.cache.get(t.roleId);
+  if (!role) {
+    await interaction.reply({ content: 'That member role no longer exists. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    return;
+  }
   const member = interaction.member;
   const guild = interaction.guild;
   await interaction.deferReply({ ephemeral: true });
@@ -235,7 +243,7 @@ async function handleMemberSelect(interaction) {
   if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
 
   // Initiate welcome in #general, same as an approval
-  const generalChan = guild.channels.cache.get('1558583385440395476');
+  const generalChan = guild.channels.cache.get(config.recruit?.generalChannelId || config.channels?.general);
   if (generalChan) {
     const welcomeMsg = buildInitiateWelcome(member.id);
     await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));

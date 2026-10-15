@@ -582,7 +582,9 @@
     },
     "generalChannelId": "1558583385440395476",
     "guestRoleId": "1558540445611728997",
-    "contactStaffChannelId": "1558399103757717518"
+    "contactStaffChannelId": "1558399103757717518",
+    "ironEmojiId": "1558623401302564996",
+    "mainEmojiId": "1558623453438025828"
   },
   "gcal": {
     "calendarId": "primary",
@@ -887,6 +889,25 @@
   "eventCalendar": {
     "thumbnailMsgId": "1559170903860846654",
     "bannerMsgId": "1559122168011292675",
-    "channelId": "1558399108715118702"
+    "channelId": "1558399108715118702",
+    "botCommandsChannelId": "1558458301627506788"
+  },
+  "seniority": {
+    "generalChannelId": "1558583385440395476",
+    "ironRoleId": "1558540424048803860",
+    "mainRoleId": "1558540434652008569",
+    "introduceChannelId": "1558428255940378715",
+    "rolesChannelId": "1558399101454786670",
+    "staffRoleId": "1558735997922054225",
+    "friendOfClanRoleId": "1558621489283211316",
+    "rankIds": {
+      "initiate": "1558452023790276659",
+      "acolyte": "1558452012797136960",
+      "devout": "1558452002319769631",
+      "zealot": "1558451991448129628",
+      "heretic": "1558451981562151062",
+      "godslayer": "1558451970883453003",
+      "ascendant": "1559619699493437482"
+    }
   }
 }
