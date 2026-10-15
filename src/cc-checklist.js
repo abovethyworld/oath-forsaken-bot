@@ -14,6 +14,7 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config');
+const { atomicWrite } = require('./store');
 
 const ZAMORAK_RED = 0x6b0e0e;
 const STAFF_CHAT_ID = '1558581400897196093'; // main channel (for thread creation)
@@ -58,8 +59,7 @@ function load() {
 }
 
 function save(data) {
-  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  atomicWrite(DATA_FILE, data);
 }
 
 const PER_PAGE = 5;
@@ -167,7 +167,7 @@ async function refreshChecklist(guild) {
     if (data.messageId) {
       const msg = await channel.messages.fetch(data.messageId).catch(() => null);
       if (msg) {
-        await msg.edit({ embeds: [embed], components }).catch(() => {});
+        await msg.edit({ embeds: [embed], components }).catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         return;
       }
     }
@@ -260,7 +260,7 @@ async function handleButton(interaction) {
       if (thread) {
         for (const pid of pingIds) {
           const pingMsg = await thread.messages.fetch(pid).catch(() => null);
-          if (pingMsg) await pingMsg.delete().catch(() => {});
+          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         }
       }
     } catch {}
@@ -279,7 +279,7 @@ async function handleButton(interaction) {
     if (action === 'next' && data.page < totalPages - 1) data.page++;
     save(data);
     await refreshChecklist(interaction.guild);
-    await interaction.deferUpdate().catch(() => {});
+    await interaction.deferUpdate().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
     return true;
   }
 
@@ -302,7 +302,7 @@ async function handleButton(interaction) {
         const thread = interaction.guild.channels.cache.get(CC_THREAD_ID);
         if (thread) {
           const pingMsg = await thread.messages.fetch(removed.pingMsgId).catch(() => null);
-          if (pingMsg) await pingMsg.delete().catch(() => {});
+          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         }
       } catch {}
     }

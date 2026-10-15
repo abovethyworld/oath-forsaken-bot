@@ -17,9 +17,16 @@ function load() {
   }
 }
 
+// Atomic write: temp file + rename so a crash mid-write never corrupts the data file.
+function atomicWrite(file, data) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file);
+}
+
 function save(data) {
-  fs.mkdirSync(path.dirname(FILE), { recursive: true });
-  fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+  atomicWrite(FILE, data);
 }
 
 function loadJson(file) {
@@ -31,11 +38,11 @@ function loadJson(file) {
 }
 
 function saveJson(file, data) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  atomicWrite(file, data);
 }
 
 module.exports = {
+  atomicWrite,
   addStrike(guildId, userId, reason, modId) {
     const data = load();
     data[guildId] ??= {};

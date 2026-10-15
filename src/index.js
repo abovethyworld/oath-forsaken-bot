@@ -7,7 +7,10 @@ const { handleButton } = require('./buttons');
 const { handleWelcome } = require('./welcome');
 const { checkReminders } = require('./calendar');
 const { syncSeniority } = require('./seniority');
+const { syncCalendar } = require('./event-calendar');
+const { backfill, recordJoin } = require('./join-dates');
 const { checkDrift } = require('./permissions');
+const { getPingRole } = require('./utils');
 const { onMemberJoin, handleModalSubmit, handleTotalSelect, handleAgeSelect } = require('./recruit');
 // tickets handled via buttons.js; member select needs direct wiring
 const { handleMemberSelect } = require('./tickets');
@@ -51,13 +54,11 @@ client.once(Events.ClientReady, async (c) => {
   setTimeout(() => checkDrift(client), 120 * 1000);
 
   // Event calendar embed: refresh daily, plus once after startup.
-  const { syncCalendar } = require('./event-calendar');
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setTimeout(() => syncCalendar(client), 90 * 1000);
 
   // Backfill original join dates for existing members (one-time, gaps only).
   setTimeout(async () => {
-    const { backfill } = require('./join-dates');
     const guild = client.guilds.cache.get(config.guildId);
     if (guild) {
       const n = await backfill(guild);
@@ -86,17 +87,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
   } catch (err) {
     console.error('Interaction error:', err);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[index.js] Silent failure:", e.message));
     }
   }
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
-  const { recordJoin } = require('./join-dates');
   recordJoin(member.id, member.joinedAt);
   // Everyone-ping role: assign on join so announcements reach all members
   try {
-    const pingRole = member.guild.roles.cache.find((r) => r.name === 'Oath Forsakers');
+    const pingRole = getPingRole(member.guild);
     if (pingRole && !member.roles.cache.has(pingRole.id)) {
       await member.roles.add(pingRole);
     }

@@ -4,6 +4,7 @@
 // ranks survive leave/rejoin cycles.
 const fs = require('fs');
 const path = require('path');
+const { atomicWrite } = require('./store');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'join-dates.json');
@@ -26,8 +27,7 @@ function load() {
 
 function save() {
   try {
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(DATA_FILE, JSON.stringify(cache, null, 2));
+    atomicWrite(DATA_FILE, cache);
   } catch (err) {
     console.error('Join dates save failed:', err.message);
   }
