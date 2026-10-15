@@ -5,6 +5,7 @@ const { handleApplyButton } = require('./recruit');
 const { handlePollButton } = require('./polls');
 const { handleCcButton } = require('./cc-checklist');
 const { handleRosterButton } = require('./roster');
+const { handleEventButton } = require('./calendar');
 
 async function handleButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
@@ -13,6 +14,7 @@ async function handleButton(interaction) {
   if (kind === 'poll') return handlePollButton(interaction);
   if (kind === 'cc') return handleCcButton(interaction);
   if (kind === 'roster') return handleRosterButton(interaction);
+  if (kind === 'event') return handleEventButton(interaction);
   if (kind === 'donate') {
     await interaction.reply({
       content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nEvery bit helps. Chaos takes all.',
