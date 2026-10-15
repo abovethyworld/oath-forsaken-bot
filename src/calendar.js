@@ -3,7 +3,11 @@
 // /event-create makes the event + announces it; a background loop (started in
 // index.js) sends reminder pings before each event starts.
 const { DateTime } = require('luxon');
+const crypto = require('node:crypto');
 const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   EmbedBuilder,
   GuildScheduledEventEntityType,
@@ -14,6 +18,21 @@ const {
 const config = require('./config');
 const store = require('./store');
 const gcal = require('./gcal');
+
+// Pending event confirmations: pendingId -> { data, expires }. Prevents
+// timezone surprises — the creator sees the auto-converting time before it goes live.
+const pendingEvents = new Map();
+const PENDING_TTL = 5 * 60 * 1000;
+
+function cleanupPending() {
+  const now = Date.now();
+  for (const [k, v] of pendingEvents) {
+    if (now > v.expires) pendingEvents.delete(k);
+  }
+}
+
+// Shared event cache (declared early — used by handleEventButton above getEvents)
+let eventsCache = { data: null, at: 0 };
 
 function parseStart(dateStr, timeStr) {
   const tz = (config.calendar && config.calendar.timezone) || 'UTC';
@@ -41,17 +60,66 @@ async function createEvent(interaction) {
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  // Confirmation step: show the parsed time as a Discord timestamp (auto-converts
+  // to each viewer's timezone) plus the explicit timezone it was read in, so the
+  // creator can catch a timezone mistake before the event goes live.
+  cleanupPending();
+  const pendingId = crypto.randomBytes(6).toString('hex');
+  pendingEvents.set(pendingId, {
+    expires: Date.now() + PENDING_TTL,
+    creatorId: interaction.user.id,
+    data: { name, date, time, description, voiceId: voice ? voice.id : null },
+  });
+  const unix = Math.floor(dt.toSeconds());
+  const tz = (config.calendar && config.calendar.timezone) || 'UTC';
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`event:confirm:${pendingId}`).setLabel('Create Event').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`event:cancel:${pendingId}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
+  );
+  await interaction.reply({
+    content:
+      `About to create **${name}**\n\n` +
+      `I read \`${date} ${time}\` as **${dt.toFormat('cccc, MMM d')} at ${dt.toFormat('h:mm a')}** (${tz}).\n` +
+      `In your timezone that shows as <t:${unix}:F>.\n\n` +
+      `If that looks wrong, hit Cancel and try again with the ${tz} time.`,
+    components: [row],
+    ephemeral: true,
+  });
+  return;
+}
 
-  const isVoice = voice && voice.type === ChannelType.GuildVoice;
-  // Validate the voice channel still exists (could be deleted between selection and submit)
-  if (isVoice) {
-    const fresh = interaction.guild.channels.cache.get(voice.id);
-    if (!fresh || fresh.type !== ChannelType.GuildVoice) {
-      await interaction.editReply('That voice channel no longer exists. Pick another one.');
-      return;
-    }
+async function handleEventButton(interaction) {
+  // customId: event:confirm:<pendingId> or event:cancel:<pendingId>
+  const [, action, pendingId] = interaction.customId.split(':');
+  const pending = pendingEvents.get(pendingId);
+  if (!pending || Date.now() > pending.expires) {
+    pendingEvents.delete(pendingId);
+    await interaction.reply({ content: 'This confirmation expired. Run `/event-create` again.', ephemeral: true }).catch(() => {});
+    return;
   }
+  if (pending.creatorId !== interaction.user.id) {
+    await interaction.reply({ content: 'Only the person who started this event can confirm it.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  pendingEvents.delete(pendingId);
+
+  if (action === 'cancel') {
+    await interaction.update({ content: 'Event creation cancelled.', components: [] }).catch(() => {});
+    return;
+  }
+
+  // Confirmed — create the event
+  const { name, description, voiceId } = pending.data;
+  const dt = parseStart(pending.data.date, pending.data.time);
+  if (!dt || dt <= DateTime.now()) {
+    await interaction.update({ content: 'That time has passed while you were confirming. Run `/event-create` again.', components: [] }).catch(() => {});
+    return;
+  }
+
+  await interaction.update({ content: 'Creating event...', components: [] }).catch(() => {});
+
+  const voice = voiceId ? interaction.guild.channels.cache.get(voiceId) : null;
+  const isVoice = voice && voice.type === ChannelType.GuildVoice;
   let event;
   try {
     event = await interaction.guild.scheduledEvents.create({
@@ -65,22 +133,22 @@ async function createEvent(interaction) {
       reason: `Event created by ${interaction.user.tag}`,
     });
   } catch (err) {
-    await interaction.editReply('Could not create the event. Make sure I have the **Manage Events** permission.');
+    await interaction.followUp({ content: 'Could not create the event. Make sure I have the **Manage Events** permission.', ephemeral: true }).catch(() => {});
     return;
   }
 
-  const unix = Math.floor(dt.toSeconds());
+  const unix2 = Math.floor(dt.toSeconds());
   const ch = interaction.guild.channels.cache.get(config.calendar.eventsChannelId);
   const ping = config.calendar.pingRoleId ? `<@&${config.calendar.pingRoleId}>` : '';
   if (ch) {
     const embed = new EmbedBuilder()
       .setTitle(`📅 ${name}`)
-      .setDescription(`${description}\n\nStarts <t:${unix}:F> (<t:${unix}:R>)`)
+      .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)`)
       .setColor(0x5865f2);
-    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed] }).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
+    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
   }
 
-  await interaction.editReply(`Event created: **${name}** — <t:${unix}:F>\nMembers can RSVP from the server's Events tab.`);
+  await interaction.followUp({ content: `Event created: **${name}** — <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
   eventsCache = { data: null, at: 0 }; // invalidate — new event exists
 
   // Mirror to Google Calendar if linked (fire and forget)
@@ -145,7 +213,6 @@ async function cancelEvent(interaction) {
 
 // Runs on an interval from index.js. Sends each configured reminder once per event.
 // Events cached for 2 min — no need to hit the API every 5 min when nothing changes.
-let eventsCache = { data: null, at: 0 };
 const EVENTS_CACHE_TTL = 2 * 60 * 1000;
 
 async function getEvents(guild) {
@@ -218,4 +285,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, syncReminders };
+module.exports = { commands, syncReminders, handleEventButton };
