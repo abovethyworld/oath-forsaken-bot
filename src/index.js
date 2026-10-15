@@ -140,7 +140,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+// Invalidate the member cache when roles/nicknames change so syncs
+// use fresh data instead of waiting out the 5-minute TTL.
+client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+  const { invalidateCache } = require('./guild-cache');
+  invalidateCache(newMember.guild.id);
+});
+
 client.on(Events.GuildMemberAdd, async (member) => {
+  // Invalidate cached member list so syncs see the new member immediately
+  const { invalidateCache } = require('./guild-cache');
+  invalidateCache(member.guild.id);
   recordJoin(member.id, member.joinedAt);
   // Everyone-ping role: assign on join so announcements reach all members
   try {

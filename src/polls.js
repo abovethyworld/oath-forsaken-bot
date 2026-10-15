@@ -54,7 +54,8 @@ async function createPoll(interaction) {
   }
 
   await interaction.deferReply();
-  const pollId = `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
+  const crypto = require('node:crypto');
+  const pollId = crypto.randomBytes(8).toString('hex');
   const poll = {
     id: pollId,
     question,
@@ -67,6 +68,7 @@ async function createPoll(interaction) {
   const msg = await interaction.editReply({
     embeds: [pollEmbed(poll)],
     components: pollRows(pollId, options),
+    allowedMentions: { parse: [] }, // block @everyone/@here in poll text
   });
   poll.messageId = msg.id;
   store.savePoll(poll);
@@ -92,7 +94,11 @@ async function handlePollButton(interaction) {
     poll.votes[interaction.user.id] = idx;
   }
   store.savePoll(poll);
-  await interaction.update({ embeds: [pollEmbed(poll)], components: pollRows(pollId, poll.options) });
+  await interaction.update({
+    embeds: [pollEmbed(poll)],
+    components: pollRows(pollId, poll.options),
+    allowedMentions: { parse: [] },
+  });
 }
 
 const commands = [

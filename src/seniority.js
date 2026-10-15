@@ -145,7 +145,12 @@ async function syncSeniority(client) {
       const original = getOriginalJoinDate(m.id);
       const joinedAt = original || m.joinedAt;
       if (!joinedAt) continue;
-      const months = (now - joinedAt.getTime()) / MONTH_MS;
+      let months = (now - joinedAt.getTime()) / MONTH_MS;
+      if (months < 0) {
+        // Clock skew or bad data: clamp to 0 and log so it doesn't silently skip
+        console.warn(`[seniority] Member ${m.id} has future join date ${joinedAt.toISOString()}, clamping to 0 months`);
+        months = 0;
+      }
       const want = rankForMonths(months);
       if (!want) continue;
       const has = m.roles.cache.has(want.roleId);
