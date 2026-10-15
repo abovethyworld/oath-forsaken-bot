@@ -132,7 +132,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (m.user.bot) continue;
       // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
       if (store.isSeniorityHeld(guild.id, m.id)) continue;
-      // Guests and Friends of the Clan never get seniority roles (Alex 2026-10-14)
+      // Guests and Friends of the Clan never get seniority roles
       // Strip any they already have, then skip.
       const skipIds = [config.recruit?.types?.guest?.roleId, SEN.friendOfClanRoleId].filter(Boolean);
       if (skipIds.some((id) => m.roles.cache.has(id))) {
