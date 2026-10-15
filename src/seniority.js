@@ -132,8 +132,16 @@ async function syncSeniority(client) {
     for (const m of members.values()) {
       if (m.user.bot) continue;
       // Guests and Friends of the Clan never get seniority roles (Alex 2026-10-14)
+      // Strip any they already have, then skip.
       const skipIds = [config.recruit?.types?.guest?.roleId, '1558621489283211316'].filter(Boolean);
-      if (skipIds.some((id) => m.roles.cache.has(id))) continue;
+      if (skipIds.some((id) => m.roles.cache.has(id))) {
+        const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
+        if (hasSeniority) {
+          await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch(() => {});
+          changed++;
+        }
+        continue;
+      }
       // Use original join date (survives leave/rejoin). Fall back to Discord's.
       const original = getOriginalJoinDate(m.id);
       const joinedAt = original || m.joinedAt;
