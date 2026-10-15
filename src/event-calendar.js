@@ -13,8 +13,8 @@ const {
 const config = require('./config');
 
 const { ZAMORAK_RED, safeFetch } = require('./utils');
-const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId || '1558399108715118702'; // #event-calendar
-const BOT_COMMANDS_CHANNEL_ID = '1558458301627506788'; // #bot-commands
+const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId; // #event-calendar
+const BOT_COMMANDS_CHANNEL_ID = config.eventCalendar?.botCommandsChannelId; // #bot-commands
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
 const API_KEY = process.env.GCAL_API_KEY || '';
 // Source messages in #bot-commands holding the embed images (per EMBED_IMAGE_SOURCES.md rule).

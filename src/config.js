@@ -45,6 +45,26 @@ for (const [name, id] of Object.entries({
   if (looksPlaceholder(id)) problems.push(`config.calendar.${name} is not set`);
 }
 if (!cal.timezone) problems.push('config.calendar.timezone is not set');
+
+// Validate seniority rank brackets: must be sorted, non-overlapping, no gaps at start
+const ranks = [...(config.seniorityRanks || [])].sort((a, b) => a.minMonths - b.minMonths);
+if (ranks.length > 0) {
+  if (ranks[0].minMonths !== 0) {
+    problems.push(`config.seniorityRanks: first bracket must start at minMonths 0 (got ${ranks[0].minMonths})`);
+  }
+  for (let i = 1; i < ranks.length; i++) {
+    if (ranks[i].minMonths <= ranks[i - 1].minMonths) {
+      problems.push(`config.seniorityRanks: "${ranks[i].name}" minMonths (${ranks[i].minMonths}) overlaps "${ranks[i-1].name}" (${ranks[i-1].minMonths})`);
+    }
+  }
+  const seenIds = new Set();
+  for (const r of ranks) {
+    if (looksPlaceholder(r.roleId)) problems.push(`config.seniorityRanks "${r.name}" has no roleId`);
+    if (seenIds.has(r.roleId)) problems.push(`config.seniorityRanks: duplicate roleId ${r.roleId}`);
+    seenIds.add(r.roleId);
+  }
+}
+
 if (problems.length > 0) {
   console.error('\nConfig problems found (edit config.json):');
   for (const p of problems) console.error(`  - ${p}`);

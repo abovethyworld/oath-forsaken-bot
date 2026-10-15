@@ -18,6 +18,8 @@ const seniority = require('./seniority');
 const ccChecklist = require('./cc-checklist');
 const recruit = require('./recruit');
 const permissions = require('./permissions');
+const roster = require('./roster');
+const lore = require('./lore');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -251,6 +253,8 @@ const commands = [
   ...ccChecklist.commands,
   ...recruit.commands,
   ...permissions.commands,
+  ...roster.commands,
+  ...lore.commands,
 ];
 
 async function handleCommand(interaction) {
