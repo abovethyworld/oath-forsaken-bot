@@ -10,16 +10,17 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
+const config = require('./config');
 
-const ZAMORAK_RED = 0x6b0e0e;
-const EVENT_CALENDAR_CHANNEL_ID = '1558399108715118702'; // #event-calendar
+const { ZAMORAK_RED, safeFetch } = require('./utils');
+const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId || '1558399108715118702'; // #event-calendar
 const BOT_COMMANDS_CHANNEL_ID = '1558458301627506788'; // #bot-commands
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
 const API_KEY = process.env.GCAL_API_KEY || '';
 // Source messages in #bot-commands holding the embed images (per EMBED_IMAGE_SOURCES.md rule).
 // The bot resolves fresh signed CDN URLs from these on each sync so they never expire.
-const THUMBNAIL_MSG_ID = process.env.GCAL_THUMBNAIL_MSG_ID || '1559170903860846654';
-const BANNER_MSG_ID = process.env.GCAL_BANNER_MSG_ID || '1559122168011292675';
+const THUMBNAIL_MSG_ID = process.env.GCAL_THUMBNAIL_MSG_ID || config.eventCalendar?.thumbnailMsgId || '';
+const BANNER_MSG_ID = process.env.GCAL_BANNER_MSG_ID || config.eventCalendar?.bannerMsgId || '';
 // Fallback static URLs (will expire if they're signed links — prefer message IDs above)
 const THUMBNAIL_URL = process.env.GCAL_THUMBNAIL_URL || '';
 const BANNER_URL = process.env.GCAL_BANNER_URL || '';
@@ -31,7 +32,7 @@ async function resolveImageUrl(client, channelId, messageId, fallbackUrl) {
     const guild = client.guilds.cache.get(require('./config').guildId);
     const channel = guild?.channels.cache.get(channelId);
     if (!channel) return fallbackUrl;
-    const msg = await channel.messages.fetch(messageId).catch(() => null);
+    const msg = await safeFetch(channel.messages.fetch(messageId), 'event-calendar fetch');
     const url = msg?.attachments.first()?.url;
     return url || fallbackUrl;
   } catch {
@@ -143,7 +144,7 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
   const { embed, components } = buildEmbed(events, thumbnailUrl, bannerUrl);
 
   // Find existing calendar message to update, or post new one
-  const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+  const messages = await safeFetch(channel.messages.fetch({ limit: 20 }), 'event-calendar scan');
   let existing = null;
   if (messages) {
     existing = messages.find(

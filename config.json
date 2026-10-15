@@ -579,7 +579,10 @@
           }
         ]
       }
-    }
+    },
+    "generalChannelId": "1558583385440395476",
+    "guestRoleId": "1558540445611728997",
+    "contactStaffChannelId": "1558399103757717518"
   },
   "gcal": {
     "calendarId": "primary",
@@ -857,5 +860,33 @@
   },
   "roles": {
     "oathForsakersId": "1559575596407857182"
+  },
+  "ccChecklist": {
+    "staffChatId": "1558581400897196093",
+    "threadId": "1559770578246836224",
+    "ccUpdaterRoleId": "1559768312613703710",
+    "rankRoleIds": {
+      "Initiate": "1558452023790276659",
+      "Acolyte": "1558452012797136960",
+      "Devout": "1558452002319769631",
+      "Zealot": "1558451991448129628",
+      "Heretic": "1558451981562151062",
+      "Godslayer": "1558451970883453003",
+      "Ascendant": "1559619699493437482"
+    },
+    "rankEmojis": {
+      "Initiate": "<:initiate:1558454896095797259>",
+      "Acolyte": "<:acolyte:1558454873924833457>",
+      "Devout": "<:devout:1558454852596531310>",
+      "Zealot": "<:zealot:1558454818396176394>",
+      "Heretic": "<:heretic:1558454842094256208>",
+      "Godslayer": "<:godslayer:1558454830056476672>",
+      "Ascendant": "<:ascendant:1558454806744666182>"
+    }
+  },
+  "eventCalendar": {
+    "thumbnailMsgId": "1559170903860846654",
+    "bannerMsgId": "1559122168011292675",
+    "channelId": "1558399108715118702"
   }
 }

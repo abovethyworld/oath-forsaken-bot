@@ -63,7 +63,26 @@ function buildInitiateWelcome(userId) {
   );
 }
 
-// ─── Safe role add/remove with logging ──────────────────────────────
+// ─── Guest welcome message ────────────────────────────────────────
+// Single source of truth for the guest welcome posted in #general.
+function buildGuestWelcome(userId) {
+  const guestId = config.recruit?.guestRoleId || '1558540445611728997';
+  const introduceId = config.channels?.introduceYourself || '1558428255940378715';
+  const rolesId = config.channels?.roles || '1558399101454786670';
+  const staffId = config.tickets?.staffRoleIds?.[0] || '1558735997922054225';
+  const contactId = config.recruit?.contactStaffChannelId || '1558399103757717518';
+
+  return (
+    `Welcome, <@&${guestId}>\n` +
+    `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
+    `<@${userId}>\n\n` +
+    `The door's open. Come see what the forsaken built.\n\n` +
+    `• Introduce yourself in <#${introduceId}>\n` +
+    `• Grab your roles in <#${rolesId}>\n` +
+    `• Ping <@&${staffId}> when you're ready for a clan chat invite\n` +
+    `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
+  );
+}
 // Wraps role changes with hierarchy check and error logging.
 // Returns true on success, false on failure.
 async function safeRoleAdd(member, roleId, reason) {
@@ -96,6 +115,21 @@ async function safeRoleRemove(member, roleId, reason) {
   }
 }
 
+// For .fetch() calls where null is a valid "not found" result.
+// Logs real errors (rate limits, permissions) but stays quiet on 404s.
+async function safeFetch(promise, label) {
+  try {
+    return await promise;
+  } catch (err) {
+    // DiscordAPIError 10008 = Unknown Message, 10003 = Unknown Channel
+    const notFound = err.code === 10008 || err.code === 10003;
+    if (!notFound) {
+      console.error(`[safeFetch] ${label}:`, err.message);
+    }
+    return null;
+  }
+}
+
 module.exports = {
   ZAMORAK_RED,
   DAY_MS,
@@ -104,6 +138,8 @@ module.exports = {
   getRoleById,
   getPingRole,
   buildInitiateWelcome,
+  buildGuestWelcome,
   safeRoleAdd,
   safeRoleRemove,
+  safeFetch,
 };

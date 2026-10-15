@@ -1,5 +1,22 @@
 // Entry point. Wires up the client, registers slash commands, routes interactions.
 require('dotenv').config();
+
+// Crash recovery: log and keep running instead of dying silently.
+// unhandledRejection: a promise failed with no .catch — log it, don't crash.
+// uncaughtException: something threw outside try/catch — log it, then exit
+//   cleanly so systemd/Docker restarts us with a fresh state.
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH-GUARD] Unhandled promise rejection:', reason?.message || reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH-GUARD] Uncaught exception:', err.message);
+  console.error(err.stack);
+  // Exit with failure so the process manager restarts us cleanly.
+  // A half-corrupted in-memory state is worse than a restart.
+  process.exit(1);
+});
+
 const { Client, Events, GatewayIntentBits, REST, Routes } = require('discord.js');
 const config = require('./config'); // validates config.json on load
 const { commands, handleCommand } = require('./commands');
@@ -12,6 +29,9 @@ const { backfill, recordJoin } = require('./join-dates');
 const { checkDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const { onMemberJoin, handleModalSubmit, handleTotalSelect, handleAgeSelect } = require('./recruit');
+
+// Command cooldowns: userId:commandName -> timestamp
+const cooldowns = new Map();
 // tickets handled via buttons.js; member select needs direct wiring
 const { handleMemberSelect } = require('./tickets');
 
@@ -70,8 +90,31 @@ client.once(Events.ClientReady, async (c) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
+      // Cooldown: 3s per user per command (prevents spam)
+      const cooldownKey = `${interaction.user.id}:${interaction.commandName}`;
+      const now = Date.now();
+      const lastUsed = cooldowns.get(cooldownKey) || 0;
+      if (now - lastUsed < 3000) {
+        await interaction.reply({
+          content: 'Slow down a moment.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
+      cooldowns.set(cooldownKey, now);
+      // Clean up old entries periodically (prevent memory leak)
+      if (cooldowns.size > 1000) {
+        for (const [k, t] of cooldowns) {
+          if (now - t > 60000) cooldowns.delete(k);
+        }
+      }
       await handleCommand(interaction);
     } else if (interaction.isButton()) {
+      // Button cooldown: 2s per user (prevents button spam)
+      const btnKey = `${interaction.user.id}:button`;
+      const btnNow = Date.now();
+      if (btnNow - (cooldowns.get(btnKey) || 0) < 2000) return;
+      cooldowns.set(btnKey, btnNow);
       await handleButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'member:select') {

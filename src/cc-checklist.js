@@ -14,32 +14,18 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config');
+const { safeFetch } = require('./utils');
 const { atomicWrite } = require('./store');
 
 const ZAMORAK_RED = 0x6b0e0e;
-const STAFF_CHAT_ID = '1558581400897196093'; // main channel (for thread creation)
-const CC_THREAD_ID = '1559770578246836224'; // CC Rank Checklist thread
-const CC_UPDATER_ROLE_ID = '1559768312613703710';
+// All IDs from config.json — no hardcoded IDs in this file.
+const CC = config.ccChecklist || {};
+const STAFF_CHAT_ID = CC.staffChatId;
+const CC_THREAD_ID = CC.threadId;
+const CC_UPDATER_ROLE_ID = CC.ccUpdaterRoleId;
 
-const RANK_ROLE_IDS = {
-  'Initiate': '1558452023790276659',
-  'Acolyte': '1558452012797136960',
-  'Devout': '1558452002319769631',
-  'Zealot': '1558451991448129628',
-  'Heretic': '1558451981562151062',
-  'Godslayer': '1558451970883453003',
-  'None': null,
-};
-
-const RANK_EMOJIS = {
-  'Initiate': '<:initiate:1558454896095797259>',
-  'Acolyte': '<:acolyte:1558454873924833457>',
-  'Devout': '<:devout:1558454852596531310>',
-  'Zealot': '<:zealot:1558454818396176394>',
-  'Heretic': '<:heretic:1558454842094256208>',
-  'Godslayer': '<:godslayer:1558454830056476672>',
-  'Ascendant': '<:ascendant:1558454806744666182>',
-};
+const RANK_ROLE_IDS = CC.rankRoleIds || {};
+const RANK_EMOJIS = CC.rankEmojis || {};
 
 function rankEmoji(rankName) {
   return RANK_EMOJIS[rankName] || '';
@@ -165,7 +151,7 @@ async function refreshChecklist(guild) {
 
   try {
     if (data.messageId) {
-      const msg = await channel.messages.fetch(data.messageId).catch(() => null);
+      const msg = await safeFetch(channel.messages.fetch(data.messageId), 'cc-checklist refresh');
       if (msg) {
         await msg.edit({ embeds: [embed], components }).catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         return;
@@ -200,7 +186,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
       const pingMsg = await channel.send({
         content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${userId}> — ${rankDisplay(oldRank)} → **${rankDisplay(newRank)}**`,
         allowedMentions: { parse: ['roles'] },
-      }).catch(() => null);
+      }).catch((e) => { console.error('[cc-checklist] Ping send failed:', e.message); return null; });
       if (pingMsg) {
         // Store ping message ID on the entry for cleanup
         const d2 = load();
@@ -259,7 +245,7 @@ async function handleButton(interaction) {
       const thread = interaction.guild.channels.cache.get(CC_THREAD_ID);
       if (thread) {
         for (const pid of pingIds) {
-          const pingMsg = await thread.messages.fetch(pid).catch(() => null);
+          const pingMsg = await safeFetch(thread.messages.fetch(pid), 'cc-checklist ping cleanup');
           if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         }
       }
@@ -301,7 +287,7 @@ async function handleButton(interaction) {
       try {
         const thread = interaction.guild.channels.cache.get(CC_THREAD_ID);
         if (thread) {
-          const pingMsg = await thread.messages.fetch(removed.pingMsgId).catch(() => null);
+          const pingMsg = await safeFetch(thread.messages.fetch(removed.pingMsgId), 'cc-checklist ping cleanup');
           if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
         }
       } catch {}
