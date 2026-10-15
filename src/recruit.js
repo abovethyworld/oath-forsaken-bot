@@ -328,6 +328,7 @@ async function handleDecision(interaction) {
   }
   decisionLocks.add(lockKey);
   try {
+  const types = appTypes();
   const t = types[type] || {};
   const guild = interaction.guild;
   const target = await guild.members.fetch(userId).catch(() => null);
