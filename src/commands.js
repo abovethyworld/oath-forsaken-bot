@@ -17,6 +17,7 @@ const eventCalendar = require('./event-calendar');
 const seniority = require('./seniority');
 const ccChecklist = require('./cc-checklist');
 const recruit = require('./recruit');
+const permissions = require('./permissions');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -249,6 +250,7 @@ const commands = [
   ...seniority.commands,
   ...ccChecklist.commands,
   ...recruit.commands,
+  ...permissions.commands,
 ];
 
 async function handleCommand(interaction) {

@@ -7,6 +7,7 @@ const { handleButton } = require('./buttons');
 const { handleWelcome } = require('./welcome');
 const { checkReminders } = require('./calendar');
 const { syncSeniority } = require('./seniority');
+const { checkDrift } = require('./permissions');
 const { onMemberJoin, handleModalSubmit, handleTotalSelect, handleAgeSelect } = require('./recruit');
 // tickets handled via buttons.js; member select needs direct wiring
 const { handleMemberSelect } = require('./tickets');
@@ -43,6 +44,11 @@ client.once(Events.ClientReady, async (c) => {
   // Seniority (tenure rank) loop: check once a day, plus once after startup.
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setTimeout(() => syncSeniority(client), 60 * 1000);
+
+  // Permission drift check: once a day, plus once after startup.
+  // Only posts to mod-log if drift is actually found (no noise on clean runs).
+  setInterval(() => checkDrift(client), 24 * 3600 * 1000);
+  setTimeout(() => checkDrift(client), 120 * 1000);
 
   // Event calendar embed: refresh daily, plus once after startup.
   const { syncCalendar } = require('./event-calendar');
