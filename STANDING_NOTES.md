@@ -10,7 +10,7 @@ Last updated: 2026-10-12
 ## Banners
 - **Style:** Real OSRS wiki art collaged in PIL (1200x300). NEVER AI-generated.
 - **Border pattern:** Red squares, 19px squares with 31px gaps, on black. Top and bottom.
-- **Treatment:** Red border lines, red glow, dark vignette on his images.
+- **Treatment:** Red border lines, red glow, dark vignette on clan images.
 - **Rules:** Don't crop the Wise Old Man's face. Keep Gielinor map full and centered on Lumby.
 - **Current banners:**
   - #roles panels: various (bosses, wizards, map, etc.)
@@ -19,7 +19,7 @@ Last updated: 2026-10-12
   - #clan-ranks Staff Roles: Zamorakian mages banner
 
 ## Copy Style
-- **Voice:** Short, direct. His voice, not AI-sounding.
+- **Voice:** Short, direct. Clan voice, not AI-sounding.
 - **No em dashes** in member-facing text. Use periods or colons. Hyphens OK (rank ranges, compounds).
 - **"competition"** spelled out, not "comp".
 - **No bot command names** in public text.

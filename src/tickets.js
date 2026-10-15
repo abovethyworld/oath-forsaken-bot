@@ -1,6 +1,6 @@
 // Ticket system: /setup-tickets posts an "Open a Ticket" panel.
 // Clicking it creates a private channel (user + staff only) with a Close button.
-// Closing posts a transcript to the log channel and deletes the ticket channel.
+// Closing archives and locks the thread (staff-only).
 const {
   ActionRowBuilder,
   ButtonBuilder,
@@ -15,7 +15,7 @@ const config = require('./config');
 const store = require('./store');
 const { isStaff, buildInitiateWelcome, safeFetch, ZAMORAK_RED } = require('./utils');
 
-// Per-button ticket themes (Alex 2026-10-14 — every ticket themed to the button clicked)
+// Per-button ticket themes (every ticket themed to the button clicked)
 const TICKET_TYPES = {
   report: { label: 'Report', emoji: '⚠️', intro: 'Tell staff what happened. Include names, dates, and any proof.' },
   inquiry: { label: 'Inquiry', emoji: '💬', intro: 'Ask your question below and staff will get back to you.' },
@@ -136,7 +136,7 @@ async function createTicket(interaction, ticketType) {
       .setEmoji('🔒')
   );
   await thread.send({
-    // Only tag Staff on tickets (Alex 2026-10-14) — quiet until launch (no notify, just the visible mention).
+    // Only tag Staff on tickets — quiet until launch (no notify, just the visible mention).
     // Flip allowedMentions to include roles for legit pings at launch.
     content: `${interaction.user} <@&${config.tickets.staffRoleIds[0]}>`.trim(),
     embeds: [embed],
@@ -181,14 +181,14 @@ async function handleTicketButton(interaction) {
   const action = parts[1];
   if (action === 'create') {
     const ticketType = parts[2] || 'inquiry';
-    // Become a Member is direct promotion, not a ticket (Alex 2026-10-14)
+    // Become a Member is direct promotion, not a ticket
     if (ticketType === 'member') return showMemberSelect(interaction);
     return createTicket(interaction, ticketType);
   }
   if (action === 'close') return closeTicket(interaction);
 }
 
-// Become a Member: guest picks iron/main, bot promotes instantly (Alex 2026-10-14)
+// Become a Member: guest picks iron/main, bot promotes instantly
 async function showMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const member = interaction.member;
