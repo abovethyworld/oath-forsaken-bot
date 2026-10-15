@@ -251,6 +251,58 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     }
   });
 
+  // ─── Decision lock (race condition) ───  console.log('\nDecision lock');
+
+  await atest('concurrent approve clicks: second one bails', async () => {
+    const config = require('../src/config');
+    const staffId = (config.tickets?.staffRoleIds || [])[0];
+    const guild = mockGuild({ roles: [mockRole(staffId, 'Staff', 10)] });
+    // Target member (the applicant)
+    const targetMember = mockMember({ id: 'applicant1', guild, roleIds: [] });
+    guild.members.fetch = async (id) => (id === 'applicant1' ? targetMember : null);
+
+    const makeInteraction = () => {
+      const staffMember = mockMember({ id: 'staff1', guild, roleIds: [staffId] });
+      const i = mockInteraction({
+        customId: 'apply:approve:applicant1:iron: bracket',
+        member: staffMember,
+        guild,
+        channel: {
+          id: 'thread1',
+          isThread: () => true,
+          name: 'Iron App from test',
+          setName: async () => {},
+          setLocked: async () => {},
+          setArchived: async () => {},
+          fetchStarterMessage: async () => null,
+          send: async () => {},
+        },
+      });
+      // handleDecision calls interaction.deferReply then editReply
+      i.deferReply = async () => { i._replies.push({ type: 'deferReply' }); };
+      return i;
+    };
+
+    const i1 = makeInteraction();
+    const i2 = makeInteraction();
+
+    // Fire both at the same time
+    const [r1, r2] = await Promise.allSettled([
+      recruit.handleApplyButton(i1),
+      recruit.handleApplyButton(i2),
+    ]);
+
+    // One should succeed, the other should get the "already handling" message
+    const allReplies = [...i1._replies, ...i2._replies];
+    const bailMessages = allReplies.filter((r) =>
+      r.content && r.content.includes('already handling')
+    );
+    assert.ok(
+      bailMessages.length >= 1,
+      `expected at least one "already handling" bail, got replies: ${JSON.stringify(allReplies.map(r => r.content || r.type))}`
+    );
+  });
+
   // ─── Summary ───
   console.log(`\n${'='.repeat(50)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`);
@@ -261,3 +313,4 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
   }
   console.log('All integration tests passed! Nothing broke.');
 })();
+
