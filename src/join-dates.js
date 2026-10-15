@@ -52,11 +52,12 @@ function getOriginalJoinDate(userId) {
 }
 
 // Backfill all current members. Only fills gaps — never overwrites.
-async function backfill(guild) {
+// Accepts pre-fetched members to avoid redundant API calls.
+async function backfill(guild, preFetchedMembers = null) {
   const dates = load();
   let added = 0;
   try {
-    const members = await guild.members.fetch().catch(() => null);
+    const members = preFetchedMembers || await guild.members.fetch().catch(() => null);
     if (!members) return added;
     for (const m of members.values()) {
       if (m.user.bot || !m.joinedAt) continue;

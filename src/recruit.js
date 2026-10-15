@@ -443,6 +443,16 @@ async function handleDecision(interaction) {
   if (log) {
     await log.send(`Application **${decision}d** (${t.label || type}): <@${userId}> by ${interaction.user.tag}`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
   }
+
+  // Record for /apply-stats
+  const appData = store.getApplicationFull(interaction.guildId, userId);
+  store.recordApplicationDecision(interaction.guildId, {
+    userId,
+    type: type || 'unknown',
+    decision,
+    decidedBy: interaction.user.id,
+    submittedAt: appData?.submittedAt || null,
+  });
   } finally {
     decisionLocks.delete(lockKey);
   }
@@ -522,6 +532,60 @@ const commands = [
       await interaction.reply({ content: `Cleared application for ${target.tag}. They can apply again.`, ephemeral: true });
     },
   },
+  {
+    data: new SlashCommandBuilder()
+      .setName('apply-stats')
+      .setDescription('Application funnel stats (Manage Roles only)')
+      .setDefaultMemberPermissions(PFB.ManageRoles)
+      .addIntegerOption((o) => o.setName('days').setDescription('Look back N days (default 30)')),
+    run: applyStatsCommand,
+  },
 ];
+
+async function applyStatsCommand(interaction) {
+  const days = interaction.options.getInteger('days') || 30;
+  const since = Date.now() - days * 24 * 3600 * 1000;
+  const stats = store.getApplicationStats(interaction.guildId, since);
+
+  if (stats.length === 0) {
+    await interaction.reply({ content: `No application decisions in the last ${days} days.`, ephemeral: true });
+    return;
+  }
+
+  const approved = stats.filter((s) => s.decision === 'approve').length;
+  const denied = stats.filter((s) => s.decision === 'deny').length;
+  const rate = Math.round((approved / stats.length) * 100);
+
+  const byType = {};
+  for (const s of stats) {
+    byType[s.type] = byType[s.type] || { approve: 0, deny: 0 };
+    byType[s.type][s.decision === 'approve' ? 'approve' : 'deny']++;
+  }
+  const typeLines = Object.entries(byType)
+    .map(([t, v]) => `  ${t}: ${v.approve} approved, ${v.deny} denied`)
+    .join('\n');
+
+  // Average time from submit to decision
+  const withTimes = stats.filter((s) => s.submittedAt && s.decidedAt);
+  let avgTime = 'n/a';
+  if (withTimes.length) {
+    const avgMs = withTimes.reduce((sum, s) => sum + (s.decidedAt - s.submittedAt), 0) / withTimes.length;
+    const hours = Math.round(avgMs / 3600000);
+    avgTime = hours < 1 ? '<1 hour' : `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+
+  const { EmbedBuilder } = require('discord.js');
+  const { ZAMORAK_RED } = require('./utils');
+  const embed = new EmbedBuilder()
+    .setTitle(`⛧ Application Stats — last ${days} days ⛧`)
+    .setDescription(
+      `**${stats.length}** decisions: **${approved}** approved, **${denied}** denied (${rate}% approval)\n\n` +
+      `By type:\n${typeLines}\n\n` +
+      `Avg time to decision: **${avgTime}**`
+    )
+    .setColor(ZAMORAK_RED);
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
 
 module.exports = { onMemberJoin, handleApplyButton, handleModalSubmit, handleTotalSelect, handleAgeSelect, commands };

@@ -44,6 +44,14 @@ async function createEvent(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
   const isVoice = voice && voice.type === ChannelType.GuildVoice;
+  // Validate the voice channel still exists (could be deleted between selection and submit)
+  if (isVoice) {
+    const fresh = interaction.guild.channels.cache.get(voice.id);
+    if (!fresh || fresh.type !== ChannelType.GuildVoice) {
+      await interaction.editReply('That voice channel no longer exists. Pick another one.');
+      return;
+    }
+  }
   let event;
   try {
     event = await interaction.guild.scheduledEvents.create({
@@ -73,6 +81,7 @@ async function createEvent(interaction) {
   }
 
   await interaction.editReply(`Event created: **${name}** — <t:${unix}:F>\nMembers can RSVP from the server's Events tab.`);
+  eventsCache = { data: null, at: 0 }; // invalidate — new event exists
 
   // Mirror to Google Calendar if linked (fire and forget)
   if (gcal.isConfigured()) {
@@ -130,15 +139,32 @@ async function cancelEvent(interaction) {
   }
   await match.delete().catch((e) => console.error("[calendar.js] Silent failure:", e.message));
   store.clearReminders(match.id);
+  eventsCache = { data: null, at: 0 }; // invalidate — event deleted
   await interaction.reply({ content: `Cancelled **${match.name}**.`, ephemeral: true });
 }
 
 // Runs on an interval from index.js. Sends each configured reminder once per event.
-async function checkReminders(client) {
+// Events cached for 2 min — no need to hit the API every 5 min when nothing changes.
+let eventsCache = { data: null, at: 0 };
+const EVENTS_CACHE_TTL = 2 * 60 * 1000;
+
+async function getEvents(guild) {
+  const now = Date.now();
+  if (eventsCache.data && now - eventsCache.at < EVENTS_CACHE_TTL) {
+    return eventsCache.data;
+  }
+  const events = await guild.scheduledEvents.fetch().catch(() => null);
+  if (events) {
+    eventsCache = { data: events, at: now };
+  }
+  return eventsCache.data;
+}
+
+async function syncReminders(client) {
   try {
     const guild = client.guilds.cache.get(config.guildId);
     if (!guild) return;
-    const events = await guild.scheduledEvents.fetch().catch(() => null);
+    const events = await getEvents(guild);
     if (!events) return;
 
     store.pruneReminders([...events.keys()]);
@@ -192,4 +218,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, checkReminders };
+module.exports = { commands, syncReminders };
