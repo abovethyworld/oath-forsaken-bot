@@ -20,4 +20,9 @@ COPY src ./src
 
 USER node
 
+# Health check: the bot writes a heartbeat file every 60s after login.
+# If the gateway drops or the event loop stalls, the file goes stale.
+HEALTHCHECK --interval=90s --timeout=10s --start-period=120s --retries=3 \
+  CMD node -e "const fs=require('fs');const s=fs.statSync('/tmp/bot-heartbeat',{throwIfNoEntry:false});if(!s||Date.now()-s.mtimeMs>180000){process.exit(1)}"
+
 CMD ["node", "src/index.js"]

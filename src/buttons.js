@@ -7,7 +7,7 @@ const { handleCcButton } = require('./cc-checklist');
 const { handleRosterButton } = require('./roster');
 const { handleEventButton } = require('./calendar');
 
-async function handleButton(interaction) {
+async function routeButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
   if (kind === 'ticket') return handleTicketButton(interaction);
   if (kind === 'apply') return handleApplyButton(interaction);
@@ -51,4 +51,4 @@ async function handleButton(interaction) {
   }
 }
 
-module.exports = { handleButton };
+module.exports = { routeButton };

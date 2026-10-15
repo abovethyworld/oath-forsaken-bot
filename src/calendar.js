@@ -42,10 +42,17 @@ function parseStart(dateStr, timeStr) {
 
 async function createEvent(interaction) {
   const name = interaction.options.getString('name');
+  // Discord scheduled event name limit is 100 chars — fail friendly
+  if (name.length > 100) {
+    await interaction.reply({ content: 'Keep the event name under 100 characters.', ephemeral: true });
+    return;
+  }
   const date = interaction.options.getString('date');
   const time = interaction.options.getString('time');
   const description = interaction.options.getString('description') || '';
   const voice = interaction.options.getChannel('voice');
+  const durationHours = interaction.options.getInteger('duration') || 2;
+  const withRoster = interaction.options.getBoolean('roster') || false;
 
   const dt = parseStart(date, time);
   if (!dt) {
@@ -68,7 +75,7 @@ async function createEvent(interaction) {
   pendingEvents.set(pendingId, {
     expires: Date.now() + PENDING_TTL,
     creatorId: interaction.user.id,
-    data: { name, date, time, description, voiceId: voice ? voice.id : null },
+    data: { name, date, time, description, voiceId: voice ? voice.id : null, durationHours, withRoster },
   });
   const unix = Math.floor(dt.toSeconds());
   const tz = (config.calendar && config.calendar.timezone) || 'UTC';
@@ -89,8 +96,13 @@ async function createEvent(interaction) {
 }
 
 async function handleEventButton(interaction) {
-  // customId: event:confirm:<pendingId> or event:cancel:<pendingId>
-  const [, action, pendingId] = interaction.customId.split(':');
+  // customId: event:confirm:<pendingId>, event:confirmcancel:<pendingId>, or event:cancel:<pendingId>
+  const parts = interaction.customId.split(':');
+  const action = parts[1];
+  const pendingId = parts[2];
+  if (action === 'confirmcancel') {
+    return handleCancelConfirm(interaction, pendingId);
+  }
   const pending = pendingEvents.get(pendingId);
   if (!pending || Date.now() > pending.expires) {
     pendingEvents.delete(pendingId);
@@ -109,7 +121,7 @@ async function handleEventButton(interaction) {
   }
 
   // Confirmed — create the event
-  const { name, description, voiceId } = pending.data;
+  const { name, description, voiceId, durationHours, withRoster } = pending.data;
   const dt = parseStart(pending.data.date, pending.data.time);
   if (!dt || dt <= DateTime.now()) {
     await interaction.update({ content: 'That time has passed while you were confirming. Run `/event-create` again.', components: [] }).catch(() => {});
@@ -125,7 +137,7 @@ async function handleEventButton(interaction) {
     event = await interaction.guild.scheduledEvents.create({
       name,
       scheduledStartTime: dt.toJSDate(),
-      scheduledEndTime: dt.plus({ hours: 2 }).toJSDate(),
+      scheduledEndTime: dt.plus({ hours: durationHours }).toJSDate(),
       privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
       entityType: isVoice ? GuildScheduledEventEntityType.Voice : GuildScheduledEventEntityType.External,
       ...(isVoice ? { channel: voice.id } : { entityMetadata: { location: 'In-game (Gielinor)' } }),
@@ -151,6 +163,12 @@ async function handleEventButton(interaction) {
   await interaction.followUp({ content: `Event created: **${name}** — <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
   eventsCache = { data: null, at: 0 }; // invalidate — new event exists
 
+  // Optional signup roster in the events channel
+  if (withRoster && ch) {
+    const { postRoster } = require('./roster');
+    await postRoster(ch, name, event.id).catch((e) => console.error('[calendar.js] Roster post failed:', e.message));
+  }
+
   // Mirror to Google Calendar if linked (fire and forget)
   if (gcal.isConfigured()) {
     gcal
@@ -158,7 +176,7 @@ async function handleEventButton(interaction) {
         summary: `[Oath Forsaken] ${name}`,
         description,
         start: dt.toJSDate(),
-        end: dt.plus({ hours: 2 }).toJSDate(),
+        end: dt.plus({ hours: durationHours }).toJSDate(),
         timeZone: config.calendar.timezone,
         calendarId: (config.gcal && config.gcal.calendarId) || 'primary',
       })
@@ -198,17 +216,64 @@ async function cancelEvent(interaction) {
     await interaction.reply({ content: 'Could not read events.', ephemeral: true });
     return;
   }
-  const match = [...events.values()].find(
+  const matches = [...events.values()].filter(
     (e) => e.id === query || e.name.toLowerCase().includes(query.toLowerCase())
   );
-  if (!match) {
+  if (matches.length === 0) {
     await interaction.reply({ content: 'No matching event found.', ephemeral: true });
+    return;
+  }
+  if (matches.length > 1) {
+    const list = matches.map((e) => `• **${e.name}** (ID: \`${e.id}\`)`).join('\n');
+    await interaction.reply({
+      content: `Multiple events match. Be more specific or use the ID:\n${list}`,
+      ephemeral: true,
+    });
+    return;
+  }
+  const match = matches[0];
+  // Confirmation — deletion is destructive and has no undo
+  cleanupPending();
+  const pendingId = crypto.randomBytes(6).toString('hex');
+  pendingEvents.set(pendingId, {
+    expires: Date.now() + PENDING_TTL,
+    creatorId: interaction.user.id,
+    data: { cancelEventId: match.id, cancelEventName: match.name },
+  });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`event:confirmcancel:${pendingId}`).setLabel(`Cancel "${match.name.slice(0, 40)}"`).setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`event:cancel:${pendingId}`).setLabel('Keep it').setStyle(ButtonStyle.Secondary)
+  );
+  await interaction.reply({
+    content: `Cancel **${match.name}**? This cannot be undone.`,
+    components: [row],
+    ephemeral: true,
+  });
+}
+
+async function handleCancelConfirm(interaction, pendingId) {
+  const pending = pendingEvents.get(pendingId);
+  if (!pending || Date.now() > pending.expires) {
+    pendingEvents.delete(pendingId);
+    await interaction.reply({ content: 'This confirmation expired.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (pending.creatorId !== interaction.user.id) {
+    await interaction.reply({ content: 'Only the person who started this can confirm it.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  pendingEvents.delete(pendingId);
+  const { cancelEventId, cancelEventName } = pending.data;
+  const events = await interaction.guild.scheduledEvents.fetch().catch(() => null);
+  const match = events ? [...events.values()].find((e) => e.id === cancelEventId) : null;
+  if (!match) {
+    await interaction.update({ content: 'Event no longer exists.', components: [] }).catch(() => {});
     return;
   }
   await match.delete().catch((e) => console.error("[calendar.js] Silent failure:", e.message));
   store.clearReminders(match.id);
   eventsCache = { data: null, at: 0 }; // invalidate — event deleted
-  await interaction.reply({ content: `Cancelled **${match.name}**.`, ephemeral: true });
+  await interaction.update({ content: `Cancelled **${cancelEventName}**.`, components: [] }).catch(() => {});
 }
 
 // Runs on an interval from index.js. Sends each configured reminder once per event.
@@ -268,6 +333,12 @@ const commands = [
       .addStringOption((o) => o.setName('description').setDescription('What to bring, requirements, etc.'))
       .addChannelOption((o) =>
         o.setName('voice').setDescription('Voice channel to attach (optional)').addChannelTypes(ChannelType.GuildVoice)
+      )
+      .addIntegerOption((o) =>
+        o.setName('duration').setDescription('Duration in hours (default 2)').setMinValue(1).setMaxValue(12)
+      )
+      .addBooleanOption((o) =>
+        o.setName('roster').setDescription('Also post a signup roster (default false)')
       ),
     run: createEvent,
   },

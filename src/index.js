@@ -20,15 +20,15 @@ process.on('uncaughtException', (err) => {
 const { Client, Events, GatewayIntentBits, REST, Routes } = require('discord.js');
 const config = require('./config'); // validates config.json on load
 const { commands, handleCommand } = require('./commands');
-const { handleButton } = require('./buttons');
+const { routeButton } = require('./buttons');
 const { handleWelcome } = require('./welcome');
 const { syncReminders } = require('./calendar');
 const { syncSeniority } = require('./seniority');
 const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
-const { checkDrift } = require('./permissions');
+const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
-const { onMemberJoin, handleModalSubmit, handleTotalSelect, handleAgeSelect } = require('./recruit');
+const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -50,6 +50,15 @@ const client = new Client({
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   c.user.setActivity('Serving Chaos', { type: 4 }); // custom status, Zamorak theme
+
+  // Heartbeat for Docker HEALTHCHECK — proves the event loop is alive and logged in
+  const heartbeat = () => {
+    try {
+      require('node:fs').writeFileSync('/tmp/bot-heartbeat', String(Date.now()));
+    } catch {}
+  };
+  heartbeat();
+  setInterval(heartbeat, 60 * 1000);
 
   // Register guild slash commands (instant, no 1-hour global wait).
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -78,7 +87,7 @@ client.once(Events.ClientReady, async (c) => {
 
       // Other one-time checks (don't need member list)
       await syncReminders(client);
-      await checkDrift(client);
+      await syncDrift(client);
       await syncCalendar(client);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
@@ -88,7 +97,7 @@ client.once(Events.ClientReady, async (c) => {
   // Recurring loops (use cached data where possible)
   setInterval(() => syncReminders(client), 5 * 60 * 1000);
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
-  setInterval(() => checkDrift(client), 24 * 3600 * 1000);
+  setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
 });
 
@@ -120,14 +129,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const btnNow = Date.now();
       if (btnNow - (cooldowns.get(btnKey) || 0) < 2000) return;
       cooldowns.set(btnKey, btnNow);
-      await handleButton(interaction);
+      await routeButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'member:select') {
         await handleMemberSelect(interaction);
       } else if (interaction.customId.startsWith('apply:age:')) {
         await handleAgeSelect(interaction);
       } else {
-        await handleTotalSelect(interaction);
+        // Unknown select menu — ignore
+        console.warn(`[index.js] Unhandled select menu: ${interaction.customId}`);
       }
     } else if (interaction.isModalSubmit()) {
       await handleModalSubmit(interaction);
@@ -140,17 +150,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// Invalidate the member cache when roles/nicknames change so syncs
-// use fresh data instead of waiting out the 5-minute TTL.
+// Invalidate the member cache when roles change so syncs use fresh data.
+// Only on role changes — nicknames/avatar updates fire this event constantly
+// and would thrash the cache for no benefit.
 client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
+  const oldRoles = oldMember.roles.cache;
+  const newRoles = newMember.roles.cache;
+  if (oldRoles.size === newRoles.size && oldRoles.every((r) => newRoles.has(r.id))) return;
   const { invalidateCache } = require('./guild-cache');
-  invalidateCache(newMember.guild.id);
+  invalidateCache();
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
   // Invalidate cached member list so syncs see the new member immediately
   const { invalidateCache } = require('./guild-cache');
-  invalidateCache(member.guild.id);
+  invalidateCache();
   recordJoin(member.id, member.joinedAt);
   // Everyone-ping role: assign on join so announcements reach all members
   try {
@@ -162,8 +176,6 @@ client.on(Events.GuildMemberAdd, async (member) => {
     console.error('Oath Forsakers auto-assign failed:', e.message);
   }
   await handleWelcome(member);
-  // Join/leave logging handled by Sapphire (2026-10-11)
-  await onMemberJoin(member).catch((e) => console.error('Application channel failed:', e.message));
 });
 
 // Member leave logging handled by Sapphire (2026-10-11)
