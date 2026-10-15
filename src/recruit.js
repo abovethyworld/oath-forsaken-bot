@@ -20,10 +20,14 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { buildInitiateWelcome, isStaff, safeRoleAdd, getPingRole } = require('./utils');
+const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole } = require('./utils');
 
 const DAY_MS = 24 * 3600 * 1000;
 const ZAMORAK_RED = 0x6b0e0e;
+
+// In-progress decision locks: userId -> true. Prevents double-decision races
+// when two staff click approve/deny on the same application simultaneously.
+const decisionLocks = new Set();
 
 function accountAgeDays(user) {
   return Math.floor((Date.now() - user.createdAt.getTime()) / DAY_MS);
@@ -226,7 +230,7 @@ async function handleModalSubmit(interaction) {
     // Staff ping on new applications — quiet until launch (Gavin 2026-10-14).
     // The mention renders but doesn't notify; flip allowedMentions to ping for real at launch.
     await thread.send({
-      content: `<@&1558735997922054225> New ${t.label} application from ${interaction.user}.`,
+      content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
       allowedMentions: { users: [interaction.user.id] },
     }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
     await interaction.editReply('Application submitted! Staff will review it soon.');
@@ -314,7 +318,16 @@ async function handleDecision(interaction) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true });
     return;
   }
-  const types = appTypes();
+
+  // Race guard: if another staff is already deciding this application, bail.
+  // Prevents double role-assignment when two staff click within the same second.
+  const lockKey = `decision:${userId}`;
+  if (decisionLocks.has(lockKey)) {
+    await interaction.reply({ content: 'Someone else is already handling this application.', ephemeral: true });
+    return;
+  }
+  decisionLocks.add(lockKey);
+  try {
   const t = types[type] || {};
   const guild = interaction.guild;
   const target = await guild.members.fetch(userId).catch(() => null);
@@ -376,19 +389,11 @@ async function handleDecision(interaction) {
     // Public welcome in #general - plain text (finalized 2026-10-13)
     // Guest gets the guest welcome; iron/main get the Initiate announcement.
     // This also handles guest-to-member promotions (they get the Initiate post).
-    const generalChan = guild.channels.cache.get('1558583385440395476');
+    const generalChan = guild.channels.cache.get(config.recruit?.generalChannelId || config.channels?.general);
     if (generalChan) {
       let welcomeMsg;
       if (type === 'guest') {
-        welcomeMsg =
-          `Welcome, <@&1558540445611728997>\n` +
-          `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
-          `<@${target.id}>\n\n` +
-          `The door's open. Come see what the forsaken built.\n\n` +
-          `• Introduce yourself in <#1558428255940378715>\n` +
-          `• Grab your roles in <#1558399101454786670>\n` +
-          `• Ping <@&1558735997922054225> when you're ready for a clan chat invite\n` +
-          `• Like what you see? To become an official member, hit Become a Member in <#1558399103757717518>`;
+        welcomeMsg = buildGuestWelcome(target.id);
       } else {
         welcomeMsg = buildInitiateWelcome(target.id);
       }
@@ -436,6 +441,9 @@ async function handleDecision(interaction) {
   const log = guild.channels.cache.get(config.tickets.logChannelId);
   if (log) {
     await log.send(`Application **${decision}d** (${t.label || type}): <@${userId}> by ${interaction.user.tag}`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+  }
+  } finally {
+    decisionLocks.delete(lockKey);
   }
 }
 
