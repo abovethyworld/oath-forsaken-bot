@@ -13,6 +13,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
+const { isStaff, buildInitiateWelcome } = require('./utils');
 
 // Per-button ticket themes (Gavin 2026-10-14 — every ticket themed to the button clicked)
 const TICKET_TYPES = {
@@ -112,7 +113,7 @@ async function createTicket(interaction, ticketType) {
       reason: `${theme.label} ticket opened by ${interaction.user.tag}`,
     });
     // Add the ticket creator to the thread (staff see it via the role ping)
-    await thread.members.add(interaction.user.id).catch(() => {});
+    await thread.members.add(interaction.user.id).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   } catch (err) {
     await interaction.editReply('Could not create the ticket thread. Make sure I have the **Create Private Threads** permission.');
     return;
@@ -144,13 +145,7 @@ async function createTicket(interaction, ticketType) {
   await interaction.editReply(`Ticket created: ${thread}`);
 }
 
-function isStaff(interaction) {
-  const staffIds = config.tickets.staffRoleIds || [];
-  return (
-    interaction.member.roles.cache.some((r) => staffIds.includes(r.id)) ||
-    interaction.memberPermissions.has(PermissionFlagsBits.Administrator)
-  );
-}
+// isStaff imported from utils.js
 
 async function closeTicket(interaction) {
   const thread = interaction.channel;
@@ -170,12 +165,12 @@ async function closeTicket(interaction) {
   store.removeTicket(interaction.guildId, ownerId);
   // Archive and lock the thread instead of deleting
   try {
-    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch(() => {});
+    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     await thread.setLocked(true);
     await thread.setArchived(true);
-    await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   } catch (err) {
-    await interaction.followUp({ content: 'Could not archive the thread: ' + (err.message || err), ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Could not archive the thread: ' + (err.message || err), ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   }
 }
 
@@ -197,11 +192,11 @@ async function showMemberSelect(interaction) {
   const member = interaction.member;
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
   if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
-    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
   if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
-    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
   const menu = new StringSelectMenuBuilder()
@@ -215,7 +210,7 @@ async function showMemberSelect(interaction) {
     content: 'Pick your account type.',
     components: [new ActionRowBuilder().addComponents(menu)],
     ephemeral: true,
-  }).catch(() => {});
+  }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
 }
 
 async function handleMemberSelect(interaction) {
@@ -224,7 +219,7 @@ async function handleMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const t = types[choice];
   if (!t || !t.roleId) {
-    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
     return;
   }
   const member = interaction.member;
@@ -233,27 +228,20 @@ async function handleMemberSelect(interaction) {
 
   // Swap Guest for the member role + Initiate
   if (types.guest?.roleId && member.roles.cache.has(types.guest.roleId)) {
-    await member.roles.remove(types.guest.roleId, 'Guest to member promotion').catch(() => {});
+    await member.roles.remove(types.guest.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   }
-  await member.roles.add(t.roleId, 'Guest to member promotion').catch(() => {});
+  await member.roles.add(t.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
-  if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch(() => {});
+  if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
 
   // Initiate welcome in #general, same as an approval
   const generalChan = guild.channels.cache.get('1558583385440395476');
   if (generalChan) {
-    const welcomeMsg =
-      `⛧ <@&1558452023790276659> ⛧\n` +
-      `⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧\n` +
-      `<@${member.id}> has joined Oath Forsaken.\n\n` +
-      `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
-      `• Drop an intro in <#1558428255940378715> so we can get to meet you\n` +
-      `• Grab your roles in <#1558399101454786670>\n` +
-      `• Ping <@&1558735997922054225> when you're ready for a clan chat invite`;
-    await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch(() => {});
+    const welcomeMsg = buildInitiateWelcome(member.id);
+    await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
   }
 
-  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch(() => {});
+  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
 }
 
 const commands = [

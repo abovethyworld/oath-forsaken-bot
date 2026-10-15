@@ -158,10 +158,10 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
   }
   const payload = { embeds: [embed], components };
   if (existing) {
-    await existing.edit(payload).catch(() => {});
+    await existing.edit(payload).catch((e) => console.error("[event-calendar.js] Silent failure:", e.message));
     console.log('Calendar: updated existing embed');
   } else {
-    await channel.send(payload).catch(() => {});
+    await channel.send(payload).catch((e) => console.error("[event-calendar.js] Silent failure:", e.message));
     console.log('Calendar: posted new embed');
   }
 }
