@@ -29,6 +29,9 @@ const ZAMORAK_RED = 0x6b0e0e;
 // when two staff click approve/deny on the same application simultaneously.
 const decisionLocks = new Set();
 
+// In-progress submit locks: prevents double-submit race on modal submission.
+const submitLocks = new Set();
+
 function accountAgeDays(user) {
   return Math.floor((Date.now() - user.createdAt.getTime()) / DAY_MS);
 }
@@ -159,6 +162,14 @@ async function handleModalSubmit(interaction) {
 
   if (parts[1] !== 'modal') return;
 
+  // Prevent multiple submissions (in-memory lock for race between check and write)
+  const submitKey = `submit:${interaction.user.id}`;
+  if (submitLocks.has(submitKey)) {
+    await interaction.reply({ content: 'Your application is already being submitted.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  submitLocks.add(submitKey);
+  try {
   // Prevent multiple submissions
   if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
     await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
@@ -193,11 +204,13 @@ async function handleModalSubmit(interaction) {
 
   const lines = [`**Application type:** ${t.label}`];
   for (const q of t.questions || []) {
-    lines.push(`**${q.label}:** ${answers[q.id]}`);
+    // Truncate answers to prevent embed overflow (description limit 4096)
+    const answer = String(answers[q.id] || '').slice(0, 500);
+    lines.push(`**${q.label}:** ${answer}`);
   }
   const embed = new EmbedBuilder()
     .setTitle(`Application — ${interaction.user.tag}`)
-    .setDescription(lines.join('\n'))
+    .setDescription(lines.join('\n').slice(0, 4000))
     .addFields(
       {
         name: 'User',
@@ -217,7 +230,8 @@ async function handleModalSubmit(interaction) {
     new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('✖️')
   );
 
-  const postName = `${t.label} App from ${interaction.user.username}`;
+  // Anti-spoof: user ID is unspoofable, username alone can impersonate staff
+  const postName = `${t.label} App from ${interaction.user.username} [${interaction.user.id}]`;
   const thread = await forum.threads
     .create({
       name: postName.slice(0, 100),
@@ -242,6 +256,9 @@ async function handleModalSubmit(interaction) {
   store.setApplicationAnswers(interaction.guildId, interaction.user.id, answers);
   // Mark this channel as submitted so it isn't reused
   store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
+  } finally {
+    submitLocks.delete(submitKey);
+  }
 }
 
 // isStaff imported from utils.js
