@@ -81,7 +81,7 @@ Run these once in your server to post the panels:
 | `/warn @user reason` | Adds a strike, logs it to the mod channel | Mods |
 | `/strikes @user` | Shows a user's strikes | Mods |
 | `/clear-strikes @user` | Clears a user's strikes | Mods |
-| `/close` | Closes the current ticket (posts transcript, deletes channel) | Staff or ticket owner |
+| `/close` | Closes the current ticket (archives and locks the thread) | Staff |
 | `/event-create` | Creates a Discord scheduled event + announcement. Date `YYYY-MM-DD`, time `HH:MM` 24h in your configured timezone | Manage Events |
 | `/events` | Lists upcoming events | Everyone |
 | `/event-cancel` | Cancels an event by name | Manage Events |
