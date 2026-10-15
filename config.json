@@ -843,5 +843,14 @@
       "name": "Guest",
       "roleId": "1558540445611728997"
     }
-  ]
+  ],
+  "permissions": {
+    "_comment": "Channels visible to brand-new members (@everyone, no roles). Drift check alerts if others become visible.",
+    "newMemberVisibleChannels": [
+      "1558393177726259241",
+      "1558481986706870445",
+      "1558905814482423818"
+    ],
+    "driftLogChannelId": "1558881164452696105"
+  }
 }
