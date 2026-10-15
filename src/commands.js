@@ -154,7 +154,7 @@ async function warnUser(interaction) {
       .setDescription(`**Reason:** ${reason}\n**Warned by:** ${interaction.user.tag}`)
       .setColor(count >= 3 ? 0xff0000 : 0xffa500)
       .setTimestamp();
-    await log.send({ embeds: [embed] }).catch(() => {});
+    await log.send({ embeds: [embed] }).catch((e) => console.error("[commands.js] Silent failure:", e.message));
   }
 
   if (count >= 3) {

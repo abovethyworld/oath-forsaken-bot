@@ -101,7 +101,7 @@ async function postRankUpStory(guild, member, rankName) {
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
     const message = `${ann.header}\n${ann.divider}\n${ann.tagline(member.id)}\n\n${ann.story}`;
-    await channel.send({ content: message, allowedMentions: { parse: ['users'] } }).catch(() => {});
+    await channel.send({ content: message, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
   } catch (err) {
     console.error('Rank-up story failed:', err.message);
   }
@@ -137,7 +137,7 @@ async function syncSeniority(client) {
       if (skipIds.some((id) => m.roles.cache.has(id))) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
-          await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch(() => {});
+          await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
           changed++;
         }
         continue;
@@ -156,8 +156,8 @@ async function syncSeniority(client) {
       const oldRank = ranks.find((r) => r.roleId !== want.roleId && m.roles.cache.has(r.roleId));
       const isRankUp = !!oldRank;
       const remove = rankIds.filter((id) => id !== want.roleId);
-      if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch(() => {});
-      if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch(() => {});
+      if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+      if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
       changed++;
       // Ping their story on rank-up (not on initial assignment)
       if (isRankUp) {
@@ -165,7 +165,7 @@ async function syncSeniority(client) {
         // Add to CC checklist for in-game rank update
         const oldRankName = oldRank ? oldRank.name.split(' ')[0] : 'None';
         const newRankName = want.name.split(' ')[0];
-        await addCcEntry(guild, m.id, oldRankName, newRankName).catch(() => {});
+        await addCcEntry(guild, m.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
         // Pace it out
         await new Promise((r) => setTimeout(r, 2000));
       }

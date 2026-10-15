@@ -81,6 +81,11 @@ async function handlePollButton(interaction) {
     return;
   }
   const idx = parseInt(idxStr, 10);
+  // Validate index is within bounds (prevents crafted customIds)
+  if (isNaN(idx) || idx < 0 || idx >= poll.options.length) {
+    await interaction.reply({ content: 'Invalid poll option.', ephemeral: true });
+    return;
+  }
   if (poll.votes[interaction.user.id] === idx) {
     delete poll.votes[interaction.user.id]; // toggle off
   } else {
