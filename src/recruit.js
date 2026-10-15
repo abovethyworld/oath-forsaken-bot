@@ -237,7 +237,7 @@ async function handleModalSubmit(interaction) {
     .catch(() => null);
 
   if (thread) {
-    // Staff ping on new applications — quiet until launch (Gavin 2026-10-14).
+    // Staff ping on new applications — quiet until launch.
     // The mention renders but doesn't notify; flip allowedMentions to ping for real at launch.
     await thread.send({
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
@@ -385,7 +385,7 @@ async function handleDecision(interaction) {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
       if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[recruit.js] Silent failure:", e.message));
     }
-    // Auto-nickname: "Nickname [RSN]" (Gavin's idea 2026-10-14, all 3 app types)
+    // Auto-nickname: "Nickname [RSN]" (all 3 application types)
     const appAnswers = store.getApplicationAnswers(guild.id, userId);
     if (appAnswers && appAnswers.nickname && appAnswers.rsn) {
       const nick = String(appAnswers.nickname).trim();

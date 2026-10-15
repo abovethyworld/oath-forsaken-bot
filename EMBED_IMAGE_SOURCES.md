@@ -11,7 +11,7 @@ Folder: "Discord Image Backup 2026-10-13" (ID: 16IVnJQY3X9ZgvpJSKnQB6TnDwTS3NUtH
   - donate-SupporttheClan.gif
 - Plus 3 OG clan-ranks banners in main Drive folder (og-iron-banner.jpg, og-armor-banner.jpg, og-staff-banner.jpg)
 Local copies: ~/workspace/discord-backup/emoji/ and ~/workspace/discord-backup/channel-images/
-#bot-commands WIP previews are NOT backed up (per Gavin — those are just ideas).
+#bot-commands WIP previews are NOT backed up (previews only, not final assets).
 
 These Discord messages contain attachments that are referenced by embeds.
 Deleting any of these messages will break the embed images (404).
@@ -57,7 +57,7 @@ Every banner must have all four:
 - Discord: #bot-commands msg <id> (backup source)
 - Used in: #<channel> <embed title> msg <id>
 
-Policy 2026-10-13 (Gavin): embed images source from Drive (lh3.googleusercontent.com), NOT Discord CDN. Drive is the reliable store. Discord #bot-commands copies are backup only.
+Policy 2026-10-13: embed images source from Drive (lh3.googleusercontent.com), NOT Discord CDN. Drive is the reliable store. Discord #bot-commands copies are backup only.
 
 ## #donate embed banner
 - Source message: 1559385469605912598 in #bot-commands
