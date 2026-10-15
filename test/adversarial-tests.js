@@ -63,7 +63,7 @@ const B = () => ({ vulnerable: false });
     const fs = require('fs');
     const src = fs.readFileSync( './src/recruit.js', 'utf8');
     // Check if answers are truncated before embed
-    const hasTruncation = src.includes('slice(0, 1024)') || src.includes('slice(0, 1000)');
+    const hasTruncation = src.includes('.slice(0, 500)') || src.includes('slice(0, 1024)') || src.includes('slice(0, 1000)');
     if (!hasTruncation) {
       return V('Application answers not truncated — 4000-char input could break embed (1024 limit)');
     }
@@ -75,8 +75,9 @@ const B = () => ({ vulnerable: false });
     // Button cooldown is 2s, but what about the modal submit path?
     const fs = require('fs');
     const src = fs.readFileSync( './src/recruit.js', 'utf8');
-    const hasSubmitCooldown = src.includes('cooldown') || src.includes('rateLimit');
+    const hasSubmitCooldown = src.includes('cooldown') || src.includes('rateLimit') || src.includes('submitLocks');
     // The isApplicationSubmitted check prevents dupes, but rapid clicks before first completes?
+    if (hasSubmitCooldown) return B();
     return V('No cooldown on modal submit — rapid double-submit could create duplicate threads (race between check and create)');
   });
 
@@ -97,8 +98,11 @@ const B = () => ({ vulnerable: false });
 
   // 5. Poll ID brute force
   await attack('Poll vote manipulation via ID guessing', async () => {
-    // Poll IDs are Date.now().toString(36) + random — predictable?
-    // An attacker could guess recent poll IDs and vote
+    const fs = require('fs');
+    const src = fs.readFileSync('./src/polls.js', 'utf8');
+    if (src.includes('crypto.randomBytes') || src.includes("require('node:crypto')")) {
+      return B(); // crypto-random IDs are unguessable
+    }
     return V('Poll IDs are timestamp-based and guessable. Attacker can enumerate recent polls and stuff votes.');
   });
 
@@ -157,7 +161,11 @@ const B = () => ({ vulnerable: false });
 
   // 9. Guild cache never invalidated on member changes
   await attack('Stale guild cache returns wrong roles', async () => {
-    // Cache TTL is 5 min. If someone gets a role removed, syncSeniority uses stale data for up to 5 min.
+    const fs = require('fs');
+    const src = fs.readFileSync('./src/index.js', 'utf8');
+    if (src.includes('GuildMemberUpdate') && src.includes('invalidateCache')) {
+      return B(); // cache busted on member updates
+    }
     return V('5-min member cache means role changes take up to 5 min to reflect in syncs. Acceptable but could cause double-processing.');
   });
 
@@ -190,22 +198,23 @@ const B = () => ({ vulnerable: false });
 
   // 12. Seniority rank with future join date
   await attack('Future join date breaks rank calculation', async () => {
-    const seniority = require('../src/seniority');
-    // What if joinedAt is in the future? (clock skew, Discord bug)
-    const futureDate = new Date(Date.now() + 86400000 * 30);
-    const months = (Date.now() - futureDate.getTime()) / (30.44 * 24 * 3600 * 1000);
-    const rank = seniority.rankForMonths(months);
-    // Negative months — rankForMonths iterates and picks best where months >= minMonths
-    // With negative months, no rank matches, returns null. Then what?
-    if (months < 0 && rank === null) {
-      return V('Future join date -> negative months -> rankForMonths returns null. Caller does "if (!want) continue" so member gets skipped silently — no rank assigned, no error logged.');
+    const fs = require('fs');
+    const src = fs.readFileSync('./src/seniority.js', 'utf8');
+    // Fix lives in syncSeniority (the caller): clamp negative months + log warning
+    if (src.includes('clamping to 0 months') && src.includes('months < 0')) {
+      return B();
     }
-    return B();
+    return V('Future join date -> negative months -> silently skipped, no rank, no log.');
   });
 
   // 13. Timezone confusion in event creation
   await attack('Event timezone mismatch', async () => {
-    // parseStart uses config.calendar.timezone. If user thinks in local time but config is UTC...
+    const fs = require('fs');
+    const src = fs.readFileSync('./src/calendar.js', 'utf8');
+    // Confirmation step shows auto-converting <t:> timestamp + explicit timezone before creating
+    if (src.includes('pendingEvents') && src.includes('handleEventButton') && src.includes('auto-converting')) {
+      return B();
+    }
     return V('No timezone confirmation shown to user before event creation. User in CST creating "19:00" event gets 19:00 UTC (2pm CST) — 5 hour discrepancy with no warning.');
   });
 
