@@ -1,6 +1,7 @@
 // Suggestions panel: button -> modal -> public post with vote reactions.
-// Members see suggestions; posting goes through the panel so every entry
-// has the same shape. Staff react to accept/deny.
+// Each suggestion gets ✅/❌ votes and an auto-created discussion thread.
+// The panel also offers anonymous submissions (footer shows "Submitted
+// anonymously" instead of the author's name).
 const {
   ModalBuilder,
   TextInputBuilder,
@@ -20,16 +21,31 @@ function suggestionsChannelId() {
   return config.channels && config.channels.suggestions;
 }
 
+function isOnCooldown(userId) {
+  return Date.now() - (cooldowns.get(`suggest:${userId}`) || 0) < COOLDOWN_MS;
+}
+
 async function handleSuggestButton(interaction) {
   // customId: 'suggest:open' or 'suggest:open:anon'
   const anon = interaction.customId === 'suggest:open:anon';
+
+  // Check the cooldown here, before the modal opens. A reply to the button
+  // press renders reliably on mobile; a reply to the modal submit often
+  // does not. The cooldown is only *set* after a successful post.
+  if (isOnCooldown(interaction.user.id)) {
+    await interaction
+      .reply({ content: 'Slow down. One suggestion every few minutes.', ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+
   const modal = new ModalBuilder()
     .setCustomId(anon ? 'suggest:modal:anon' : 'suggest:modal')
     .setTitle(anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
   modal.addComponents(
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
-        .setCustomId('title')
+        .setCustomId('suggest:title')
         .setLabel('Title')
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
@@ -37,7 +53,7 @@ async function handleSuggestButton(interaction) {
     ),
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
-        .setCustomId('details')
+        .setCustomId('suggest:details')
         .setLabel('Details')
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
@@ -48,45 +64,57 @@ async function handleSuggestButton(interaction) {
 }
 
 async function handleSuggestModal(interaction) {
-  // customId: 'suggest:modal' or 'suggest:modal:anon'. Returns true if handled.
-  if (!interaction.customId.startsWith('suggest:')) return false;
+  // customId: 'suggest:modal' or 'suggest:modal:anon'
+  // (index.js only routes 'suggest' modals here).
   const anon = interaction.customId === 'suggest:modal:anon';
 
-  const now = Date.now();
-  const key = `suggest:${interaction.user.id}`;
-  if (now - (cooldowns.get(key) || 0) < COOLDOWN_MS) {
+  const title = interaction.fields.getTextInputValue('suggest:title').trim();
+  const details = interaction.fields.getTextInputValue('suggest:details').trim();
+  if (!title || !details) {
     await interaction
-      .reply({ content: 'Slow down. One suggestion every few minutes.', ephemeral: true })
+      .reply({ content: 'Title and details cannot be blank.', ephemeral: true })
       .catch(() => {});
-    return true;
+    return;
   }
-  cooldowns.set(key, now);
 
-  const title = interaction.fields.getTextInputValue('title').trim();
-  const details = interaction.fields.getTextInputValue('details').trim();
   const channelId = suggestionsChannelId();
   if (!channelId) {
     await interaction
       .reply({ content: 'Suggestions are not set up yet. Tell staff.', ephemeral: true })
       .catch(() => {});
-    return true;
+    return;
   }
   const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
   if (!channel) {
     await interaction
       .reply({ content: 'Could not find the suggestions channel. Tell staff.', ephemeral: true })
       .catch(() => {});
-    return true;
+    return;
   }
+
   const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle(title)
     .setDescription(details)
-    .setFooter({ text: anon ? 'Submitted anonymously' : `Suggested by ${interaction.user.tag}` })
+    .setFooter({
+      text: anon ? 'Submitted anonymously' : `Suggested by ${interaction.user.displayName}`,
+    })
     .setTimestamp();
-  const msg = await channel.send({ embeds: [embed] });
-  await msg.react('✅').catch(() => {});
-  await msg.react('❌').catch(() => {});
+
+  let msg;
+  try {
+    msg = await channel.send({ embeds: [embed] });
+  } catch (err) {
+    console.error('Suggest post failed:', err.message);
+    await interaction
+      .reply({ content: 'Could not post that. Tell staff.', ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+
+  await msg.react('✅').catch((err) => console.warn('Suggest react failed:', err.message));
+  await msg.react('❌').catch((err) => console.warn('Suggest react failed:', err.message));
+
   // Discussion thread per suggestion
   const thread = await msg
     .startThread({
@@ -94,16 +122,22 @@ async function handleSuggestModal(interaction) {
       autoArchiveDuration: 4320,
       reason: 'Suggestion discussion',
     })
-    .catch(() => null);
+    .catch((err) => {
+      console.warn('Suggest thread failed:', err.message);
+      return null;
+    });
   if (thread) {
     await thread
       .send('Discuss this suggestion here. Vote with ✅ or ❌ on the post above.')
-      .catch(() => {});
+      .catch((err) => console.warn('Suggest thread message failed:', err.message));
   }
+
+  // Only burn the cooldown once the post actually landed.
+  cooldowns.set(`suggest:${interaction.user.id}`, Date.now());
+
   await interaction
     .reply({ content: 'Posted. Members can vote with reactions.', ephemeral: true })
     .catch(() => {});
-  return true;
 }
 
 function suggestPanelPayload() {
