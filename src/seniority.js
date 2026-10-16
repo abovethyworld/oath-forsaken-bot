@@ -134,7 +134,10 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (store.isSeniorityHeld(guild.id, m.id)) continue;
       // Guests and Friends of the Clan never get seniority roles
       // Strip any they already have, then skip.
+      // The permission-audit canary (turtlepace7 alt) must stay @everyone-only.
       const skipIds = [config.recruit?.types?.guest?.roleId, SEN.friendOfClanRoleId].filter(Boolean);
+      const skipUsers = ['261537945943539712']; // audit canary
+      if (skipUsers.includes(m.id)) continue;
       if (skipIds.some((id) => m.roles.cache.has(id))) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
