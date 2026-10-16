@@ -29,6 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
+const { handleSuggestModal } = require('./suggestions');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -140,7 +141,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         console.warn(`[index.js] Unhandled select menu: ${interaction.customId}`);
       }
     } else if (interaction.isModalSubmit()) {
-      await handleModalSubmit(interaction);
+      if (interaction.customId.startsWith('suggest:')) {
+        await handleSuggestModal(interaction);
+      } else {
+        await handleModalSubmit(interaction);
+      }
     }
   } catch (err) {
     console.error('Interaction error:', err);
