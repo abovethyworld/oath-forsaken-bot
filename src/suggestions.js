@@ -96,7 +96,7 @@ function suggestPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Suggestions ⛧')
         .setDescription(
-          'Got an idea for the clan? Events, channels, bots, anything.\n\nHit the button, write it up, and it goes public for voting. Staff reviews the ones with backing.'
+          'Got an idea for the clan? Events, channels, bots, anything.\n\nClick the button and have the clan vote on it!'
         ),
     ],
     components: [
