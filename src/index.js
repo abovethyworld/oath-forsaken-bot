@@ -141,7 +141,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         console.warn(`[index.js] Unhandled select menu: ${interaction.customId}`);
       }
     } else if (interaction.isModalSubmit()) {
-      if (interaction.customId.startsWith('suggest:')) {
+      const [modalKind] = interaction.customId.split(':');
+      if (modalKind === 'suggest') {
         await handleSuggestModal(interaction);
       } else {
         await handleModalSubmit(interaction);
