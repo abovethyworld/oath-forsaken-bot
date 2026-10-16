@@ -93,6 +93,11 @@ function sectionsDesc(intro, sections, footer) {
   });
   console.log('posted ticket panel');
 
+  // 5b. Suggestions panel
+  const { suggestPanelPayload } = require('./suggestions');
+  await api(`/channels/${config.channels.suggestions}/messages`, 'POST', suggestPanelPayload());
+  console.log('posted suggestions panel');
+
   // 6. Welcome channel: drop a note that auto-welcomes are live
   await api(`/channels/${config.channels.welcome}/messages`, 'POST', {
     embeds: [
