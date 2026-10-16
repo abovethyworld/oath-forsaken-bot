@@ -21,8 +21,11 @@ function suggestionsChannelId() {
 }
 
 async function handleSuggestButton(interaction) {
-  // customId: 'suggest:open'
-  const modal = new ModalBuilder().setCustomId('suggest:modal').setTitle('Suggest an idea');
+  // customId: 'suggest:open' or 'suggest:open:anon'
+  const anon = interaction.customId === 'suggest:open:anon';
+  const modal = new ModalBuilder()
+    .setCustomId(anon ? 'suggest:modal:anon' : 'suggest:modal')
+    .setTitle(anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
   modal.addComponents(
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
@@ -45,8 +48,9 @@ async function handleSuggestButton(interaction) {
 }
 
 async function handleSuggestModal(interaction) {
-  // customId: 'suggest:modal'. Returns true if handled.
+  // customId: 'suggest:modal' or 'suggest:modal:anon'. Returns true if handled.
   if (!interaction.customId.startsWith('suggest:')) return false;
+  const anon = interaction.customId === 'suggest:modal:anon';
 
   const now = Date.now();
   const key = `suggest:${interaction.user.id}`;
@@ -78,11 +82,24 @@ async function handleSuggestModal(interaction) {
     .setColor(ZAMORAK_RED)
     .setTitle(title)
     .setDescription(details)
-    .setFooter({ text: `Suggested by ${interaction.user.tag}` })
+    .setFooter({ text: anon ? 'Submitted anonymously' : `Suggested by ${interaction.user.tag}` })
     .setTimestamp();
   const msg = await channel.send({ embeds: [embed] });
   await msg.react('✅').catch(() => {});
   await msg.react('❌').catch(() => {});
+  // Discussion thread per suggestion
+  const thread = await msg
+    .startThread({
+      name: `💬 ${title}`.slice(0, 100),
+      autoArchiveDuration: 4320,
+      reason: 'Suggestion discussion',
+    })
+    .catch(() => null);
+  if (thread) {
+    await thread
+      .send('Discuss this suggestion here. Vote with ✅ or ❌ on the post above.')
+      .catch(() => {});
+  }
   await interaction
     .reply({ content: 'Posted. Members can vote with reactions.', ephemeral: true })
     .catch(() => {});
@@ -105,7 +122,12 @@ function suggestPanelPayload() {
           .setCustomId('suggest:open')
           .setLabel('Submit Suggestion')
           .setStyle(ButtonStyle.Primary)
-          .setEmoji('💡')
+          .setEmoji('💡'),
+        new ButtonBuilder()
+          .setCustomId('suggest:open:anon')
+          .setLabel('Submit Anonymously')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🕵️')
       ),
     ],
   };
