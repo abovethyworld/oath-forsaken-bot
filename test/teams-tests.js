@@ -102,9 +102,9 @@ test('Mass button is on Nex and Hueycoatl only', () => {
     assert.ok(size, `${key} missing size step`);
     assert.ok(size.options.some((o) => o.id === 'mass'), `${key} size step missing Mass button`);
   }
-  // Nex: 3, 5, Mass (the real strats, pending his confirm).
+  // Nex: 2, 3, 5, 8, Mass (wiki strat sizes).
   const nexSize = creationStepsFor('nex', null).find((s) => s.id === 'size');
-  assert.deepStrictEqual(nexSize.options.map((o) => o.id), ['3', '5', 'mass']);
+  assert.deepStrictEqual(nexSize.options.map((o) => o.id), ['2', '3', '5', '8', 'mass']);
   // Hueycoatl: 3, 4, 5 + Mass.
   const hueySize = creationStepsFor('huey', 'public').find((s) => s.id === 'size');
   assert.deepStrictEqual(hueySize.options.map((o) => o.id), ['3', '4', '5', 'mass']);
