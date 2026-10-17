@@ -529,7 +529,11 @@ function creationStepsFor(activityKey, preId) {
   const steps = [];
 
   if (activityKey === 'toa') {
-    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(1, 8) });
+    steps.push({
+      id: 'sizeChoice', kind: 'buttons', prompt: 'Want a specific team size?',
+      options: [{ id: 'specific', label: 'Yes, pick a size' }, { id: 'any', label: 'No, any size' }],
+    });
+    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(2, 8) });
     steps.push({
       id: 'tier', kind: 'buttons', prompt: 'What raid level?', options: [
         { id: 'Entry', label: 'Entry (0-149)' },
@@ -806,6 +810,8 @@ async function handleStepButton(interaction, stepId, value) {
   }
   // Store numbers as numbers, keep ids like 'mass' or tiers as strings.
   creation.data[stepId] = /^\d+$/.test(value) ? parseInt(value, 10) : value;
+  // ToA: "any size" skips the number picker.
+  if (stepId === 'sizeChoice' && value === 'any') creation.idx += 1;
   await advanceCreation(interaction, creation);
 }
 
