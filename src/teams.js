@@ -119,8 +119,8 @@ const CATEGORIES = [
 // Custom emojis matching the #roles panel buttons.
 const ACTIVITY_EMOJI = {
   toa: '<:toa:1558470672986939634>',
-  cox: '<:cox:1558470688644268187>',
-  tob: '<:tob:1558470703899217945>',
+  cox: '<:cox:1561158969379004510>',
+  tob: '<:tob:1561159051147223100>',
   wintertodt: '<:wintertodt:1558470813584465960>',
   gotr: '<:gotr:1558470845918220318>',
   tempoross: '<:tempoross:1558470796752457779>',
@@ -140,8 +140,8 @@ const ACTIVITY_EMOJI = {
 // For select menus: { id, name } pairs.
 const ACTIVITY_EMOJI_OBJ = {
   toa: { id: '1558470672986939634', name: 'toa' },
-  cox: { id: '1558470688644268187', name: 'cox' },
-  tob: { id: '1558470703899217945', name: 'tob' },
+  cox: { id: '1561158969379004510', name: 'cox' },
+  tob: { id: '1561159051147223100', name: 'tob' },
   wintertodt: { id: '1558470813584465960', name: 'wintertodt' },
   gotr: { id: '1558470845918220318', name: 'gotr' },
   tempoross: { id: '1558470796752457779', name: 'tempoross' },
