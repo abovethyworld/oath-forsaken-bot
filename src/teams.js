@@ -26,21 +26,18 @@ const createCooldowns = new Map();
 
 // ─── Activity templates ─────────────────────────────────────────────
 // size: null = open/mass (no cap, never fills). {min,max} = organizer
-// picks a number. {fixed:n} = fixed headcount, no input needed.
+// picks a number via buttons. {fixed:n} = fixed headcount, no input needed.
 // roles: exclusive claim slots (ToB, BA) or pick-style (Yama: each
 // player picks Mage or Melee, both can pick the same).
-// fields: modal inputs shown for this activity, in order (max 5).
-// pre: button step shown before the modal (Discord modals are text-only).
+// pre: button step shown before the step flow (mode toggles).
 const ACTIVITIES = {
   toa: {
     name: 'Tombs of Amascut', short: 'ToA', category: 'raids',
     size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
-    fields: ['size', 'raidLevel', 'world', 'hub', 'note'],
   },
   cox: {
     name: 'Chambers of Xeric', short: 'CoX', category: 'raids',
     fillPing: true, partyHub: true, pre: 'coxMode',
-    fields: ['scale', 'world', 'hub', 'note'],
   },
   tob: {
     name: 'Theatre of Blood', short: 'ToB', category: 'raids',
@@ -52,81 +49,66 @@ const ACTIVITIES = {
       '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
       '5s-hard': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     },
-    fields: ['world', 'hub', 'note'],
   },
   wintertodt: {
     name: 'Wintertodt', category: 'skilling',
     size: null, fillPing: false, partyHub: false,
-    fields: ['world', 'note'],
   },
   gotr: {
     name: 'Guardians of the Rift', category: 'skilling',
     size: null, fillPing: false, partyHub: false,
-    fields: ['world', 'note'],
   },
   tempoross: {
     name: 'Tempoross', category: 'skilling',
     size: null, fillPing: false, partyHub: false,
-    fields: ['world', 'note'],
   },
   zalcano: {
     name: 'Zalcano', category: 'skilling',
     size: null, fillPing: false, partyHub: true,
-    fields: ['world', 'hub', 'note'],
   },
   ba: {
     name: 'Barbarian Assault', category: 'skilling',
     size: { fixed: 5 }, fillPing: true, partyHub: true,
     roleMode: 'exclusive',
     roles: ['Attacker', 'Defender', 'Collector', 'Healer', 'Flex'],
-    fields: ['world', 'hub', 'note'],
   },
   nex: {
     name: 'Nex', category: 'bosses',
     size: { min: 1, max: 100 }, fillPing: true, partyHub: true,
-    fields: ['size', 'world', 'hub', 'note'],
   },
   yama: {
     name: 'Yama', category: 'bosses',
     size: { fixed: 2 }, fillPing: false, partyHub: true,
     roleMode: 'pick',
     roles: ['Mage', 'Melee'],
-    fields: ['contract', 'world', 'hub', 'note'],
   },
   huey: {
     name: 'The Hueycoatl', category: 'bosses',
     size: { min: 1, max: 20 }, fillPing: false, partyHub: true, pre: 'hueyInstance',
-    fields: ['size', 'world', 'hub', 'note'],
   },
   royals: {
     name: 'Royal Titans', category: 'bosses',
     size: { fixed: 2 }, fillPing: false, partyHub: true,
-    fields: ['world', 'hub', 'note'],
   },
   venenatis: {
     name: 'Venenatis', category: 'bosses',
     size: { min: 1, max: 100, allowMass: true }, fillPing: false, partyHub: true,
-    fields: ['size', 'world', 'hub', 'note'],
   },
   callisto: {
     name: 'Callisto', category: 'bosses',
     size: { min: 1, max: 100, allowMass: true }, fillPing: false, partyHub: true,
-    fields: ['size', 'world', 'hub', 'note'],
   },
   vetion: {
     name: "Vet'ion", category: 'bosses',
     size: { min: 1, max: 100, allowMass: true }, fillPing: false, partyHub: true,
-    fields: ['size', 'world', 'hub', 'note'],
   },
   nm: {
     name: 'Nightmare', category: 'bosses',
     size: { min: 1, max: 5 }, partyHub: true, pre: 'nmMode',
-    fields: ['size', 'world', 'hub', 'note'],
   },
   wag: {
     name: 'Wilderness Agility', category: 'bosses',
     size: null, fillPing: false, partyHub: false, pre: 'wagWorld',
-    fields: ['world', 'note'],
   },
 };
 
@@ -190,10 +172,9 @@ const PRE_CHOICES = {
     ],
   },
   coxMode: {
-    prompt: 'CoX mode and layout',
+    prompt: 'CoX mode',
     options: [
       { id: 'normal', label: 'Normal' },
-      { id: 'large', label: 'Normal (Large)' },
       { id: 'cm', label: 'Challenge Mode' },
     ],
   },
@@ -386,8 +367,8 @@ function buildTeamEmbed(team) {
   const act = ACTIVITIES[team.activity] || {};
   const lines = [];
 
-  if (team.activity === 'toa' && team.raidLevel != null) {
-    lines.push(`Raid level ${team.raidLevel} (${toaModeForLevel(team.raidLevel)})`);
+  if (team.activity === 'toa' && team.raidLevel) {
+    lines.push(`Raid level: ${team.raidLevel}`);
   }
   if (team.activity === 'cox' && team.scale) {
     const s = team.scale;
@@ -415,13 +396,15 @@ function buildTeamEmbed(team) {
   }
 
   lines.push('');
-  if (team.world) lines.push(`🌍 **World:** ${team.world}`);
+  if (team.world && team.region) lines.push(`🌍 **World:** ${team.world} (${team.region})`);
+  else if (team.world) lines.push(`🌍 **World:** ${team.world}`);
+  else if (team.region) lines.push(`🌍 **Region:** ${team.region}`);
   if (team.hub) lines.push(`👥 **Party hub:** ${team.hub}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
   const count = memberCount(team);
   const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
-  const sizeStr = denom ? `${count}/${denom}` : `${count} in`;
+  const sizeStr = team.mass ? 'Mass' : (denom ? `${count}/${denom}` : `${count} in`);
   lines.push('');
   lines.push(`Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}`);
   if (team.status === 'closed') lines.push('**Closed.**');
@@ -512,40 +495,419 @@ function preChoiceRow(activityKey) {
   return { content: `**${act.name}:** ${pre.prompt}`, components: [row] };
 }
 
-const MODAL_FIELDS = {
-  size: { label: 'Team size', placeholder: '4', maxLength: 3 },
-  raidLevel: { label: 'Raid level (invocations)', placeholder: '250', maxLength: 4 },
-  scale: { label: 'Scale (raiders + scalers)', placeholder: '3+2', maxLength: 7 },
-  world: { label: 'World', placeholder: '388', maxLength: 3, required: true },
-  hub: {
-    label: 'Party hub (RuneLite Party plugin)',
-    placeholder: 'Everyone types the same name to share inventories and pings',
-    maxLength: 50,
-    required: true,
-  },
-  note: { label: 'Note (optional)', placeholder: 'Learners welcome', style: 'paragraph', maxLength: 200 },
-  contract: { label: 'Contract (optional)', placeholder: 'None', maxLength: 100 },
-};
+const REGIONS = [
+  { id: 'US', label: 'US', emoji: '🇺🇸' },
+  { id: 'UK', label: 'UK', emoji: '🇬🇧' },
+  { id: 'DE', label: 'Germany', emoji: '🇩🇪' },
+  { id: 'AU', label: 'Australia', emoji: '🇦🇺' },
+];
 
-function showTeamModal(interaction, activityKey, preId) {
+// Step-by-step creation state. userId -> { activity, pre, steps, idx, data, expiresAt }.
+const CREATION_EXPIRE_MS = 5 * 60 * 1000;
+const pendingCreations = new Map();
+
+function getCreation(userId) {
+  const c = pendingCreations.get(userId);
+  if (!c) return null;
+  if (Date.now() > c.expiresAt) {
+    pendingCreations.delete(userId);
+    return null;
+  }
+  return c;
+}
+
+function numOptions(min, max) {
+  const opts = [];
+  for (let i = min; i <= max; i++) opts.push({ id: String(i), label: String(i) });
+  return opts;
+}
+
+// Ordered step list for an activity (after any pre-choice). Each step:
+// { id, kind: 'buttons'|'select'|'optionalText', prompt, ... }
+function creationStepsFor(activityKey, preId) {
   const act = ACTIVITIES[activityKey];
-  const modalId = preId ? `team:modal:${activityKey}:${preId}` : `team:modal:${activityKey}`;
-  const modal = new ModalBuilder().setCustomId(modalId).setTitle(`${act.name} team`.slice(0, 45));
-  for (const f of act.fields) {
-    const def = MODAL_FIELDS[f];
-    modal.addComponents(
+  const steps = [];
+
+  if (activityKey === 'toa') {
+    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(1, 8) });
+    steps.push({
+      id: 'tier', kind: 'buttons', prompt: 'What raid level?', options: [
+        { id: 'Entry', label: 'Entry (0-149)' },
+        { id: 'Normal', label: 'Normal (150-299)' },
+        { id: 'Expert', label: 'Expert (300+)' },
+      ],
+    });
+  } else if (activityKey === 'cox') {
+    steps.push({ id: 'raiders', kind: 'buttons', prompt: 'How many raiders?', options: numOptions(1, 10) });
+    steps.push({
+      id: 'scalers', kind: 'buttons', prompt: 'How many scaler alts?', options: [
+        { id: '0', label: 'None' }, ...numOptions(1, 5),
+      ],
+    });
+  } else if (activityKey === 'nex') {
+    steps.push({
+      id: 'size', kind: 'buttons', prompt: 'How many players?',
+      options: [...numOptions(2, 10), { id: 'mass', label: 'Mass' }],
+    });
+  } else if (activityKey === 'huey') {
+    steps.push({
+      id: 'size', kind: 'buttons', prompt: 'How many players? (Mass is 6+)',
+      options: [...numOptions(3, 5), { id: 'mass', label: 'Mass' }],
+    });
+  } else if (['venenatis', 'callisto', 'vetion'].includes(activityKey)) {
+    steps.push({
+      id: 'size', kind: 'buttons', prompt: 'How many players?',
+      options: [...numOptions(2, 10), { id: 'mass', label: 'Mass' }],
+    });
+  } else if (activityKey === 'nm' && preId === 'team') {
+    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(1, 5) });
+  }
+  // BA (5), Yama (2), Royal Titans (2) are fixed. ToB size comes from
+  // roles. Skilling, Zalcano, WAG, and NM mass are open.
+
+  steps.push({
+    id: 'region', kind: 'buttons', prompt: 'Which region?',
+    options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
+  });
+  steps.push({
+    id: 'world', kind: 'optionalText', prompt: 'Add the specific world number?',
+    typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
+    modalPlaceholder: '420',
+  });
+
+  if (act.partyHub) {
+    steps.push({
+      id: 'hub', kind: 'optionalText',
+      prompt: 'Party hub? (from the RuneLite Party plugin - the hub name you host under)',
+      typeLabel: 'hub name', modalTitle: 'Party hub', modalLabel: 'Party hub name',
+      modalPlaceholder: 'oath1',
+    });
+  }
+  if (activityKey === 'yama') {
+    steps.push({
+      id: 'contract', kind: 'optionalText', prompt: 'Add a contract?',
+      typeLabel: 'contract', modalTitle: 'Contract', modalLabel: 'Contract',
+      modalPlaceholder: 'None',
+    });
+  }
+  steps.push({
+    id: 'note', kind: 'optionalText', prompt: 'Add a note?',
+    typeLabel: 'note', modalTitle: 'Note', modalLabel: 'Note',
+    modalPlaceholder: 'Learners welcome', paragraph: true,
+  });
+
+  return steps;
+}
+
+function stepButtonsRows(stepId, options) {
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const o of options) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    const btn = new ButtonBuilder()
+      .setCustomId(`team:mk:${stepId}:${o.id}`)
+      .setLabel(o.label)
+      .setStyle(ButtonStyle.Danger);
+    if (o.emoji) btn.setEmoji(o.emoji);
+    row.addComponents(btn);
+  }
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+function renderCreationStep(creation) {
+  const step = creation.steps[creation.idx];
+  const act = ACTIVITIES[creation.activity];
+  const title = `${ACTIVITY_EMOJI[creation.activity] || ''} ${act.name}`.trim();
+  const content = `**${title}** (${creation.idx + 1}/${creation.steps.length})\n${step.prompt}`;
+  let components;
+  if (step.kind === 'buttons') {
+    components = stepButtonsRows(step.id, step.options);
+  } else if (step.kind === 'select') {
+    components = [
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`team:mksel:${step.id}`)
+          .setPlaceholder(step.placeholder || 'Pick one')
+          .addOptions(step.options.map((o) => ({ label: o.label, value: o.id })))
+      ),
+    ];
+  } else {
+    components = [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`team:mktype:${step.id}`).setLabel(`Type ${step.typeLabel}`).setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`team:mkskip:${step.id}`).setLabel('Skip').setStyle(ButtonStyle.Danger)
+      ),
+    ];
+  }
+  return { content, components };
+}
+
+async function startCreation(interaction, activityKey, preId) {
+  const steps = creationStepsFor(activityKey, preId);
+  const creation = {
+    activity: activityKey,
+    pre: preId || null,
+    steps,
+    idx: 0,
+    data: {},
+    expiresAt: Date.now() + CREATION_EXPIRE_MS,
+  };
+  pendingCreations.set(interaction.user.id, creation);
+  const { content, components } = renderCreationStep(creation);
+  await interaction.update({ content, components }).catch(() => {});
+}
+
+async function advanceCreation(interaction, creation) {
+  creation.idx += 1;
+  creation.expiresAt = Date.now() + CREATION_EXPIRE_MS;
+  if (creation.idx >= creation.steps.length) {
+    await finalizeCreation(interaction, creation);
+    return;
+  }
+  const { content, components } = renderCreationStep(creation);
+  await interaction.update({ content, components }).catch(() => {});
+}
+
+function buildTeamFromData(activityKey, preId, data, organizer) {
+  // Returns { team } or { error }. Pure.
+  const act = ACTIVITIES[activityKey];
+  if (!act) return { error: 'Unknown activity.' };
+
+  const team = {
+    activity: activityKey,
+    organizerId: organizer.id,
+    memberNames: { [organizer.id]: organizer.displayName },
+    members: {},
+    roles: rolesFor(activityKey, preId),
+    roleMode: roleModeFor(activityKey),
+    pre: preId || null,
+    world: data.world || null,
+    region: data.region || null,
+    hub: data.hub || null,
+    note: data.note || null,
+    contract: null,
+    scale: null,
+    raidLevel: null,
+    size: null,
+    mass: false,
+    fillPing: !!act.fillPing,
+    status: 'open',
+    createdAt: Date.now(),
+    closedAt: null,
+    messageId: null,
+    channelId: null,
+  };
+
+  // Organizer is in from the start on headcount teams. Role-based teams
+  // (ToB, BA, Yama) join by claiming a role button instead.
+  if (!team.roleMode) team.members[organizer.id] = true;
+
+  // Size
+  if (activityKey === 'nm') {
+    const nmCfg = nmSizeAndPing(preId);
+    team.fillPing = nmCfg.fillPing;
+    if (preId === 'mass') {
+      team.size = null;
+      team.mass = true;
+    } else {
+      team.size = data.size;
+    }
+  } else if (act.size && act.size.fixed) {
+    team.size = act.size.fixed;
+  } else if (activityKey === 'cox') {
+    // Set from raiders below.
+  } else if (data.size === 'mass') {
+    team.size = null;
+    team.mass = true;
+  } else if (data.size != null) {
+    team.size = data.size;
+  }
+
+  if (activityKey === 'toa') {
+    if (!data.tier) return { error: 'Pick a raid level.' };
+    team.raidLevel = data.tier;
+  }
+  if (activityKey === 'cox') {
+    if (!data.raiders) return { error: 'Pick how many raiders.' };
+    team.scale = { raiders: data.raiders, scalers: data.scalers || 0 };
+    team.size = data.raiders;
+  }
+  if (activityKey === 'tob' && !team.roles) return { error: 'Pick 4s or 5s first.' };
+  if (activityKey === 'yama') team.contract = data.contract || null;
+
+  return { team };
+}
+
+async function finalizeCreation(interaction, creation) {
+  pendingCreations.delete(interaction.user.id);
+  const { team, error } = buildTeamFromData(creation.activity, creation.pre, creation.data, interaction.user);
+  if (error || !team) {
+    await interaction.update({ content: error || 'Could not build that team.', components: [] }).catch(() => {});
+    return;
+  }
+
+  const channelId = teamsChannelId();
+  if (!channelId) {
+    await interaction.update({ content: 'Team finder is not set up yet. Tell staff.', components: [] }).catch(() => {});
+    return;
+  }
+  const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    await interaction.update({ content: 'Could not find the team finder channel. Tell staff.', components: [] }).catch(() => {});
+    return;
+  }
+
+  await interaction.update({ content: 'Posting your team...', components: [] }).catch(() => {});
+
+  const roleId = activityRoleId(creation.activity);
+  const content = roleId ? `<@&${roleId}>` : null;
+  let msg;
+  try {
+    team.channelId = channel.id;
+    msg = await channel.send({
+      content,
+      embeds: [buildTeamEmbed(team)],
+      components: buildListingComponents({ ...team, messageId: 'pending' }),
+    });
+  } catch (err) {
+    console.error('Team post failed:', err.message);
+    await interaction.followUp({ content: 'Could not post that team. Tell staff.', ephemeral: true }).catch(() => {});
+    return;
+  }
+
+  team.messageId = msg.id;
+  const state = loadState();
+  state.teams[msg.id] = team;
+  saveState(state);
+
+  // Patch the buttons with the real message id now that we have it.
+  await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
+
+  await interaction.followUp({ content: 'Team posted.', ephemeral: true }).catch(() => {});
+}
+
+// ─── Step interaction handlers ──────────────────────────────────────
+
+async function handleStepButton(interaction, stepId, value) {
+  const creation = getCreation(interaction.user.id);
+  if (!creation) {
+    await interaction.reply({ content: 'That creation expired. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const step = creation.steps[creation.idx];
+  if (!step || step.id !== stepId || step.kind !== 'buttons') {
+    await interaction.reply({ content: 'Out of sync. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const valid = (step.options || []).some((o) => o.id === value);
+  if (!valid) {
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Store numbers as numbers, keep ids like 'mass' or tiers as strings.
+  creation.data[stepId] = /^\d+$/.test(value) ? parseInt(value, 10) : value;
+  await advanceCreation(interaction, creation);
+}
+
+async function handleStepSelect(interaction) {
+  // customId 'team:mksel:<stepId>', values[0] = choice
+  const stepId = interaction.customId.split(':')[2];
+  const value = interaction.values && interaction.values[0];
+  const creation = getCreation(interaction.user.id);
+  if (!creation) {
+    await interaction.reply({ content: 'That creation expired. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const step = creation.steps[creation.idx];
+  if (!step || step.id !== stepId || step.kind !== 'select' || !value) {
+    await interaction.reply({ content: 'Out of sync. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const valid = (step.options || []).some((o) => o.id === value);
+  if (!valid) {
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  creation.data[stepId] = /^\d+$/.test(value) ? parseInt(value, 10) : value;
+  await advanceCreation(interaction, creation);
+}
+
+async function handleStepTypeOpen(interaction, stepId) {
+  const creation = getCreation(interaction.user.id);
+  if (!creation) {
+    await interaction.reply({ content: 'That creation expired. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const step = creation.steps[creation.idx];
+  if (!step || step.id !== stepId || step.kind !== 'optionalText') {
+    await interaction.reply({ content: 'Out of sync. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`team:mkmodal:${stepId}`)
+    .setTitle((step.modalTitle || 'Details').slice(0, 45))
+    .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId(`team:${f}`)
-          .setLabel(def.label)
-          .setStyle(def.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-          .setRequired(!!def.required)
-          .setMaxLength(def.maxLength)
-          .setPlaceholder(def.placeholder || '')
+          .setCustomId('team:mkvalue')
+          .setLabel((step.modalLabel || 'Value').slice(0, 45))
+          .setStyle(step.paragraph ? TextInputStyle.Paragraph : TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(stepId === 'note' ? 200 : 50)
+          .setPlaceholder(step.modalPlaceholder || '')
       )
     );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleStepSkip(interaction, stepId) {
+  const creation = getCreation(interaction.user.id);
+  if (!creation) {
+    await interaction.reply({ content: 'That creation expired. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
   }
-  return interaction.showModal(modal);
+  const step = creation.steps[creation.idx];
+  if (!step || step.id !== stepId || step.kind !== 'optionalText') {
+    await interaction.reply({ content: 'Out of sync. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  creation.data[stepId] = null;
+  await advanceCreation(interaction, creation);
+}
+
+async function handleStepModal(interaction) {
+  // customId 'team:mkmodal:<stepId>'
+  const stepId = interaction.customId.split(':')[2];
+  const creation = getCreation(interaction.user.id);
+  if (!creation) {
+    await interaction.reply({ content: 'That creation expired. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const step = creation.steps[creation.idx];
+  if (!step || step.id !== stepId || step.kind !== 'optionalText') {
+    await interaction.reply({ content: 'Out of sync. Start over with Create Team.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  let value;
+  try {
+    value = interaction.fields.getTextInputValue('team:mkvalue').trim();
+  } catch {
+    value = '';
+  }
+  if (!value) {
+    await interaction.reply({ content: 'That was blank. Try again or hit Skip.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (stepId === 'world' && !validateWorld(value)) {
+    await interaction.reply({ content: 'World must be a 3-digit number.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  creation.data[stepId] = value;
+  await advanceCreation(interaction, creation);
 }
 
 async function handleCreate(interaction) {
@@ -554,6 +916,8 @@ async function handleCreate(interaction) {
     await interaction.reply({ content: 'Slow down. One team a minute.', ephemeral: true }).catch(() => {});
     return;
   }
+  // Cooldown starts when they hit Create Team, not when the team posts.
+  createCooldowns.set(interaction.user.id, Date.now());
   const row = new ActionRowBuilder();
   for (const c of CATEGORIES) {
     row.addComponents(
@@ -582,7 +946,7 @@ async function handleTeamSelect(interaction) {
     await interaction.update({ content, components }).catch(() => {});
     return;
   }
-  await showTeamModal(interaction, activityKey, null).catch(() => {});
+  await startCreation(interaction, activityKey, null);
 }
 
 async function handlePreChoice(interaction, activityKey, preId) {
@@ -590,143 +954,7 @@ async function handlePreChoice(interaction, activityKey, preId) {
     await interaction.reply({ content: 'Unknown activity.', ephemeral: true }).catch(() => {});
     return;
   }
-  await showTeamModal(interaction, activityKey, preId).catch(() => {});
-}
-
-function buildTeamFromModal(activityKey, preId, fields, organizer) {
-  // Returns { team } or { error }. Pure apart from reading fields.
-  const act = ACTIVITIES[activityKey];
-  if (!act) return { error: 'Unknown activity.' };
-
-  const get = (name) => {
-    try {
-      return fields.getTextInputValue(`team:${name}`).trim();
-    } catch {
-      return '';
-    }
-  };
-
-  const world = get('world');
-  if (!validateWorld(world)) return { error: 'World must be a 3-digit number.' };
-
-  const hub = act.partyHub ? get('hub') : '';
-  if (act.partyHub && !hub) return { error: 'Party hub cannot be blank.' };
-  const note = get('note');
-
-  const team = {
-    activity: activityKey,
-    organizerId: organizer.id,
-    memberNames: { [organizer.id]: organizer.displayName },
-    members: {},
-    roles: rolesFor(activityKey, preId),
-    roleMode: roleModeFor(activityKey),
-    pre: preId || null,
-    world,
-    hub: hub || null,
-    note: note || null,
-    contract: null,
-    scale: null,
-    raidLevel: null,
-    size: null,
-    fillPing: !!act.fillPing,
-    status: 'open',
-    createdAt: Date.now(),
-    closedAt: null,
-    messageId: null,
-    channelId: null,
-  };
-
-  // Organizer is in from the start on headcount teams. Role-based teams
-  // (ToB, BA, Yama) join by claiming a role button instead.
-  if (!team.roleMode) team.members[organizer.id] = true;
-
-  // Size
-  if (activityKey === 'nm') {
-    const nmCfg = nmSizeAndPing(preId);
-    team.fillPing = nmCfg.fillPing;
-    if (nmCfg.size == null) {
-      team.size = null; // mass mode is open
-    } else {
-      const parsed = parseSizeInput(activityKey, get('size'));
-      if (parsed.error) return { error: parsed.error };
-      team.size = parsed.size;
-    }
-  } else if (act.size && act.size.fixed) {
-    team.size = act.size.fixed;
-  } else if (act.size) {
-    const parsed = parseSizeInput(activityKey, get('size'));
-    if (parsed.error) return { error: parsed.error };
-    team.size = parsed.size;
-  }
-
-  if (activityKey === 'toa') {
-    const lvl = parseRaidLevel(get('raidLevel'));
-    if (lvl == null) return { error: 'Raid level must be a number.' };
-    team.raidLevel = lvl;
-  }
-  if (activityKey === 'cox') {
-    const scale = parseCoxScale(get('scale'));
-    if (!scale) return { error: 'Scale looks like 3+2 (raiders + scalers).' };
-    team.scale = scale;
-    team.size = scale.raiders;
-  }
-  if (activityKey === 'tob' && !team.roles) return { error: 'Pick 4s or 5s first.' };
-  if (activityKey === 'yama') team.contract = get('contract') || null;
-
-  return { team };
-}
-
-async function handleTeamModal(interaction) {
-  // customId: 'team:modal:<activity>[:<preId>]'
-  const parts = interaction.customId.split(':');
-  const activityKey = parts[2];
-  const preId = parts.slice(3).join(':') || null;
-
-  const { team, error } = buildTeamFromModal(activityKey, preId, interaction.fields, interaction.user);
-  if (error || !team) {
-    await interaction.reply({ content: error || 'Could not build that team.', ephemeral: true }).catch(() => {});
-    return;
-  }
-
-  const channelId = teamsChannelId();
-  if (!channelId) {
-    await interaction.reply({ content: 'Team finder is not set up yet. Tell staff.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
-  if (!channel || !channel.isTextBased()) {
-    await interaction.reply({ content: 'Could not find the team finder channel. Tell staff.', ephemeral: true }).catch(() => {});
-    return;
-  }
-
-  await interaction.deferReply({ ephemeral: true });
-
-  const roleId = activityRoleId(activityKey);
-  const content = roleId ? `<@&${roleId}>` : null;
-  let msg;
-  try {
-    team.channelId = channel.id;
-    msg = await channel.send({
-      content,
-      embeds: [buildTeamEmbed(team)],
-      components: buildListingComponents({ ...team, messageId: 'pending' }),
-    });
-  } catch (err) {
-    console.error('Team post failed:', err.message);
-    await interaction.editReply({ content: 'Could not post that team. Tell staff.' }).catch(() => {});
-    return;
-  }
-
-  team.messageId = msg.id;
-  const state = loadState();
-  state.teams[msg.id] = team;
-  saveState(state);
-
-  // Patch the buttons with the real message id now that we have it.
-  await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
-
-  createCooldowns.set(interaction.user.id, Date.now());
-  await interaction.editReply({ content: 'Team posted.' }).catch(() => {});
+  await startCreation(interaction, activityKey, preId);
 }
 
 // ─── Listing interactions ───────────────────────────────────────────
@@ -836,6 +1064,7 @@ async function handleClose(interaction, msgId) {
 
 async function handleTeamButton(interaction) {
   // customId: team:create | team:cat:<id> | team:pre:<act>:<pre> |
+  // team:mk:<step>:<value> | team:mktype:<step> | team:mkskip:<step> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
   // team:close:<msg>
   const parts = interaction.customId.split(':');
@@ -843,6 +1072,9 @@ async function handleTeamButton(interaction) {
   if (action === 'create') return handleCreate(interaction);
   if (action === 'cat') return handleCategory(interaction, parts[2]);
   if (action === 'pre') return handlePreChoice(interaction, parts[2], parts.slice(3).join(':'));
+  if (action === 'mk') return handleStepButton(interaction, parts[2], parts.slice(3).join(':'));
+  if (action === 'mktype') return handleStepTypeOpen(interaction, parts[2]);
+  if (action === 'mkskip') return handleStepSkip(interaction, parts[2]);
   if (action === 'join') return handleJoin(interaction, parts[2]);
   if (action === 'leave') return handleLeave(interaction, parts[2]);
   if (action === 'role') return handleRoleClaim(interaction, parts[2], parseInt(parts[3], 10));
@@ -937,13 +1169,16 @@ module.exports = {
   applyJoin,
   applyLeave,
   applyRoleClaim,
-  buildTeamFromModal,
+  buildTeamFromData,
+  creationStepsFor,
+  REGIONS,
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
   handleTeamButton,
   handleTeamSelect,
-  handleTeamModal,
+  handleStepSelect,
+  handleTeamModal: handleStepModal,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
