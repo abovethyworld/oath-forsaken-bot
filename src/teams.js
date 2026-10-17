@@ -1,6 +1,6 @@
 // Team finder: button panel -> activity picker -> per-activity form ->
 // listing embed with Join/Leave or role-claim buttons. Organizer gets
-// Bump (re-posts the listing to the channel bottom) and Close Party.
+// Close Party (organizer or staff).
 // State lives in data/teams.json, same pattern as bounties.
 const {
   SlashCommandBuilder,
@@ -376,7 +376,8 @@ function buildTeamEmbed(team) {
   if (team.note) lines.push(`**Note:** ${team.note}`);
 
   const count = memberCount(team);
-  const sizeStr = team.size != null ? `${count}/${team.size}` : `${count} in`;
+  const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
+  const sizeStr = denom ? `${count}/${denom}` : `${count} in`;
   lines.push('');
   lines.push(`Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}`);
   if (team.status === 'closed') lines.push('**Closed.**');
@@ -416,7 +417,6 @@ function buildListingComponents(team) {
 
   rows.push(
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:bump:${msgId}`).setLabel('Bump').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger)
     )
   );
@@ -587,6 +587,10 @@ function buildTeamFromModal(activityKey, preId, fields, organizer) {
     messageId: null,
     channelId: null,
   };
+
+  // Organizer is in from the start on headcount teams. Role-based teams
+  // (ToB, BA, Yama) join by claiming a role button instead.
+  if (!team.roleMode) team.members[organizer.id] = true;
 
   // Size
   if (activityKey === 'nm') {
@@ -764,47 +768,6 @@ async function handleRoleClaim(interaction, msgId, roleIdx) {
   if (res.filled && team.fillPing) await sendFillPing(interaction.client, team);
 }
 
-async function handleBump(interaction, msgId) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team || team.status !== 'open') {
-    await interaction.reply({ content: 'Nothing to bump.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  if (interaction.user.id !== team.organizerId) {
-    await interaction.reply({ content: 'Only the organizer can bump this.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  await interaction.deferReply({ ephemeral: true });
-  const channel = await interaction.client.channels.fetch(team.channelId).catch(() => null);
-  if (!channel || !channel.isTextBased()) {
-    await interaction.editReply({ content: 'Could not find the channel.' }).catch(() => {});
-    return;
-  }
-  let msg;
-  try {
-    // Re-post at the bottom without re-tagging the activity role.
-    // Buttons are patched with the real message id after send, same as post.
-    msg = await channel.send({
-      embeds: [buildTeamEmbed(team)],
-      components: buildListingComponents({ ...team, messageId: 'pending' }),
-    });
-  } catch (err) {
-    console.error('Team bump failed:', err.message);
-    await interaction.editReply({ content: 'Could not bump that team.' }).catch(() => {});
-    return;
-  }
-  const oldId = team.messageId;
-  team.messageId = msg.id;
-  await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team bump patch failed:', err.message));
-  const oldMsg = await channel.messages.fetch(oldId).catch(() => null);
-  if (oldMsg) await oldMsg.delete().catch(() => {});
-  delete state.teams[oldId];
-  state.teams[msg.id] = team;
-  saveState(state);
-  await interaction.editReply({ content: 'Bumped to the bottom.' }).catch(() => {});
-}
-
 async function handleClose(interaction, msgId) {
   const state = loadState();
   const team = state.teams[msgId];
@@ -826,7 +789,7 @@ async function handleClose(interaction, msgId) {
 async function handleTeamButton(interaction) {
   // customId: team:create | team:cat:<id> | team:pre:<act>:<pre> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
-  // team:bump:<msg> | team:close:<msg>
+  // team:close:<msg>
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'create') return handleCreate(interaction);
@@ -835,13 +798,12 @@ async function handleTeamButton(interaction) {
   if (action === 'join') return handleJoin(interaction, parts[2]);
   if (action === 'leave') return handleLeave(interaction, parts[2]);
   if (action === 'role') return handleRoleClaim(interaction, parts[2], parseInt(parts[3], 10));
-  if (action === 'bump') return handleBump(interaction, parts[2]);
   if (action === 'close') return handleClose(interaction, parts[2]);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
-// Unfilled open teams expire after 24h. Closed listings are deleted 24h
-// after closing. Filled teams stay until the organizer closes them.
+// Unfilled open teams expire after 24h. Filled open teams auto-close
+// after 24h (no ping). Closed listings are deleted 24h after closing.
 // Idempotent across restarts; missing messages just drop their state.
 function shouldSweepTeam(team, now) {
   if (team.status === 'closed') {
@@ -851,11 +813,23 @@ function shouldSweepTeam(team, now) {
   return now - (team.createdAt || 0) > EXPIRE_MS;
 }
 
+function shouldAutoClose(team, now) {
+  return team.status === 'open' && isTeamFull(team) && now - (team.createdAt || 0) > EXPIRE_MS;
+}
+
 async function sweepExpiredTeams(client) {
   const state = loadState();
   const now = Date.now();
   let changed = false;
   for (const [id, team] of Object.entries(state.teams)) {
+    // Auto-close filled teams at 24h: mark closed, strip buttons, no ping.
+    if (shouldAutoClose(team, now)) {
+      team.status = 'closed';
+      team.closedAt = now;
+      changed = true;
+      await refreshListing(client, team).catch((err) => console.warn('Team auto-close refresh failed:', err.message));
+      continue;
+    }
     if (!shouldSweepTeam(team, now)) continue;
     changed = true;
     try {
@@ -923,6 +897,7 @@ module.exports = {
   handleTeamSelect,
   handleTeamModal,
   shouldSweepTeam,
+  shouldAutoClose,
   sweepExpiredTeams,
   commands,
 };
