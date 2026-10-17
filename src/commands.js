@@ -20,6 +20,7 @@ const recruit = require('./recruit');
 const permissions = require('./permissions');
 const roster = require('./roster');
 const lore = require('./lore');
+const bounty = require('./bounty');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -253,6 +254,7 @@ const commands = [
   ...ccChecklist.commands,
   ...recruit.commands,
   ...permissions.commands,
+  ...bounty.commands,
   ...roster.commands,
   ...lore.commands,
 ];
