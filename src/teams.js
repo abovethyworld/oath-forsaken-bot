@@ -547,7 +547,7 @@ function creationStepsFor(activityKey, preId) {
   } else if (activityKey === 'nex') {
     steps.push({
       id: 'size', kind: 'buttons', prompt: 'How many players?',
-      options: [{ id: '3', label: '3' }, { id: '5', label: '5' }, { id: 'mass', label: 'Mass' }],
+      options: [{ id: '2', label: '2' }, { id: '3', label: '3' }, { id: '5', label: '5' }, { id: '8', label: '8' }, { id: 'mass', label: 'Mass (10+)' }],
     });
   } else if (activityKey === 'huey') {
     steps.push({
