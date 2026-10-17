@@ -376,7 +376,7 @@ function applyRoleClaim(team, userId, roleIdx) {
 function teamTitle(team) {
   const act = ACTIVITIES[team.activity] || {};
   const emoji = ACTIVITY_EMOJI[team.activity] ? `${ACTIVITY_EMOJI[team.activity]} ` : '';
-  const base = `${act.short || act.name || 'Team'} Team`;
+  const base = `${act.short || act.name || 'Team'} - Find a Team`;
   const pre = preLabel(team.activity, team.pre);
   if (team.status === 'closed') return `${emoji}${base} (Closed)`;
   return pre ? `${emoji}${base} (${pre})` : `${emoji}${base}`;
@@ -411,7 +411,7 @@ function buildTeamEmbed(team) {
     }
   } else {
     const memberIds = Object.keys(team.members || {});
-    lines.push(`**In:** ${memberIds.length ? memberIds.map((id) => names[id] || 'claimed').join(', ') : 'no one yet'}`);
+    lines.push(`**Signed up:** ${memberIds.length ? memberIds.map((id) => names[id] || 'claimed').join(', ') : 'no one yet'}`);
   }
 
   lines.push('');
