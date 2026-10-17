@@ -17,6 +17,9 @@ const { isStaff, ZAMORAK_RED, getRoleById } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bounties.json');
 const CLAIM_ARCHIVE_MIN = 4320; // 3 days
+const DAY_MS = 24 * 3600 * 1000;
+// Time limit is set by threat level, not by hand.
+const DAYS_BY_THREAT = { Easy: 7, Medium: 14, Hard: 21, Extreme: 21 };
 // Clan member roles allowed to claim: Iron Sworn, Unbound, Friend of the Clan.
 const GUILD_MEMBER_ROLES = (config.bounty && config.bounty.memberRoleIds) || [];
 
@@ -91,7 +94,7 @@ async function postCommand(interaction) {
   const target = interaction.options.getString('target', true).trim();
   const location = interaction.options.getString('location', true).trim();
   const threat = interaction.options.getString('threat', true);
-  const days = interaction.options.getInteger('days', true);
+  const days = DAYS_BY_THREAT[threat] || 14;
   const wiki = interaction.options.getString('wiki')?.trim();
   const image = interaction.options.getString('image')?.trim();
   const channelId = bountyConfig().channelId;
@@ -177,6 +180,7 @@ async function postCommand(interaction) {
     active: true,
     winnerId: null,
     createdAt: Date.now(),
+    expiresAt: Date.now() + days * DAY_MS,
     createdBy: interaction.user.id,
   };
   saveState(state);
@@ -291,6 +295,14 @@ async function handleGrant(interaction, threadId) {
         });
         await msg.edit({ embeds: [done], components: [] });
       }
+      if (chan && chan.isTextBased()) {
+        await chan
+          .send(
+            `🩸 Contract claimed. **${bounty.target}** falls to <@${winner.id}>. ` +
+              `A new contract will be nailed to the board soon.`
+          )
+          .catch(() => {});
+      }
     } catch (err) {
       console.warn('Bounty close edit failed:', err.message);
     }
@@ -345,6 +357,40 @@ async function handleLock(interaction, threadId) {
   await interaction.reply({ content: 'Thread locked and archived.', ephemeral: true }).catch(() => {});
 }
 
+// Daily sweep: expire bounties past their time limit. Marks them inactive,
+// closes the contract embed, and posts an expiry notice to the board so
+// staff knows a new contract is needed. Idempotent across restarts.
+async function sweepExpiredBounties(client) {
+  const state = loadState();
+  const now = Date.now();
+  let changed = false;
+  for (const [id, b] of Object.entries(state.bounties)) {
+    if (!b.active) continue;
+    const expiresAt = b.expiresAt || (b.createdAt || 0) + (b.days || 14) * DAY_MS;
+    if (expiresAt > now) continue;
+    b.active = false;
+    changed = true;
+    try {
+      const chan = await client.channels.fetch(b.channelId).catch(() => null);
+      if (!chan || !chan.isTextBased()) continue;
+      const msg = await chan.messages.fetch(id).catch(() => null);
+      if (msg && msg.embeds[0]) {
+        const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
+        await msg.edit({ embeds: [expired], components: [] });
+      }
+      await chan
+        .send(
+          `⌛ The contract on **${b.target}** expired with no claim. ` +
+            `A new contract will be nailed to the board soon.`
+        )
+        .catch(() => {});
+    } catch (err) {
+      console.warn('Bounty expiry sweep failed:', err.message);
+    }
+  }
+  if (changed) saveState(state);
+}
+
 async function handleBountyButton(interaction) {
   // customId: 'bounty:claim:<msgId>' | 'bounty:grant:<threadId>' | 'bounty:reject:<threadId>' | 'bounty:lock:<threadId>'
   const [, action, id] = interaction.customId.split(':');
@@ -377,7 +423,6 @@ const commands = [
                 { name: 'Extreme', value: 'Extreme' }
               )
           )
-          .addIntegerOption((o) => o.setName('days').setDescription('Time limit in days').setRequired(true).setMinValue(1).setMaxValue(90))
           .addStringOption((o) => o.setName('wiki').setDescription('Wiki URL (defaults to OSRS wiki)').setRequired(false))
           .addStringOption((o) => o.setName('image').setDescription('Thumbnail image URL').setRequired(false))
       ),
@@ -387,4 +432,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleBountyButton };
+module.exports = { commands, handleBountyButton, sweepExpiredBounties };
