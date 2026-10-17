@@ -228,11 +228,12 @@ function saveState(state) {
 
 // ─── Pure helpers (unit-tested) ─────────────────────────────────────
 
-// ToA raid level -> entry mode, per the OSRS wiki.
+// ToA raid level -> mode, per the OSRS wiki.
 function toaModeForLevel(n) {
   if (n < 150) return 'Entry';
   if (n < 300) return 'Normal';
-  return 'Expert';
+  if (n < 350) return 'Expert';
+  return 'High Invo';
 }
 
 // "3+2" -> { raiders: 3, scalers: 2 }. "5" -> { raiders: 5, scalers: 0 }.
@@ -537,9 +538,9 @@ function creationStepsFor(activityKey, preId) {
     steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(2, 8) });
     steps.push({
       id: 'tier', kind: 'buttons', prompt: 'What raid level?', options: [
-        { id: 'Entry', label: 'Entry (0-149)' },
         { id: 'Normal', label: 'Normal (150-299)' },
-        { id: 'Expert', label: 'Expert (300+)' },
+        { id: 'Expert', label: 'Expert (300-349)' },
+        { id: 'High Invo', label: 'High Invo (350+)' },
       ],
     });
   } else if (activityKey === 'cox') {
