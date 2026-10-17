@@ -861,6 +861,13 @@
     ],
     "driftLogChannelId": "1558881164452696105"
   },
+  "bounty": {
+    "_comment": "Bounty board.",
+    "channelId": "1560854941642399776",
+    "roleId": "1560855011163115586",
+    "roleName": "Champion of Chaos",
+    "memberRoleIds": ["1558540424048803860", "1558540434652008569", "1558621489283211316"]
+  },
   "roles": {
     "oathForsakersId": "1559575596407857182"
   },
