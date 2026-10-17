@@ -31,7 +31,7 @@ const { getPingRole } = require('./utils');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
-const { handleTeamModal, handleTeamSelect, sweepExpiredTeams } = require('./teams');
+const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams } = require('./teams');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -142,6 +142,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleMemberSelect(interaction);
       } else if (interaction.customId === 'team:pick') {
         await handleTeamSelect(interaction);
+      } else if (interaction.customId.startsWith('team:mksel:')) {
+        await handleTeamStepSelect(interaction);
       } else if (interaction.customId.startsWith('apply:age:')) {
         await handleAgeSelect(interaction);
       } else {

@@ -5,6 +5,7 @@
 const assert = require('node:assert');
 const {
   ACTIVITIES,
+  REGIONS,
   toaModeForLevel,
   parseCoxScale,
   parseSizeInput,
@@ -18,7 +19,8 @@ const {
   applyJoin,
   applyLeave,
   applyRoleClaim,
-  buildTeamFromModal,
+  buildTeamFromData,
+  creationStepsFor,
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
@@ -59,10 +61,81 @@ test('all 17 activities defined with name, category, and config role', () => {
   }
 });
 
-test('every activity has at most 5 modal fields', () => {
-  for (const [key, a] of Object.entries(ACTIVITIES)) {
-    assert.ok((a.fields || []).length <= 5, `${key} has ${(a.fields || []).length} modal fields`);
+test('creation steps exist for every activity and end with region/world/note', () => {
+  for (const key of Object.keys(ACTIVITIES)) {
+    const pre = ACTIVITIES[key].pre
+      ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
+      : null;
+    const steps = creationStepsFor(key, pre);
+    assert.ok(steps.length >= 2, `${key} has no steps`);
+    const ids = steps.map((s) => s.id);
+    assert.ok(ids.includes('region'), `${key} missing region step`);
+    assert.ok(ids.includes('note'), `${key} missing note step`);
+    // No em dashes in prompts.
+    for (const s of steps) assert.ok(!s.prompt.includes('—'), `${key} step ${s.id} has em dash`);
   }
+});
+
+test('skilling activities and WAG skip the party hub step', () => {
+  for (const key of ['wintertodt', 'gotr', 'tempoross', 'wag']) {
+    const pre = key === 'wag' ? 'mass' : null;
+    const ids = creationStepsFor(key, pre).map((s) => s.id);
+    assert.ok(!ids.includes('hub'), `${key} should not have a hub step`);
+  }
+  assert.ok(creationStepsFor('zalcano', null).map((s) => s.id).includes('hub'), 'zalcano keeps hub');
+});
+
+test('ToA steps include size buttons 1-8 and tier buttons', () => {
+  const steps = creationStepsFor('toa', null);
+  const size = steps.find((s) => s.id === 'size');
+  assert.strictEqual(size.kind, 'buttons');
+  assert.deepStrictEqual(size.options.map((o) => o.id), ['1', '2', '3', '4', '5', '6', '7', '8']);
+  const tier = steps.find((s) => s.id === 'tier');
+  assert.deepStrictEqual(tier.options.map((o) => o.id), ['Entry', 'Normal', 'Expert']);
+});
+
+test('Mass button is on Nex, Venenatis, Callisto, Vetion, and Hueycoatl only', () => {
+  const withMass = ['nex', 'venenatis', 'callisto', 'vetion', 'huey'];
+  for (const key of withMass) {
+    const pre = key === 'huey' ? 'public' : null;
+    const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
+    assert.ok(size, `${key} missing size step`);
+    assert.ok(size.options.some((o) => o.id === 'mass'), `${key} size step missing Mass button`);
+  }
+  // Hueycoatl: 3, 4, 5 + Mass.
+  const hueySize = creationStepsFor('huey', 'public').find((s) => s.id === 'size');
+  assert.deepStrictEqual(hueySize.options.map((o) => o.id), ['3', '4', '5', 'mass']);
+  // Nex and the wildy bosses: 2-10 + Mass.
+  for (const key of ['nex', 'venenatis', 'callisto', 'vetion']) {
+    const size = creationStepsFor(key, null).find((s) => s.id === 'size');
+    assert.deepStrictEqual(
+      size.options.map((o) => o.id),
+      ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'mass']
+    );
+  }
+  // No one else gets a Mass button on the size step.
+  for (const key of Object.keys(ACTIVITIES)) {
+    if (withMass.includes(key)) continue;
+    const pre = ACTIVITIES[key].pre
+      ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
+      : null;
+    const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
+    if (size) assert.ok(!size.options.some((o) => o.id === 'mass'), `${key} should not have a Mass button`);
+  }
+});
+
+test('CoX steps are raiders then scalers', () => {
+  const steps = creationStepsFor('cox', 'normal');
+  const raiders = steps.find((s) => s.id === 'raiders');
+  const scalers = steps.find((s) => s.id === 'scalers');
+  assert.ok(raiders && scalers);
+  assert.deepStrictEqual(raiders.options.map((o) => o.id).slice(0, 3), ['1', '2', '3']);
+  assert.strictEqual(scalers.options[0].id, '0');
+  assert.strictEqual(scalers.options[0].label, 'None');
+});
+
+test('four regions are offered', () => {
+  assert.deepStrictEqual(REGIONS.map((r) => r.id), ['US', 'UK', 'DE', 'AU']);
 });
 
 test('pre-choice activities have matching PRE_CHOICES entries', () => {
@@ -229,67 +302,62 @@ test('pick mode (yama): both can pick mage, full at 2', () => {
   assert.ok(!isTeamFull(t));
 });
 
-// ─── Modal -> team object ─────────────────────────────────────────
-
-function mockFields(values) {
-  return {
-    getTextInputValue: (id) => {
-      if (!(id in values)) throw new Error('missing field');
-      return values[id];
-    },
-  };
-}
+// ─── Step data -> team object ───────────────────────────────────────
 
 const org = { id: 'org1', displayName: 'Gavin' };
 
-test('buildTeamFromModal builds a valid ToA team', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds a valid ToA team', () => {
+  const { team, error } = buildTeamFromData(
     'toa', null,
-    mockFields({ 'team:size': '4', 'team:raidLevel': '250', 'team:world': '388', 'team:hub': 'oath1', 'team:note': 'learners welcome' }),
+    { size: 4, tier: 'Normal', region: 'US', world: '388', hub: 'oath1', note: 'learners welcome' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, 4);
-  assert.strictEqual(team.raidLevel, 250);
+  assert.strictEqual(team.raidLevel, 'Normal');
   assert.strictEqual(team.world, '388');
+  assert.strictEqual(team.region, 'US');
   assert.strictEqual(team.hub, 'oath1');
   assert.strictEqual(team.fillPing, true);
 });
 
-test('buildTeamFromModal rejects a bad world', () => {
-  const { error } = buildTeamFromModal(
+test('buildTeamFromData requires a ToA tier', () => {
+  const { error } = buildTeamFromData(
     'toa', null,
-    mockFields({ 'team:size': '4', 'team:raidLevel': '250', 'team:world': 'abc', 'team:hub': 'oath1', 'team:note': '' }),
+    { size: 4, region: 'US', world: '388' },
     org
   );
   assert.ok(error);
 });
 
-test('buildTeamFromModal parses CoX scale into size', () => {
-  const { team, error } = buildTeamFromModal(
-    'cox', 'large',
-    mockFields({ 'team:scale': '3+2', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+test('buildTeamFromData builds CoX scale from raiders and scalers', () => {
+  const { team, error } = buildTeamFromData(
+    'cox', 'normal',
+    { raiders: 3, scalers: 2, region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, 3);
   assert.deepStrictEqual(team.scale, { raiders: 3, scalers: 2 });
-  assert.strictEqual(team.pre, 'large');
+  assert.strictEqual(team.pre, 'normal');
 });
 
-test('buildTeamFromModal rejects a bad CoX scale', () => {
-  const { error } = buildTeamFromModal(
-    'cox', 'normal',
-    mockFields({ 'team:scale': 'lots', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+test('buildTeamFromData handles CoX with no scalers', () => {
+  const { team, error } = buildTeamFromData(
+    'cox', 'cm',
+    { raiders: 5, scalers: 0, region: 'UK' },
     org
   );
-  assert.ok(error);
+  assert.ok(!error, error);
+  assert.deepStrictEqual(team.scale, { raiders: 5, scalers: 0 });
+  assert.strictEqual(team.world, null);
+  assert.strictEqual(team.region, 'UK');
 });
 
-test('buildTeamFromModal builds ToB with 5s roles', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds ToB with 5s roles', () => {
+  const { team, error } = buildTeamFromData(
     'tob', '5s-hard',
-    mockFields({ 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
@@ -297,10 +365,10 @@ test('buildTeamFromModal builds ToB with 5s roles', () => {
   assert.strictEqual(team.roleMode, 'exclusive');
 });
 
-test('buildTeamFromModal builds BA with fixed size and roles', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds BA with fixed size and roles', () => {
+  const { team, error } = buildTeamFromData(
     'ba', null,
-    mockFields({ 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
@@ -308,10 +376,10 @@ test('buildTeamFromModal builds BA with fixed size and roles', () => {
   assert.ok(team.roles.includes('Flex'));
 });
 
-test('buildTeamFromModal builds Yama duo with optional contract', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds Yama duo with optional contract', () => {
+  const { team, error } = buildTeamFromData(
     'yama', null,
-    mockFields({ 'team:contract': 'Oathplate', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { region: 'US', world: '388', hub: 'oath1', contract: 'Oathplate', note: '' },
     org
   );
   assert.ok(!error, error);
@@ -320,41 +388,34 @@ test('buildTeamFromModal builds Yama duo with optional contract', () => {
   assert.strictEqual(team.fillPing, false);
 });
 
-test('buildTeamFromModal builds Nightmare mass as open', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds Nightmare mass as open with mass flag', () => {
+  const { team, error } = buildTeamFromData(
     'nm', 'mass',
-    mockFields({ 'team:size': '', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, null);
+  assert.strictEqual(team.mass, true);
   assert.strictEqual(team.fillPing, false);
 });
 
-test('buildTeamFromModal builds Nightmare team with a valid size', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds Nightmare team with picked size', () => {
+  const { team, error } = buildTeamFromData(
     'nm', 'team',
-    mockFields({ 'team:size': '3', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { size: 3, region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, 3);
+  assert.strictEqual(team.mass, false);
   assert.strictEqual(team.fillPing, true);
 });
 
-test('buildTeamFromModal caps Nightmare team at 5', () => {
-  const { error } = buildTeamFromModal(
-    'nm', 'team',
-    mockFields({ 'team:size': '8', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
-    org
-  );
-  assert.ok(error);
-});
-
-test('buildTeamFromModal builds skilling mass without hub', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData builds skilling mass without hub', () => {
+  const { team, error } = buildTeamFromData(
     'wintertodt', null,
-    mockFields({ 'team:world': '388', 'team:note': '' }),
+    { region: 'US', world: '388', note: '' },
     org
   );
   assert.ok(!error, error);
@@ -363,22 +424,77 @@ test('buildTeamFromModal builds skilling mass without hub', () => {
   assert.strictEqual(team.fillPing, false);
 });
 
+test('buildTeamFromData sets mass flag on Nex Mass pick', () => {
+  const { team, error } = buildTeamFromData(
+    'nex', null,
+    { size: 'mass', region: 'US' },
+    org
+  );
+  assert.ok(!error, error);
+  assert.strictEqual(team.size, null);
+  assert.strictEqual(team.mass, true);
+  assert.strictEqual(team.fillPing, true);
+});
+
+test('buildTeamFromData sets mass flag on Hueycoatl Mass pick', () => {
+  const { team, error } = buildTeamFromData(
+    'huey', 'public',
+    { size: 'mass', region: 'DE', world: '422' },
+    org
+  );
+  assert.ok(!error, error);
+  assert.strictEqual(team.size, null);
+  assert.strictEqual(team.mass, true);
+});
+
+test('buildTeamEmbed shows Mass for mass teams', () => {
+  const team = {
+    activity: 'nex', status: 'open', size: null, mass: true, roleMode: null,
+    members: { u1: true, u2: true }, memberNames: { u1: 'Gavin', u2: 'Suga', org1: 'Gavin' },
+    organizerId: 'org1', region: 'US', messageId: 'm1',
+  };
+  const desc = buildTeamEmbed(team).toJSON().description;
+  assert.ok(desc.includes('· Mass'), `expected Mass in embed, got: ${desc}`);
+  assert.ok(!/\d+\/\d+/.test(desc), 'mass team should not show a fill count like 2/4');
+  assert.ok(!/\d+ in/.test(desc), 'mass team should not show an open count like 2 in');
+});
+
+test('buildTeamEmbed shows region only when world is skipped', () => {
+  const team = {
+    activity: 'toa', status: 'open', size: 4, roleMode: null,
+    members: { org1: true }, memberNames: { org1: 'Gavin' },
+    organizerId: 'org1', region: 'UK', raidLevel: 'Expert', messageId: 'm1',
+  };
+  const desc = buildTeamEmbed(team).toJSON().description;
+  assert.ok(desc.includes('Region:** UK') || desc.includes('Region: UK'), `expected region line, got: ${desc}`);
+  assert.ok(desc.includes('Raid level: Expert'), `expected tier line, got: ${desc}`);
+});
+
+test('buildTeamEmbed shows world with region in parentheses', () => {
+  const team = {
+    activity: 'toa', status: 'open', size: 4, roleMode: null,
+    members: { org1: true }, memberNames: { org1: 'Gavin' },
+    organizerId: 'org1', region: 'US', world: '420', raidLevel: 'Entry', messageId: 'm1',
+  };
+  const desc = buildTeamEmbed(team).toJSON().description;
+  assert.ok(desc.includes('420 (US)'), `expected world with region, got: ${desc}`);
+});
+
 // ─── Embed + components ───────────────────────────────────────────
 
 test('buildTeamEmbed uses Zamorak red and has no em dashes', () => {
   const team = {
     activity: 'toa', status: 'open', size: 4, roleMode: null, roles: null,
     members: { u1: true }, memberNames: { u1: 'Gavin', org1: 'Gavin' },
-    organizerId: 'org1', world: '388', hub: 'oath1', note: 'learners welcome',
-    raidLevel: 250, messageId: 'm1',
+    organizerId: 'org1', world: '388', region: 'US', hub: 'oath1', note: 'learners welcome',
+    raidLevel: 'Normal', messageId: 'm1',
   };
   const embed = buildTeamEmbed(team);
   const json = embed.toJSON();
   assert.strictEqual(json.color, ZAMORAK_RED);
   assert.ok(!json.description.includes('—'), 'em dash found in embed');
   assert.ok(!json.title.includes('—'), 'em dash found in title');
-  assert.ok(json.description.includes('Normal'), 'raid level mode label missing');
-  assert.ok(json.description.includes('2/4') === false, 'count should be 1/4');
+  assert.ok(json.description.includes('Raid level: Normal'), 'raid level tier label missing');
   assert.ok(json.description.includes('1/4'));
 });
 
@@ -463,10 +579,10 @@ test('shouldAutoClose fires for filled open teams older than 24h', () => {
   assert.strictEqual(shouldAutoClose({ ...old, status: 'closed' }, now), false);
 });
 
-test('buildTeamFromModal auto-adds the organizer on headcount teams', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData auto-adds the organizer on headcount teams', () => {
+  const { team, error } = buildTeamFromData(
     'toa', null,
-    mockFields({ 'team:size': '4', 'team:raidLevel': '250', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { size: 4, tier: 'Normal', region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
@@ -474,10 +590,10 @@ test('buildTeamFromModal auto-adds the organizer on headcount teams', () => {
   assert.strictEqual(memberCount(team), 1);
 });
 
-test('buildTeamFromModal does not auto-add the organizer on role teams', () => {
-  const { team, error } = buildTeamFromModal(
+test('buildTeamFromData does not auto-add the organizer on role teams', () => {
+  const { team, error } = buildTeamFromData(
     'tob', '4s',
-    mockFields({ 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
