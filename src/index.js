@@ -30,6 +30,7 @@ const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
+const { sweepExpiredBounties } = require('./bounty');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -90,6 +91,7 @@ client.once(Events.ClientReady, async (c) => {
       await syncReminders(client);
       await syncDrift(client);
       await syncCalendar(client);
+      await sweepExpiredBounties(client);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -100,6 +102,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
+  setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
