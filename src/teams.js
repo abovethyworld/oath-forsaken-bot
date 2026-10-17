@@ -136,6 +136,48 @@ const CATEGORIES = [
   { id: 'bosses', label: 'Group Bosses', emoji: '💀' },
 ];
 
+// Custom emojis matching the #roles panel buttons.
+const ACTIVITY_EMOJI = {
+  toa: '<:toa:1558470672986939634>',
+  cox: '<:cox:1558470688644268187>',
+  tob: '<:tob:1558470703899217945>',
+  wintertodt: '<:wintertodt:1558470813584465960>',
+  gotr: '<:gotr:1558470845918220318>',
+  tempoross: '<:tempoross:1558470796752457779>',
+  zalcano: '<:zalcano:1558470781946568724>',
+  ba: '<:barbarianassault:1558470749919125557>',
+  nex: '<:nex:1558470907956170923>',
+  yama: '<:yama:1558470765639372800>',
+  huey: '<:hueycoatl:1558470719078146068>',
+  royals: '<:royaltitans:1558470734227972227>',
+  venenatis: '<:venenatis:1558470861126897767>',
+  callisto: '<:callisto:1558470876075270145>',
+  vetion: '<:vetion:1558470891049062400>',
+  nm: '<:nightmare:1558470923273637949>',
+  wag: '<:wildyagility:1558470829187006547>',
+};
+
+// For select menus: { id, name } pairs.
+const ACTIVITY_EMOJI_OBJ = {
+  toa: { id: '1558470672986939634', name: 'toa' },
+  cox: { id: '1558470688644268187', name: 'cox' },
+  tob: { id: '1558470703899217945', name: 'tob' },
+  wintertodt: { id: '1558470813584465960', name: 'wintertodt' },
+  gotr: { id: '1558470845918220318', name: 'gotr' },
+  tempoross: { id: '1558470796752457779', name: 'tempoross' },
+  zalcano: { id: '1558470781946568724', name: 'zalcano' },
+  ba: { id: '1558470749919125557', name: 'barbarianassault' },
+  nex: { id: '1558470907956170923', name: 'nex' },
+  yama: { id: '1558470765639372800', name: 'yama' },
+  huey: { id: '1558470719078146068', name: 'hueycoatl' },
+  royals: { id: '1558470734227972227', name: 'royaltitans' },
+  venenatis: { id: '1558470861126897767', name: 'venenatis' },
+  callisto: { id: '1558470876075270145', name: 'callisto' },
+  vetion: { id: '1558470891049062400', name: 'vetion' },
+  nm: { id: '1558470923273637949', name: 'nightmare' },
+  wag: { id: '1558470829187006547', name: 'wildyagility' },
+};
+
 // Pre-modal button steps. Label shown on the listing too.
 const PRE_CHOICES = {
   tobScale: {
@@ -333,9 +375,11 @@ function applyRoleClaim(team, userId, roleIdx) {
 
 function teamTitle(team) {
   const act = ACTIVITIES[team.activity] || {};
+  const emoji = ACTIVITY_EMOJI[team.activity] ? `${ACTIVITY_EMOJI[team.activity]} ` : '';
   const base = `${act.short || act.name || 'Team'} Team`;
   const pre = preLabel(team.activity, team.pre);
-  return team.status === 'closed' ? `${base} (Closed)` : pre ? `${base} (${pre})` : base;
+  if (team.status === 'closed') return `${emoji}${base} (Closed)`;
+  return pre ? `${emoji}${base} (${pre})` : `${emoji}${base}`;
 }
 
 function buildTeamEmbed(team) {
@@ -371,9 +415,9 @@ function buildTeamEmbed(team) {
   }
 
   lines.push('');
-  if (team.world) lines.push(`**World:** ${team.world}`);
-  if (team.hub) lines.push(`**Party hub:** ${team.hub}`);
-  if (team.note) lines.push(`**Note:** ${team.note}`);
+  if (team.world) lines.push(`🌍 **World:** ${team.world}`);
+  if (team.hub) lines.push(`👥 **Party hub:** ${team.hub}`);
+  if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
   const count = memberCount(team);
   const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
@@ -444,7 +488,11 @@ function teamPanelPayload() {
 function categorySelectRow(catId) {
   const options = Object.entries(ACTIVITIES)
     .filter(([, a]) => a.category === catId)
-    .map(([key, a]) => ({ label: a.name, value: key }));
+    .map(([key, a]) => {
+      const opt = { label: a.name, value: key };
+      if (ACTIVITY_EMOJI_OBJ[key]) opt.emoji = ACTIVITY_EMOJI_OBJ[key];
+      return opt;
+    });
   return [
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder().setCustomId('team:pick').setPlaceholder('Pick an activity').addOptions(options)
