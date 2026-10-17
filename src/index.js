@@ -31,6 +31,7 @@ const { getPingRole } = require('./utils');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
+const { handleTeamModal, handleTeamSelect, sweepExpiredTeams } = require('./teams');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -92,6 +93,7 @@ client.once(Events.ClientReady, async (c) => {
       await syncDrift(client);
       await syncCalendar(client);
       await sweepExpiredBounties(client);
+      await sweepExpiredTeams(client);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -103,6 +105,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
+  setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -137,6 +140,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId === 'member:select') {
         await handleMemberSelect(interaction);
+      } else if (interaction.customId === 'team:pick') {
+        await handleTeamSelect(interaction);
       } else if (interaction.customId.startsWith('apply:age:')) {
         await handleAgeSelect(interaction);
       } else {
@@ -147,6 +152,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const [modalKind] = interaction.customId.split(':');
       if (modalKind === 'suggest') {
         await handleSuggestModal(interaction);
+      } else if (modalKind === 'team') {
+        await handleTeamModal(interaction);
       } else {
         await handleModalSubmit(interaction);
       }
