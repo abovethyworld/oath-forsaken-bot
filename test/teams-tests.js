@@ -85,11 +85,14 @@ test('skilling activities and WAG skip the party hub step', () => {
   assert.ok(creationStepsFor('zalcano', null).map((s) => s.id).includes('hub'), 'zalcano keeps hub');
 });
 
-test('ToA steps include size buttons 1-8 and tier buttons', () => {
+test('ToA steps ask specific size first, then 2-8 and tier buttons', () => {
   const steps = creationStepsFor('toa', null);
+  const choice = steps.find((s) => s.id === 'sizeChoice');
+  assert.strictEqual(choice.kind, 'buttons');
+  assert.deepStrictEqual(choice.options.map((o) => o.id), ['specific', 'any']);
   const size = steps.find((s) => s.id === 'size');
   assert.strictEqual(size.kind, 'buttons');
-  assert.deepStrictEqual(size.options.map((o) => o.id), ['1', '2', '3', '4', '5', '6', '7', '8']);
+  assert.deepStrictEqual(size.options.map((o) => o.id), ['2', '3', '4', '5', '6', '7', '8']);
   const tier = steps.find((s) => s.id === 'tier');
   assert.deepStrictEqual(tier.options.map((o) => o.id), ['Entry', 'Normal', 'Expert']);
 });
