@@ -494,10 +494,13 @@ function preChoiceRow(activityKey) {
 }
 
 const REGIONS = [
-  { id: 'US', label: 'US', emoji: '🇺🇸' },
-  { id: 'UK', label: 'UK', emoji: '🇬🇧' },
+  { id: 'US-East', label: 'US East', emoji: '🇺🇸' },
+  { id: 'US-West', label: 'US West', emoji: '🇺🇸' },
+  { id: 'UK', label: 'United Kingdom', emoji: '🇬🇧' },
   { id: 'DE', label: 'Germany', emoji: '🇩🇪' },
   { id: 'AU', label: 'Australia', emoji: '🇦🇺' },
+  { id: 'SG', label: 'Singapore', emoji: '🇸🇬' },
+  { id: 'JP', label: 'Japan', emoji: '🇯🇵' },
 ];
 
 // Step-by-step creation state. userId -> { activity, pre, steps, idx, data, expiresAt }.
