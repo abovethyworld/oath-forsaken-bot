@@ -21,8 +21,6 @@ const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
-const CREATE_COOLDOWN_MS = 60 * 1000;
-const createCooldowns = new Map();
 
 // ─── Activity templates ─────────────────────────────────────────────
 // size: null = open/mass (no cap, never fills). {min,max} = organizer
@@ -913,13 +911,6 @@ async function handleStepModal(interaction) {
 }
 
 async function handleCreate(interaction) {
-  const last = createCooldowns.get(interaction.user.id) || 0;
-  if (Date.now() - last < CREATE_COOLDOWN_MS) {
-    await interaction.reply({ content: 'Slow down. One team a minute.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  // Cooldown starts when they hit Create Team, not when the team posts.
-  createCooldowns.set(interaction.user.id, Date.now());
   const row = new ActionRowBuilder();
   for (const c of CATEGORIES) {
     row.addComponents(
