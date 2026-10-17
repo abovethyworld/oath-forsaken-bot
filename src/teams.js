@@ -547,23 +547,19 @@ function creationStepsFor(activityKey, preId) {
   } else if (activityKey === 'nex') {
     steps.push({
       id: 'size', kind: 'buttons', prompt: 'How many players?',
-      options: [...numOptions(2, 10), { id: 'mass', label: 'Mass' }],
+      options: [{ id: '3', label: '3' }, { id: '5', label: '5' }, { id: 'mass', label: 'Mass' }],
     });
   } else if (activityKey === 'huey') {
     steps.push({
       id: 'size', kind: 'buttons', prompt: 'How many players? (Mass is 6+)',
       options: [...numOptions(3, 5), { id: 'mass', label: 'Mass' }],
     });
-  } else if (['venenatis', 'callisto', 'vetion'].includes(activityKey)) {
-    steps.push({
-      id: 'size', kind: 'buttons', prompt: 'How many players?',
-      options: [...numOptions(2, 10), { id: 'mass', label: 'Mass' }],
-    });
   } else if (activityKey === 'nm' && preId === 'team') {
     steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(1, 5) });
   }
   // BA (5), Yama (2), Royal Titans (2) are fixed. ToB size comes from
-  // roles. Skilling, Zalcano, WAG, and NM mass are open.
+  // roles. Skilling, Zalcano, WAG, Venenatis, Callisto, Vet'ion, and
+  // NM mass are open.
 
   steps.push({
     id: 'region', kind: 'buttons', prompt: 'Which region?',
