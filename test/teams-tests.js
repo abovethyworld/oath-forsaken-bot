@@ -94,7 +94,7 @@ test('ToA steps ask specific size first, then 2-8 and tier buttons', () => {
   assert.strictEqual(size.kind, 'buttons');
   assert.deepStrictEqual(size.options.map((o) => o.id), ['2', '3', '4', '5', '6', '7', '8']);
   const tier = steps.find((s) => s.id === 'tier');
-  assert.deepStrictEqual(tier.options.map((o) => o.id), ['Entry', 'Normal', 'Expert']);
+  assert.deepStrictEqual(tier.options.map((o) => o.id), ['Normal', 'Expert', 'High Invo']);
 });
 
 test('Mass button is on Nex and Hueycoatl only', () => {
@@ -162,7 +162,9 @@ test('toaModeForLevel boundaries match the wiki', () => {
   assert.strictEqual(toaModeForLevel(150), 'Normal');
   assert.strictEqual(toaModeForLevel(299), 'Normal');
   assert.strictEqual(toaModeForLevel(300), 'Expert');
-  assert.strictEqual(toaModeForLevel(600), 'Expert');
+  assert.strictEqual(toaModeForLevel(349), 'Expert');
+  assert.strictEqual(toaModeForLevel(350), 'High Invo');
+  assert.strictEqual(toaModeForLevel(600), 'High Invo');
 });
 
 test('parseCoxScale handles raiders+scalers and bare numbers', () => {
