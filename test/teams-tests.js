@@ -94,25 +94,20 @@ test('ToA steps include size buttons 1-8 and tier buttons', () => {
   assert.deepStrictEqual(tier.options.map((o) => o.id), ['Entry', 'Normal', 'Expert']);
 });
 
-test('Mass button is on Nex, Venenatis, Callisto, Vetion, and Hueycoatl only', () => {
-  const withMass = ['nex', 'venenatis', 'callisto', 'vetion', 'huey'];
+test('Mass button is on Nex and Hueycoatl only', () => {
+  const withMass = ['nex', 'huey'];
   for (const key of withMass) {
     const pre = key === 'huey' ? 'public' : null;
     const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
     assert.ok(size, `${key} missing size step`);
     assert.ok(size.options.some((o) => o.id === 'mass'), `${key} size step missing Mass button`);
   }
+  // Nex: 3, 5, Mass (the real strats, pending his confirm).
+  const nexSize = creationStepsFor('nex', null).find((s) => s.id === 'size');
+  assert.deepStrictEqual(nexSize.options.map((o) => o.id), ['3', '5', 'mass']);
   // Hueycoatl: 3, 4, 5 + Mass.
   const hueySize = creationStepsFor('huey', 'public').find((s) => s.id === 'size');
   assert.deepStrictEqual(hueySize.options.map((o) => o.id), ['3', '4', '5', 'mass']);
-  // Nex and the wildy bosses: 2-10 + Mass.
-  for (const key of ['nex', 'venenatis', 'callisto', 'vetion']) {
-    const size = creationStepsFor(key, null).find((s) => s.id === 'size');
-    assert.deepStrictEqual(
-      size.options.map((o) => o.id),
-      ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'mass']
-    );
-  }
   // No one else gets a Mass button on the size step.
   for (const key of Object.keys(ACTIVITIES)) {
     if (withMass.includes(key)) continue;
@@ -122,6 +117,17 @@ test('Mass button is on Nex, Venenatis, Callisto, Vetion, and Hueycoatl only', (
     const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
     if (size) assert.ok(!size.options.some((o) => o.id === 'mass'), `${key} should not have a Mass button`);
   }
+});
+
+test('Venenatis, Callisto, and Vetion have no size step at all', () => {
+  for (const key of ['venenatis', 'callisto', 'vetion']) {
+    const ids = creationStepsFor(key, null).map((s) => s.id);
+    assert.ok(!ids.includes('size'), `${key} should not have a size step`);
+  }
+  const { team, error } = buildTeamFromData('venenatis', null, { region: 'US', world: '388', note: '' }, { id: 'org1', displayName: 'Alex' });
+  assert.ok(!error, error);
+  assert.strictEqual(team.size, null);
+  assert.strictEqual(team.mass, false);
 });
 
 test('CoX steps are raiders then scalers', () => {
