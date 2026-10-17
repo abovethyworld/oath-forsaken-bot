@@ -120,7 +120,7 @@ const ACTIVITIES = {
   },
   nm: {
     name: 'Nightmare', category: 'bosses',
-    partyHub: true, pre: 'nmMode',
+    size: { min: 1, max: 5 }, partyHub: true, pre: 'nmMode',
     fields: ['size', 'world', 'hub', 'note'],
   },
   wag: {
@@ -590,13 +590,13 @@ function buildTeamFromModal(activityKey, preId, fields, organizer) {
 
   // Size
   if (activityKey === 'nm') {
-    const { size, fillPing } = nmSizeAndPing(preId);
-    team.fillPing = fillPing;
-    if (size != null) {
+    const nmCfg = nmSizeAndPing(preId);
+    team.fillPing = nmCfg.fillPing;
+    if (nmCfg.size == null) {
+      team.size = null; // mass mode is open
+    } else {
       const parsed = parseSizeInput(activityKey, get('size'));
       if (parsed.error) return { error: parsed.error };
-      // nm team mode caps at 5 regardless of the generic range
-      if (parsed.size < 1 || parsed.size > 5) return { error: 'Team size must be between 1 and 5.' };
       team.size = parsed.size;
     }
   } else if (act.size && act.size.fixed) {
@@ -784,16 +784,21 @@ async function handleBump(interaction, msgId) {
   let msg;
   try {
     // Re-post at the bottom without re-tagging the activity role.
-    msg = await channel.send({ embeds: [buildTeamEmbed(team)], components: buildListingComponents(team) });
+    // Buttons are patched with the real message id after send, same as post.
+    msg = await channel.send({
+      embeds: [buildTeamEmbed(team)],
+      components: buildListingComponents({ ...team, messageId: 'pending' }),
+    });
   } catch (err) {
     console.error('Team bump failed:', err.message);
     await interaction.editReply({ content: 'Could not bump that team.' }).catch(() => {});
     return;
   }
   const oldId = team.messageId;
+  team.messageId = msg.id;
+  await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team bump patch failed:', err.message));
   const oldMsg = await channel.messages.fetch(oldId).catch(() => null);
   if (oldMsg) await oldMsg.delete().catch(() => {});
-  team.messageId = msg.id;
   delete state.teams[oldId];
   state.teams[msg.id] = team;
   saveState(state);

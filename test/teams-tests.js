@@ -330,6 +330,17 @@ test('buildTeamFromModal builds Nightmare mass as open', () => {
   assert.strictEqual(team.fillPing, false);
 });
 
+test('buildTeamFromModal builds Nightmare team with a valid size', () => {
+  const { team, error } = buildTeamFromModal(
+    'nm', 'team',
+    mockFields({ 'team:size': '3', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    org
+  );
+  assert.ok(!error, error);
+  assert.strictEqual(team.size, 3);
+  assert.strictEqual(team.fillPing, true);
+});
+
 test('buildTeamFromModal caps Nightmare team at 5', () => {
   const { error } = buildTeamFromModal(
     'nm', 'team',
