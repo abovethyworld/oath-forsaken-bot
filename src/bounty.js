@@ -46,8 +46,8 @@ function isMember(member) {
   return member.roles.cache.some((r) => GUILD_MEMBER_ROLES.includes(r.id));
 }
 
-function bountyEmbed({ target, location, threat, days, wiki, rewardMention }) {
-  return new EmbedBuilder()
+function bountyEmbed({ target, location, threat, days, image, rewardMention }) {
+  const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle('📜 Bounty Contract Available')
     .setDescription(
@@ -60,6 +60,8 @@ function bountyEmbed({ target, location, threat, days, wiki, rewardMention }) {
         `First to return with proof claims the title. The kill must be fresh.`
     )
     .setTimestamp();
+  if (image) embed.setThumbnail(image);
+  return embed;
 }
 
 function reviewButtons(threadId) {
@@ -91,6 +93,7 @@ async function postCommand(interaction) {
   const threat = interaction.options.getString('threat', true);
   const days = interaction.options.getInteger('days', true);
   const wiki = interaction.options.getString('wiki')?.trim();
+  const image = interaction.options.getString('image')?.trim();
   const channelId = bountyConfig().channelId;
   if (!channelId) {
     await interaction.reply({ content: 'Bounty board is not set up yet. Tell staff.', ephemeral: true }).catch(() => {});
@@ -130,7 +133,7 @@ async function postCommand(interaction) {
     location,
     threat,
     days,
-    wiki: wikiUrl,
+    image,
     rewardMention: `<@&${role.id}>`,
   });
   // Stash wiki for the link button (per-bounty).
@@ -170,6 +173,7 @@ async function postCommand(interaction) {
     threat,
     days,
     wiki: wikiUrl,
+    image: image || null,
     active: true,
     winnerId: null,
     createdAt: Date.now(),
@@ -375,6 +379,7 @@ const commands = [
           )
           .addIntegerOption((o) => o.setName('days').setDescription('Time limit in days').setRequired(true).setMinValue(1).setMaxValue(90))
           .addStringOption((o) => o.setName('wiki').setDescription('Wiki URL (defaults to OSRS wiki)').setRequired(false))
+          .addStringOption((o) => o.setName('image').setDescription('Thumbnail image URL').setRequired(false))
       ),
     run: async (interaction) => {
       if (interaction.options.getSubcommand() === 'post') return postCommand(interaction);
