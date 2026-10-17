@@ -23,6 +23,7 @@ const {
   buildListingComponents,
   teamPanelPayload,
   shouldSweepTeam,
+  shouldAutoClose,
 } = require('../src/teams');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
@@ -406,7 +407,7 @@ test('buildListingComponents: role mode gets role buttons plus organizer row', (
   assert.ok(roleRow.components[0].custom_id === 'team:role:m1:0');
   assert.ok(roleRow.components[0].label.includes('Alex'), 'claimed role shows holder');
   const orgRow = rows[1].toJSON();
-  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:bump:m1', 'team:close:m1']);
+  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1']);
 });
 
 test('buildListingComponents: headcount gets Join/Leave plus organizer row', () => {
@@ -449,6 +450,50 @@ test('shouldSweepTeam expires unfilled and closed listings after 24h', () => {
   // Filled teams survive until closed.
   const filled = { status: 'open', size: 1, roleMode: null, members: { u1: true }, createdAt: now - 48 * H };
   assert.strictEqual(shouldSweepTeam(filled, now), false);
+});
+
+test('shouldAutoClose fires for filled open teams older than 24h', () => {
+  const now = Date.now();
+  const H = 3600 * 1000;
+  const old = { status: 'open', size: 2, roleMode: null, members: { u1: true, u2: true }, createdAt: now - 25 * H };
+  assert.strictEqual(shouldAutoClose(old, now), true);
+  assert.strictEqual(shouldAutoClose({ ...old, createdAt: now - 23 * H }, now), false);
+  // Unfilled, closed, or role teams without full state do not auto-close.
+  assert.strictEqual(shouldAutoClose({ ...old, members: { u1: true } }, now), false);
+  assert.strictEqual(shouldAutoClose({ ...old, status: 'closed' }, now), false);
+});
+
+test('buildTeamFromModal auto-adds the organizer on headcount teams', () => {
+  const { team, error } = buildTeamFromModal(
+    'toa', null,
+    mockFields({ 'team:size': '4', 'team:raidLevel': '250', 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    org
+  );
+  assert.ok(!error, error);
+  assert.ok(team.members['org1'], 'organizer is in members');
+  assert.strictEqual(memberCount(team), 1);
+});
+
+test('buildTeamFromModal does not auto-add the organizer on role teams', () => {
+  const { team, error } = buildTeamFromModal(
+    'tob', '4s',
+    mockFields({ 'team:world': '388', 'team:hub': 'oath1', 'team:note': '' }),
+    org
+  );
+  assert.ok(!error, error);
+  assert.deepStrictEqual(team.members, {}, 'organizer picks a role button instead');
+});
+
+test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
+  const team = {
+    activity: 'tob', status: 'open', pre: '4s', roleMode: 'exclusive',
+    roles: ['Mage', 'North FZ', 'RDPS', 'MDPS'],
+    members: { u1: 'Mage', u2: 'RDPS' },
+    memberNames: { u1: 'Alex', u2: 'Suga', org1: 'Alex' },
+    organizerId: 'org1', world: '388',
+  };
+  const desc = buildTeamEmbed(team).toJSON().description;
+  assert.ok(desc.includes('2/4'), `expected 2/4 in embed, got: ${desc}`);
 });
 
 // ─── Report ───────────────────────────────────────────────────────
