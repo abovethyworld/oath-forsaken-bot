@@ -144,7 +144,7 @@ test('CoX steps are raiders then scalers', () => {
 });
 
 test('four regions are offered', () => {
-  assert.deepStrictEqual(REGIONS.map((r) => r.id), ['US', 'UK', 'DE', 'AU']);
+  assert.deepStrictEqual(REGIONS.map((r) => r.id), ['US-East', 'US-West', 'UK', 'DE', 'AU', 'SG', 'JP']);
 });
 
 test('pre-choice activities have matching PRE_CHOICES entries', () => {
