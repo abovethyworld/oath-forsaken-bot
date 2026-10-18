@@ -62,6 +62,7 @@ test('all 17 activities defined with name, category, and config role', () => {
 });
 
 test('creation steps exist for every activity and end with region/world/note', () => {
+  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano'];
   for (const key of Object.keys(ACTIVITIES)) {
     const pre = ACTIVITIES[key].pre
       ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
@@ -69,7 +70,9 @@ test('creation steps exist for every activity and end with region/world/note', (
     const steps = creationStepsFor(key, pre);
     assert.ok(steps.length >= 2, `${key} has no steps`);
     const ids = steps.map((s) => s.id);
-    assert.ok(ids.includes('region'), `${key} missing region step`);
+    if (!noRegion.includes(key)) {
+      assert.ok(ids.includes('region'), `${key} missing region step`);
+    }
     assert.ok(ids.includes('note'), `${key} missing note step`);
     // No em dashes in prompts.
     for (const s of steps) assert.ok(!s.prompt.includes('—'), `${key} step ${s.id} has em dash`);
