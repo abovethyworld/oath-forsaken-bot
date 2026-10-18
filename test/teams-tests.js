@@ -34,6 +34,7 @@ const {
   toggleSpec,
   getShowSpecs,
   toggleShowSpec,
+  kcMetricForTeam,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName } = require('../src/party-board');
@@ -671,6 +672,36 @@ test('specsForActivity: relevance per boss', () => {
   assert.deepEqual(specsForActivity('nex'), ['zcb'], 'nex');
   assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
+});
+
+test('kcMetricForTeam: raids use the picked mode', () => {
+  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'Normal' }), 'tombs_of_amascut');
+  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'Expert' }), 'tombs_of_amascut_expert');
+  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'High Invo' }), 'tombs_of_amascut_expert');
+  assert.equal(kcMetricForTeam({ activity: 'cox', pre: 'normal' }), 'chambers_of_xeric');
+  assert.equal(kcMetricForTeam({ activity: 'cox', pre: 'cm' }), 'chambers_of_xeric_challenge_mode');
+  assert.equal(kcMetricForTeam({ activity: 'tob', pre: '5s' }), 'theatre_of_blood');
+  assert.equal(kcMetricForTeam({ activity: 'tob', pre: '5s-hard' }), 'theatre_of_blood_hard_mode');
+  assert.equal(kcMetricForTeam({ activity: 'yama' }), 'yama');
+  assert.equal(kcMetricForTeam({ activity: 'nex' }), 'nex');
+  assert.equal(kcMetricForTeam({ activity: 'nm' }), 'nightmare');
+  assert.equal(kcMetricForTeam({ activity: 'huey' }), 'the_hueycoatl');
+  assert.equal(kcMetricForTeam({ activity: 'royals' }), 'the_royal_titans');
+  assert.equal(kcMetricForTeam({ activity: 'venenatis' }), 'venenatis');
+});
+
+test('renderPartyBoard accepts a kc per row', () => {
+  const { renderPartyBoard } = require('../src/party-board');
+  const buf = renderPartyBoard(
+    [{ name: 'PTstud', stats: [124, 99, 99, 99, 99, 98, 99, 85], specs: [], kc: 1240 }],
+    0
+  );
+  assert.ok(Buffer.isBuffer(buf) && buf.length > 1000, 'renders with kc');
+  const buf2 = renderPartyBoard(
+    [{ name: 'Nobody', stats: null, specs: [], kc: null }],
+    0
+  );
+  assert.ok(Buffer.isBuffer(buf2), 'renders without kc');
 });
 
 test('SPECS has seven weapons in two categories with unique ids', () => {

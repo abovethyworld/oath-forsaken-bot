@@ -362,6 +362,29 @@ function boardApplies(team) {
   return !!act && act.category !== 'skilling';
 }
 
+// WOM boss metric key for a team's KC column. Raids use the mode the
+// team picked; other bosses use their WOM key (overridden where the
+// activity id doesn't match).
+const KC_METRIC_OVERRIDE = {
+  nm: 'nightmare',
+  huey: 'the_hueycoatl',
+  royals: 'the_royal_titans',
+};
+function kcMetricForTeam(team) {
+  if (team.activity === 'toa') {
+    return team.raidLevel && team.raidLevel !== 'Normal'
+      ? 'tombs_of_amascut_expert'
+      : 'tombs_of_amascut';
+  }
+  if (team.activity === 'cox') {
+    return team.pre === 'cm' ? 'chambers_of_xeric_challenge_mode' : 'chambers_of_xeric';
+  }
+  if (team.activity === 'tob') {
+    return (team.pre || '').includes('hard') ? 'theatre_of_blood_hard_mode' : 'theatre_of_blood';
+  }
+  return KC_METRIC_OVERRIDE[team.activity] || team.activity;
+}
+
 // Builds the party-board image for a team, or null when it shouldn't show
 // (not a board team, or nobody has linked an RSN yet).
 async function partyBoardFile(team) {
@@ -375,6 +398,7 @@ async function partyBoardFile(team) {
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
+  const kcMetric = kcMetricForTeam(team);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
     const stats = st && !st.notFound
@@ -382,7 +406,8 @@ async function partyBoardFile(team) {
       : null;
     const rsn = links[id] && links[id].rsn;
     const specs = getShowSpecs(id, team.activity);
-    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs };
+    const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null };
   });
   if (!rows.some((r) => r.stats)) return null;
   const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS));
@@ -1671,6 +1696,7 @@ module.exports = {
   toggleSpec,
   getShowSpecs,
   toggleShowSpec,
+  kcMetricForTeam,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
