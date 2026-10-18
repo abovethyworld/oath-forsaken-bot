@@ -206,7 +206,7 @@ function drawText(dst, x, y, str, tint) {
           glyph.rgba[di + 3] = atlas.img.rgba[si + 3];
         }
       }
-      blit(dst, glyph, cx, y, tint);
+      blit(dst, glyph, cx, y + (g.dy || 0), tint);
     }
     cx += g.adv;
   }
@@ -280,7 +280,7 @@ function renderPartyBoard(rows, extraCount) {
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   shown.forEach(({ name, stats }) => {
-    const ry = y + ROW_H / 2 - 22; // text top for vertical centering
+    const ry = y + ROW_H / 2 - 26; // text top: centers the 52px em box in the row
     drawText(cv, ox + 20, Math.round(ry), shortDisplayName(name), stats ? undefined : gray);
     COLUMNS.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
