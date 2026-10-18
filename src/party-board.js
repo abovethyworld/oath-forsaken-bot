@@ -378,7 +378,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
       known.forEach((specId, idx) => {
         drawIcon(cv, specIcons[specId], ix, icy, 72);
         const lw = lws[idx];
-        drawText(cv, Math.round(ix - lw / 2), Math.round(icy + 40), labs[idx], [150, 150, 150], smallA);
+        drawText(cv, Math.round(ix - lw / 2), Math.round(icy + 40), labs[idx], undefined, smallA);
         const nextW = idx + 1 < known.length ? lws[idx + 1] : 0;
         ix += Math.max(110, (lw + nextW) / 2 + 48);
       });
