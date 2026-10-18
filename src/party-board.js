@@ -294,6 +294,29 @@ function hline(dst, y, x0, x1, r, g, b, thickness) {
   }
 }
 
+function fillRect(dst, x0, y0, w, h, r, g, b) {
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = ((y0 + y) * dst.w + x0 + x) * 4;
+      dst.buf[i] = r; dst.buf[i + 1] = g; dst.buf[i + 2] = b;
+    }
+  }
+}
+
+// OSRS-style inventory slot, centered at (cx, cy) with outer size s.
+function drawSlot(dst, cx, cy, s) {
+  const x0 = Math.round(cx - s / 2), y0 = Math.round(cy - s / 2);
+  fillRect(dst, x0, y0, s, s, 110, 85, 60); // border
+  fillRect(dst, x0 + 3, y0 + 3, s - 6, s - 6, 38, 28, 22); // dark well
+  hline(dst, y0 + 3, x0 + 3, x0 + s - 3, 20, 14, 10, 2); // top inner shadow
+  for (let t = 0; t < 2; t++) { // left inner shadow
+    for (let y = y0 + 3; y < y0 + s - 3; y++) {
+      const i = (y * dst.w + x0 + 3 + t) * 4;
+      dst.buf[i] = 20; dst.buf[i + 1] = 14; dst.buf[i + 2] = 10;
+    }
+  }
+}
+
 function shortDisplayName(name) {
   const s = String(name || 'member');
   return s.length > MAX_NAME_CHARS ? `${s.slice(0, MAX_NAME_CHARS - 1)}…` : s;
@@ -301,14 +324,17 @@ function shortDisplayName(name) {
 
 // rows: [{ name, stats: [cb,atk,str,rng,mag,def,hp,pry] | null }]
 // extraCount: members beyond MAX_ROWS not shown.
-function renderPartyBoard(rows, extraCount) {
+// opts.specLayout: 'inline' (default) | 'slots' | 'twoline' (prototype variants)
+function renderPartyBoard(rows, extraCount, opts = {}) {
   loadAssets();
   if (!rows.length) return null;
+  const specLayout = opts.specLayout || 'inline';
+  const rowH = specLayout === 'twoline' ? 148 : ROW_H;
   const shown = rows.slice(0, MAX_ROWS);
   const gridW = NAME_W + COL_W * COLUMNS.length;
   const ox = Math.round((BOARD_W - gridW) / 2);
   const footerH = extraCount > 0 ? 56 : 24;
-  const H = HEADER_H + ROW_H * shown.length + footerH;
+  const H = HEADER_H + rowH * shown.length + footerH;
   const cv = newCanvas(BOARD_W, H, 26, 18, 16);
 
   // Icon header
@@ -322,28 +348,48 @@ function renderPartyBoard(rows, extraCount) {
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   shown.forEach(({ name, stats, specs }) => {
-    const ry = y + ROW_H / 2 - 26; // text top: centers the 52px em box in the row
     const label = shortDisplayName(name);
-    drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
-    // Owned spec-weapon icons, right after the name. Size to fit: full-size
-    // when there's room, shrink (never below the floor) so every icon shows.
     const known = (specs || []).filter((id) => specIcons[id]);
-    let specSize = SPEC_ICON_MAX;
-    if (known.length) {
-      const avail = ox + NAME_W - 8 - (ox + 20 + textWidth(label) + 12);
-      specSize = Math.max(SPEC_ICON_MIN, Math.min(SPEC_ICON_MAX, Math.floor(avail / known.length) - 5));
+    if (specLayout === 'twoline') {
+      // Line 1: name + stats. Line 2: big spec icons.
+      const ry = y + 12;
+      drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
+      COLUMNS.forEach((_, i) => {
+        const cx = ox + NAME_W + COL_W * i + COL_W / 2;
+        drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
+      });
+      let ix = ox + 20 + 32;
+      const icy = y + 68 + 36;
+      for (const specId of known) {
+        drawIcon(cv, specIcons[specId], ix, icy, 64);
+        ix += 76;
+      }
+    } else {
+      const ry = y + rowH / 2 - 26; // text top: centers the 52px em box in the row
+      drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
+      // Owned spec-weapon icons, right after the name. Size to fit: full-size
+      // when there's room, shrink (never below the floor) so every icon shows.
+      let specSize = SPEC_ICON_MAX;
+      if (known.length) {
+        const avail = ox + NAME_W - 8 - (ox + 20 + textWidth(label) + 12);
+        specSize = Math.max(SPEC_ICON_MIN, Math.min(SPEC_ICON_MAX, Math.floor(avail / known.length) - 5));
+      }
+      let ix = ox + 20 + textWidth(label) + 12;
+      const icy = y + rowH / 2;
+      for (const specId of known) {
+        if (specLayout === 'slots') {
+          const slotS = specSize + 14;
+          drawSlot(cv, ix + slotS / 2, icy, slotS);
+        }
+        drawIcon(cv, specIcons[specId], ix + specSize / 2, icy, specSize);
+        ix += specSize + 5 + (specLayout === 'slots' ? 14 : 0);
+      }
+      COLUMNS.forEach((_, i) => {
+        const cx = ox + NAME_W + COL_W * i + COL_W / 2;
+        drawCentered(cv, cx, Math.round(y + rowH / 2 - 26), stats ? String(stats[i]) : '-', stats ? undefined : gray);
+      });
     }
-    let ix = ox + 20 + textWidth(label) + 12;
-    const icy = y + ROW_H / 2;
-    for (const specId of known) {
-      drawIcon(cv, specIcons[specId], ix + specSize / 2, icy, specSize);
-      ix += specSize + 5;
-    }
-    COLUMNS.forEach((_, i) => {
-      const cx = ox + NAME_W + COL_W * i + COL_W / 2;
-      drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
-    });
-    y += ROW_H;
+    y += rowH;
     hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
   });
   if (extraCount > 0) {
