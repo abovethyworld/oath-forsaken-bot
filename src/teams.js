@@ -275,7 +275,8 @@ async function partyBoardFile(team) {
     const stats = st && !st.notFound
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
-    return { name: (team.memberNames || {})[id] || 'member', stats };
+    const rsn = links[id] && links[id].rsn;
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats };
   });
   if (!rows.some((r) => r.stats)) return null;
   const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS));
