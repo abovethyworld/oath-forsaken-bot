@@ -10,10 +10,10 @@ import json
 from PIL import Image, ImageDraw, ImageFont
 
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-SIZE = 44
+SIZE = int(__import__("sys").argv[1]) if len(__import__("sys").argv) > 1 else 44
 CHARS = sorted(" !%&'()+,-./0123456789:?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]_abcdefghijklmnopqrstuvwxyz·…")
-OUT_PNG = "assets/party-board/font-atlas.png"
-OUT_JSON = "assets/party-board/font-atlas.json"
+OUT_PNG = "assets/party-board/font-atlas-small.png" if SIZE != 44 else "assets/party-board/font-atlas.png"
+OUT_JSON = "assets/party-board/font-atlas-small.json" if SIZE != 44 else "assets/party-board/font-atlas.json"
 ATLAS_W = 1024
 PAD = 4
 
