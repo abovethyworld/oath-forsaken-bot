@@ -580,9 +580,9 @@ function teamPanelPayload() {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
-        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('🔗'),
-        new ButtonBuilder().setCustomId('team:specs').setLabel('My Specs').setStyle(ButtonStyle.Danger).setEmoji('🗡️')
+        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
+        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
+        new ButtonBuilder().setCustomId('team:specs').setLabel('My Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
       ),
     ],
   };
