@@ -27,6 +27,11 @@ const {
   boardApplies,
   shouldSweepTeam,
   shouldAutoClose,
+  SPECS,
+  specsForActivity,
+  loadSpecs,
+  getSpecs,
+  toggleSpec,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName } = require('../src/party-board');
@@ -653,6 +658,44 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
   assert.ok(!boardApplies({ activity: 'zalcano' }), 'zalcano');
   assert.ok(!boardApplies({ activity: 'wag' }), 'wag');
   assert.ok(!boardApplies({ activity: 'nope' }), 'unknown activity');
+});
+
+test('specsForActivity: raids get spec icons, accursed is Yama-only', () => {
+  for (const raid of ['toa', 'cox', 'tob']) {
+    const shown = specsForActivity(raid);
+    assert.deepEqual(shown, ['bgs', 'dwh', 'eldermaul', 'tonalztics'], raid);
+  }
+  assert.deepEqual(specsForActivity('yama'), ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'], 'yama');
+  assert.deepEqual(specsForActivity('nex'), [], 'non-raid boss');
+  assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
+  assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
+});
+
+test('SPECS has five weapons with unique ids', () => {
+  assert.equal(SPECS.length, 5);
+  assert.equal(new Set(SPECS.map((s) => s.id)).size, 5);
+  for (const s of SPECS) assert.ok(s.label && s.name, s.id);
+});
+
+test('toggleSpec adds, removes, and ignores bad ids', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, '..', 'data', 'specs.json');
+  const backup = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  try {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    const u = 'test-user-specs';
+    assert.deepEqual(getSpecs(u), [], 'starts empty');
+    assert.deepEqual(toggleSpec(u, 'dwh'), ['dwh'], 'add dwh');
+    assert.deepEqual(toggleSpec(u, 'bgs'), ['dwh', 'bgs'], 'add bgs');
+    assert.deepEqual(getSpecs(u), ['dwh', 'bgs'], 'persists');
+    assert.deepEqual(toggleSpec(u, 'dwh'), ['bgs'], 'remove dwh');
+    assert.deepEqual(toggleSpec(u, 'nope'), ['bgs'], 'bad id ignored');
+    assert.deepEqual(loadSpecs()[u], ['bgs'], 'stored');
+  } finally {
+    if (backup !== null) fs.writeFileSync(file, backup);
+    else if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
 });
 
 test('buildTeamEmbed hides the signed-up line when the board shows', () => {

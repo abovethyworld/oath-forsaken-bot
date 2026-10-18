@@ -11,12 +11,13 @@ const ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
 // Column order: combat, attack, strength, ranged, magic, defence, hitpoints, prayer.
 const COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
 
-const BOARD_W = 1200;
-const NAME_W = 340;
+const BOARD_W = 1400;
+const NAME_W = 520;
 const COL_W = 106;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
+const SPEC_ICON_SIZE = 28;
 const MAX_ROWS = 12;
 const MAX_NAME_CHARS = 14;
 
@@ -143,6 +144,8 @@ function decodePng(buf) {
 // ─── Asset loading (lazy, cached) ───────────────────────────────────
 let atlas = null; // { img, glyphs }
 const icons = {}; // name -> { w, h, rgba }
+const specIcons = {}; // spec id -> { w, h, rgba }
+const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'];
 
 function loadAssets() {
   if (atlas) return;
@@ -151,6 +154,13 @@ function loadAssets() {
   atlas = { img: atlasImg, glyphs };
   for (const name of COLUMNS) {
     icons[name] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'icons', `${name}.png`)));
+  }
+  for (const id of SPEC_IDS) {
+    try {
+      specIcons[id] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`)));
+    } catch {
+      // icon missing: that spec just won't draw
+    }
   }
 }
 
@@ -182,6 +192,27 @@ function blit(dst, src, dx, dy, tint) {
       dst.buf[di + 2] = Math.round((src.rgba[si + 2] / 255 * tb) * sa + dst.buf[di + 2] * (1 - sa));
     }
   }
+}
+
+// Draw an icon centered at (cx, cy), nearest-neighbor scaled so its
+// largest side is `size` px.
+function drawIcon(dst, icon, cx, cy, size) {
+  if (!icon) return;
+  const scale = size / Math.max(icon.w, icon.h);
+  const dw = Math.max(1, Math.round(icon.w * scale));
+  const dh = Math.max(1, Math.round(icon.h * scale));
+  const scaled = { w: dw, h: dh, rgba: Buffer.alloc(dw * dh * 4) };
+  for (let y = 0; y < dh; y++) {
+    for (let x = 0; x < dw; x++) {
+      const si = ((y / scale | 0) * icon.w + (x / scale | 0)) * 4;
+      const di = (y * dw + x) * 4;
+      scaled.rgba[di] = icon.rgba[si];
+      scaled.rgba[di + 1] = icon.rgba[si + 1];
+      scaled.rgba[di + 2] = icon.rgba[si + 2];
+      scaled.rgba[di + 3] = icon.rgba[si + 3];
+    }
+  }
+  blit(dst, scaled, Math.round(cx - dw / 2), Math.round(cy - dh / 2));
 }
 
 function drawText(dst, x, y, str, tint) {
@@ -256,32 +287,26 @@ function renderPartyBoard(rows, extraCount) {
   // Icon header
   const cy = HEADER_H / 2;
   COLUMNS.forEach((name, i) => {
-    const ic = icons[name];
-    const scale = ICON_SIZE / Math.max(ic.w, ic.h);
-    const dw = Math.round(ic.w * scale);
-    const dh = Math.round(ic.h * scale);
-    // nearest-neighbor scale for crisp pixels
-    const scaled = { w: dw, h: dh, rgba: Buffer.alloc(dw * dh * 4) };
-    for (let y = 0; y < dh; y++) {
-      for (let x = 0; x < dw; x++) {
-        const si = ((y / scale | 0) * ic.w + (x / scale | 0)) * 4;
-        const di = (y * dw + x) * 4;
-        scaled.rgba[di] = ic.rgba[si];
-        scaled.rgba[di + 1] = ic.rgba[si + 1];
-        scaled.rgba[di + 2] = ic.rgba[si + 2];
-        scaled.rgba[di + 3] = ic.rgba[si + 3];
-      }
-    }
     const cx = ox + NAME_W + COL_W * i + COL_W / 2;
-    blit(cv, scaled, Math.round(cx - dw / 2), Math.round(cy - dh / 2));
+    drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
   });
 
   let y = HEADER_H;
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
-  shown.forEach(({ name, stats }) => {
+  shown.forEach(({ name, stats, specs }) => {
     const ry = y + ROW_H / 2 - 26; // text top: centers the 52px em box in the row
-    drawText(cv, ox + 20, Math.round(ry), shortDisplayName(name), stats ? undefined : gray);
+    const label = shortDisplayName(name);
+    drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
+    // Owned spec-weapon icons, right after the name.
+    let ix = ox + 20 + textWidth(label) + 12;
+    const icy = y + ROW_H / 2;
+    for (const specId of specs || []) {
+      if (!specIcons[specId]) continue;
+      if (ix + SPEC_ICON_SIZE > ox + NAME_W - 8) break;
+      drawIcon(cv, specIcons[specId], ix + SPEC_ICON_SIZE / 2, icy, SPEC_ICON_SIZE);
+      ix += SPEC_ICON_SIZE + 5;
+    }
     COLUMNS.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
