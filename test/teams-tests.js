@@ -24,9 +24,12 @@ const {
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
+  boardApplies,
   shouldSweepTeam,
   shouldAutoClose,
 } = require('../src/teams');
+const { combatLevel, parseStats } = require('../src/wom');
+const { renderPartyBoard, boardHeight, shortDisplayName } = require('../src/party-board');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
 
@@ -635,6 +638,80 @@ test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
   };
   const desc = buildTeamEmbed(team).toJSON().description;
   assert.ok(desc.includes('2/4'), `expected 2/4 in embed, got: ${desc}`);
+});
+
+// ─── Party board ──────────────────────────────────────────────────
+
+test('boardApplies: raids and bosses yes, role teams and skilling no', () => {
+  assert.ok(boardApplies({ activity: 'toa' }), 'toa');
+  assert.ok(boardApplies({ activity: 'nex' }), 'nex');
+  assert.ok(boardApplies({ activity: 'cox' }), 'cox');
+  assert.ok(!boardApplies({ activity: 'tob', roleMode: 'exclusive' }), 'tob roles');
+  assert.ok(!boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba roles');
+  assert.ok(!boardApplies({ activity: 'wintertodt' }), 'wintertodt');
+  assert.ok(!boardApplies({ activity: 'zalcano' }), 'zalcano');
+  assert.ok(!boardApplies({ activity: 'wag' }), 'wag');
+  assert.ok(!boardApplies({ activity: 'nope' }), 'unknown activity');
+});
+
+test('buildTeamEmbed hides the signed-up line when the board shows', () => {
+  const team = {
+    activity: 'toa', status: 'open', pre: null,
+    members: { u1: true }, memberNames: { u1: 'Alex', org1: 'Alex' },
+    organizerId: 'org1', size: 4,
+  };
+  const withText = buildTeamEmbed(team).toJSON().description;
+  assert.ok(withText.includes('**Signed up:**'), 'signed-up line present by default');
+  const withBoard = buildTeamEmbed(team, { hideSignedUp: true }).toJSON().description;
+  assert.ok(!withBoard.includes('**Signed up:**'), 'signed-up line hidden with board');
+});
+
+test('team panel has a Link RSN button', () => {
+  const payload = teamPanelPayload();
+  const ids = payload.components.flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
+  assert.ok(ids.includes('team:rsn'), `expected team:rsn button, got ${ids.join(',')}`);
+});
+
+test('combatLevel matches the OSRS formula', () => {
+  const maxed = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99 };
+  assert.strictEqual(combatLevel(maxed), 126);
+  const mid = { attack: 75, strength: 80, defence: 70, ranged: 60, magic: 65, hitpoints: 75, prayer: 70 };
+  assert.strictEqual(combatLevel(mid), 95);
+  const pure = { attack: 99, strength: 99, defence: 1, ranged: 1, magic: 1, hitpoints: 99, prayer: 99 };
+  assert.strictEqual(combatLevel(pure), 101);
+});
+
+test('parseStats reads a WOM snapshot defensively', () => {
+  const skills = {};
+  const lvls = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99 };
+  for (const [k, v] of Object.entries(lvls)) skills[k] = { rank: 1, level: v, experience: 13034431 };
+  const st = parseStats({ latestSnapshot: { data: { skills } } });
+  assert.ok(st, 'parsed');
+  assert.strictEqual(st.combat, 126);
+  assert.strictEqual(st.attack, 99);
+  assert.strictEqual(parseStats({}), null, 'garbage -> null');
+  assert.strictEqual(parseStats({ latestSnapshot: {} }), null, 'empty snapshot -> null');
+});
+
+test('renderPartyBoard produces a valid PNG', () => {
+  const buf = renderPartyBoard(
+    [{ name: 'Alex', stats: [126, 99, 99, 99, 99, 99, 99, 99] }, { name: 'NoLink', stats: null }],
+    0
+  );
+  assert.ok(Buffer.isBuffer(buf), 'returns a buffer');
+  assert.deepStrictEqual(buf.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'PNG signature');
+  assert.strictEqual(renderPartyBoard([], 0), null, 'no rows -> null');
+});
+
+test('boardHeight grows with rows and caps', () => {
+  assert.ok(boardHeight(20) === boardHeight(15), 'capped at MAX_ROWS');
+  assert.ok(boardHeight(4) < boardHeight(8), 'grows with rows');
+  assert.ok(boardHeight(12) < boardHeight(13), '+N more footer appears past the cap');
+});
+
+test('shortDisplayName truncates long names', () => {
+  assert.strictEqual(shortDisplayName('Alex'), 'Alex');
+  assert.ok(shortDisplayName('averylongdisplaynameindeed').endsWith('…'), 'truncates with ellipsis');
 });
 
 // ─── Report ───────────────────────────────────────────────────────
