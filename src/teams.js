@@ -36,9 +36,17 @@ const ACTIVITIES = {
     name: 'Tombs of Amascut', short: 'ToA', category: 'raids',
     size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
   },
+  toa_expert: {
+    name: 'Tombs of Amascut Expert', short: 'ToA Expert', category: 'raids',
+    size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
+  },
   cox: {
     name: 'Chambers of Xeric', short: 'CoX', category: 'raids',
-    fillPing: true, partyHub: true, pre: 'coxMode',
+    fillPing: true, partyHub: true,
+  },
+  cox_cm: {
+    name: 'Chambers of Xeric CM', short: 'CoX CM', category: 'raids',
+    fillPing: true, partyHub: true,
   },
   tob: {
     name: 'Theatre of Blood', short: 'ToB', category: 'raids',
@@ -46,9 +54,16 @@ const ACTIVITIES = {
     roleMode: 'exclusive',
     rolesByPre: {
       '4s': ['Mage', 'North FZ', 'RDPS', 'MDPS'],
-      '4s-hard': ['Mage', 'North FZ', 'RDPS', 'MDPS'],
       '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
-      '5s-hard': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
+    },
+  },
+  tob_hard: {
+    name: 'Hard Mode Theatre of Blood', short: 'ToB Hard Mode', category: 'raids',
+    fillPing: true, partyHub: true, pre: 'tobScale',
+    roleMode: 'exclusive',
+    rolesByPre: {
+      '4s': ['Mage', 'North FZ', 'RDPS', 'MDPS'],
+      '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     },
   },
   wintertodt: {
@@ -122,8 +137,11 @@ const CATEGORIES = [
 // Custom emojis matching the #roles panel buttons.
 const ACTIVITY_EMOJI = {
   toa: '<:toa:1558470672986939634>',
+  toa_expert: '<:toa:1558470672986939634>',
   cox: '<:cox:1561158969379004510>',
+  cox_cm: '<:cox:1561158969379004510>',
   tob: '<:tob:1561159051147223100>',
+  tob_hard: '<:tob:1561159051147223100>',
   wintertodt: '<:wintertodt:1558470813584465960>',
   gotr: '<:gotr:1558470845918220318>',
   tempoross: '<:tempoross:1558470796752457779>',
@@ -143,8 +161,11 @@ const ACTIVITY_EMOJI = {
 // For select menus: { id, name } pairs.
 const ACTIVITY_EMOJI_OBJ = {
   toa: { id: '1558470672986939634', name: 'toa' },
+  toa_expert: { id: '1558470672986939634', name: 'toa' },
   cox: { id: '1561158969379004510', name: 'cox' },
+  cox_cm: { id: '1561158969379004510', name: 'cox' },
   tob: { id: '1561159051147223100', name: 'tob' },
+  tob_hard: { id: '1561159051147223100', name: 'tob' },
   wintertodt: { id: '1558470813584465960', name: 'wintertodt' },
   gotr: { id: '1558470845918220318', name: 'gotr' },
   tempoross: { id: '1558470796752457779', name: 'tempoross' },
@@ -167,16 +188,7 @@ const PRE_CHOICES = {
     prompt: 'ToB scale',
     options: [
       { id: '4s', label: '4s' },
-      { id: '4s-hard', label: '4s Hard Mode' },
       { id: '5s', label: '5s' },
-      { id: '5s-hard', label: '5s Hard Mode' },
-    ],
-  },
-  coxMode: {
-    prompt: 'CoX mode',
-    options: [
-      { id: 'normal', label: 'Normal' },
-      { id: 'cm', label: 'Challenge Mode' },
     ],
   },
   nmMode: {
@@ -212,8 +224,12 @@ function teamsChannelId() {
   return config.teams && config.teams.channelId;
 }
 
+// Split raid modes ping the same 3 raid roles.
+const PING_ROLE_ALIAS = { toa_expert: 'toa', cox_cm: 'cox', tob_hard: 'tob' };
 function activityRoleId(activityKey) {
-  return config.teams && config.teams.activityRoles && config.teams.activityRoles[activityKey];
+  const roles = config.teams && config.teams.activityRoles;
+  if (!roles) return null;
+  return roles[activityKey] || roles[PING_ROLE_ALIAS[activityKey]] || null;
 }
 
 function loadState() {
@@ -268,8 +284,11 @@ const SPEC_CATS = [
 // The accursed sceptre is Yama-only; the horn skips ToB for now.
 const SPEC_DISPLAY = {
   toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
+  toa_expert: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
   cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
+  cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
   tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb'],
+  tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb'],
   yama: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'],
   nex: ['zcb'],
 };
@@ -371,17 +390,12 @@ const KC_METRIC_OVERRIDE = {
   royals: 'the_royal_titans',
 };
 function kcMetricForTeam(team) {
-  if (team.activity === 'toa') {
-    return team.raidLevel && team.raidLevel !== 'Normal'
-      ? 'tombs_of_amascut_expert'
-      : 'tombs_of_amascut';
-  }
-  if (team.activity === 'cox') {
-    return team.pre === 'cm' ? 'chambers_of_xeric_challenge_mode' : 'chambers_of_xeric';
-  }
-  if (team.activity === 'tob') {
-    return (team.pre || '').includes('hard') ? 'theatre_of_blood_hard_mode' : 'theatre_of_blood';
-  }
+  if (team.activity === 'toa') return 'tombs_of_amascut';
+  if (team.activity === 'toa_expert') return 'tombs_of_amascut_expert';
+  if (team.activity === 'cox') return 'chambers_of_xeric';
+  if (team.activity === 'cox_cm') return 'chambers_of_xeric_challenge_mode';
+  if (team.activity === 'tob') return 'theatre_of_blood';
+  if (team.activity === 'tob_hard') return 'theatre_of_blood_hard_mode';
   return KC_METRIC_OVERRIDE[team.activity] || team.activity;
 }
 
@@ -555,11 +569,11 @@ function buildTeamEmbed(team, opts) {
   const lines = [];
   const hideSignedUp = !!(opts && opts.hideSignedUp);
 
-  if (team.activity === 'toa' && team.raidLevel) {
-    const tierLabels = { 'Normal': 'Normal (150-299)', 'Expert': 'Expert (300-349)', 'High Invo': 'High Invo (350+)' };
+  if (team.activity === 'toa_expert' && team.raidLevel) {
+    const tierLabels = { 'Expert': 'Expert (300-349)', 'High Invo': 'High Invo (350+)' };
     lines.push(`Raid level: ${tierLabels[team.raidLevel] || team.raidLevel}`);
   }
-  if (team.activity === 'cox' && team.scale) {
+  if ((team.activity === 'cox' || team.activity === 'cox_cm') && team.scale) {
     const s = team.scale;
     lines.push(`Scale ${s.raiders}${s.scalers ? `+${s.scalers}` : ''}`);
   }
@@ -644,7 +658,43 @@ function buildListingComponents(team) {
     );
   }
   rows.push(closeRow);
+  // Organizer/staff management row. Permission is checked on tap.
+  const manageRow = new ActionRowBuilder();
+  if (sizeOptionsFor(team.activity)) {
+    manageRow.addComponents(
+      new ButtonBuilder().setCustomId(`team:teamsize:${msgId}`).setLabel('Size').setStyle(ButtonStyle.Secondary)
+    );
+  }
+  manageRow.addComponents(
+    new ButtonBuilder().setCustomId(`team:teamworld:${msgId}`).setLabel('World').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamregion:${msgId}`).setLabel('Region').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamhub:${msgId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary)
+  );
+  rows.push(manageRow);
   return rows;
+}
+
+// Size-lock options per activity for the post-creation Size button.
+// Null means size is fixed or not applicable (no button).
+function sizeOptionsFor(activity) {
+  if (activity === 'toa' || activity === 'toa_expert') {
+    return [...numOptions(2, 8), { id: 'any', label: 'Any size' }];
+  }
+  if (activity === 'nex') {
+    return [
+      { id: '2', label: '2' }, { id: '3', label: '3' }, { id: '5', label: '5' },
+      { id: '8', label: '8' }, { id: 'mass', label: 'Mass (10+)' }, { id: 'any', label: 'Any size' },
+    ];
+  }
+  if (activity === 'huey') {
+    return [
+      ...numOptions(3, 5), { id: 'mass', label: 'Mass' }, { id: 'any', label: 'Any size' },
+    ];
+  }
+  if (['venenatis', 'callisto', 'vetion'].includes(activity)) {
+    return [{ id: 'mass', label: 'Mass' }, { id: 'any', label: 'Any size' }];
+  }
+  return null;
 }
 
 function teamPanelPayload() {
@@ -659,6 +709,10 @@ function teamPanelPayload() {
           'Link your RuneScape name once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
           'Tap the spec weapons you own, so you can show what you have.\n\n' +
+          '⛧ Region ⛧\n' +
+          'Set your default region. New teams post with it.\n\n' +
+          '⛧ Party Hub ⛧\n' +
+          'Set your default party hub. New teams post with it.\n\n' +
           'Tap below to get started.'
         ),
     ],
@@ -666,7 +720,9 @@ function teamPanelPayload() {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
-        new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+        new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
+        new ButtonBuilder().setCustomId('team:defregion').setLabel('Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
+        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('👥')
       ),
     ],
   };
@@ -737,24 +793,16 @@ function creationStepsFor(activityKey, preId) {
   const act = ACTIVITIES[activityKey];
   const steps = [];
 
-  if (activityKey === 'toa') {
+  // Size, world, region, and hub are post-creation now (listing buttons
+  // + panel defaults). Creation only asks activity-specific questions.
+  if (activityKey === 'toa_expert') {
     steps.push({
-      id: 'sizeChoice', kind: 'buttons', prompt: 'Want a specific team size?',
-      options: [{ id: 'specific', label: 'Yes, pick a size' }, { id: 'any', label: 'No, any size' }],
-    });
-    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(2, 8) });
-    steps.push({
-      id: 'tier', kind: 'buttons', prompt: 'What raid level?', options: [
-        { id: 'Normal', label: 'Normal (150-299)' },
+      id: 'invo', kind: 'buttons', prompt: 'What invocation level?', options: [
         { id: 'Expert', label: 'Expert (300-349)' },
         { id: 'High Invo', label: 'High Invo (350+)' },
       ],
     });
   } else if (activityKey === 'cox') {
-    steps.push({
-      id: 'sizeChoice', kind: 'buttons', prompt: 'Want a specific team size?',
-      options: [{ id: 'specific', label: 'Yes, pick a size' }, { id: 'any', label: 'No, any size' }],
-    });
     steps.push({ id: 'raiders', kind: 'buttons', prompt: 'How many raiders?', options: numOptions(1, 10) });
     steps.push({
       id: 'scalers', kind: 'buttons', prompt: 'How many scaler alts?', options: [
@@ -768,58 +816,24 @@ function creationStepsFor(activityKey, preId) {
         { id: 'Full', label: 'Full' },
       ],
     });
-  } else if (activityKey === 'nex') {
+  } else if (activityKey === 'cox_cm') {
+    steps.push({ id: 'raiders', kind: 'buttons', prompt: 'How many raiders?', options: numOptions(1, 10) });
     steps.push({
-      id: 'size', kind: 'buttons', prompt: 'How many players?',
-      options: [{ id: '2', label: '2' }, { id: '3', label: '3' }, { id: '5', label: '5' }, { id: '8', label: '8' }, { id: 'mass', label: 'Mass (10+)' }],
-    });
-  } else if (activityKey === 'huey') {
-    steps.push({
-      id: 'size', kind: 'buttons', prompt: 'How many players? (Mass is 6+)',
-      options: [...numOptions(3, 5), { id: 'mass', label: 'Mass' }],
+      id: 'scalers', kind: 'buttons', prompt: 'How many scaler alts?', options: [
+        { id: '0', label: 'None' }, ...numOptions(1, 5),
+      ],
     });
   }
   // BA (5), Yama (2), Royal Titans (2) are fixed. ToB size comes from
-  // roles. Skilling, Zalcano, WAG, Venenatis, Callisto, Vet'ion, and
-  // NM mass are open. NM team is fixed at 5.
-
-  // Skilling minigames and Zalcano don't need a region. WAG skips world too.
-  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano', 'wag'].includes(activityKey);
-  if (!noRegion) {
-    steps.push({
-      id: 'region', kind: 'buttons', prompt: 'Which region?',
-      options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
-    });
-  }
-  // Wintertodt, GotR, Tempoross: mass world or small team? World question only for small team.
-  const skillingChoice = ['wintertodt', 'gotr', 'tempoross'].includes(activityKey);
-  if (skillingChoice) {
+  // roles. Everything else starts open; the organizer locks size after.
+  // Wintertodt, GotR, Tempoross: mass world or small team?
+  if (['wintertodt', 'gotr', 'tempoross'].includes(activityKey)) {
     steps.push({
       id: 'worldType', kind: 'buttons', prompt: 'Mass world or small team?',
       options: [{ id: 'mass', label: 'Mass world' }, { id: 'team', label: 'Small team' }],
     });
-    steps.push({
-      id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
-      typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
-      modalPlaceholder: '420',
-    });
-  }
-  if (activityKey !== 'wag' && !skillingChoice) {
-    steps.push({
-      id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
-      typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
-      modalPlaceholder: '420',
-    });
   }
 
-  if (act.partyHub) {
-    steps.push({
-      id: 'hub', kind: 'optionalText',
-      prompt: 'Party hub name? (RuneLite Party plugin)',
-      typeLabel: 'hub name', modalTitle: 'Party hub', modalLabel: 'Party hub name',
-      modalPlaceholder: 'oath1',
-    });
-  }
   if (activityKey === 'yama') {
     steps.push({
       id: 'contract', kind: 'optionalText', prompt: 'Add a contract?',
@@ -917,6 +931,9 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
   const act = ACTIVITIES[activityKey];
   if (!act) return { error: 'Unknown activity.' };
 
+  // Region and hub come from the organizer's panel defaults. World and
+  // size are set after posting via the listing buttons.
+  const defaults = getUserDefaults(organizer.id);
   const team = {
     activity: activityKey,
     organizerId: organizer.id,
@@ -925,9 +942,9 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     roles: rolesFor(activityKey, preId),
     roleMode: roleModeFor(activityKey),
     pre: preId || null,
-    world: data.world || null,
-    region: data.region || null,
-    hub: data.hub || null,
+    world: null,
+    region: defaults.region || null,
+    hub: defaults.partyHub || null,
     note: data.note || null,
     contract: null,
     scale: null,
@@ -948,42 +965,33 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
   // (ToB, BA, Yama) join by claiming a role button instead.
   if (!team.roleMode) team.members[organizer.id] = true;
 
-  // Size
+  // Size: fixed sizes and NM modes are set here; everything else starts
+  // open and the organizer locks it from the listing.
   if (activityKey === 'nm') {
     const nmCfg = nmSizeAndPing(preId);
     team.fillPing = nmCfg.fillPing;
     if (preId === 'mass') {
-      team.size = null;
       team.mass = true;
     } else if (preId === 'team') {
       team.size = 5;
-    } else {
-      team.size = data.size;
     }
   } else if (act.size && act.size.fixed) {
     team.size = act.size.fixed;
-  } else if (activityKey === 'cox') {
-    // Set from raiders below.
-  } else if (data.size === 'mass') {
-    team.size = null;
-    team.mass = true;
-  } else if (data.size != null) {
-    team.size = data.size;
   }
 
-  if (activityKey === 'toa') {
-    if (!data.tier) return { error: 'Pick a raid level.' };
-    team.raidLevel = data.tier;
+  if (activityKey === 'toa_expert') {
+    if (!data.invo) return { error: 'Pick an invocation level.' };
+    team.raidLevel = data.invo;
   }
-  if (activityKey === 'cox') {
-    if (data.sizeChoice === 'specific' && !data.raiders) return { error: 'Pick how many raiders.' };
-    if (data.raiders) {
-      team.scale = { raiders: data.raiders, scalers: data.scalers || 0 };
-      team.size = data.raiders;
-    }
-    team.layout = data.layout || null;
+  if (activityKey === 'cox' || activityKey === 'cox_cm') {
+    if (!data.raiders) return { error: 'Pick how many raiders.' };
+    team.scale = { raiders: data.raiders, scalers: data.scalers || 0 };
+    team.size = data.raiders;
   }
-  if (activityKey === 'tob' && !team.roles) return { error: 'Pick 4s or 5s first.' };
+  if (activityKey === 'cox') team.layout = data.layout || null;
+  if ((activityKey === 'tob' || activityKey === 'tob_hard') && !team.roles) {
+    return { error: 'Pick 4s or 5s first.' };
+  }
   if (activityKey === 'yama') team.contract = data.contract || null;
 
   return { team };
@@ -1060,16 +1068,8 @@ async function handleStepButton(interaction, stepId, value) {
     await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
     return;
   }
-  // Store numbers as numbers, keep ids like 'mass' or tiers as strings.
+  // Store numbers as numbers, keep ids like 'mass' as strings.
   creation.data[stepId] = /^\d+$/.test(value) ? parseInt(value, 10) : value;
-  // "Any size" skips the size steps. ToA skips 1 (size), CoX skips 2 (raiders + scalers).
-  if (stepId === 'sizeChoice' && value === 'any') {
-    creation.idx += creation.activity === 'cox' ? 2 : 1;
-  }
-  // "Mass world" skips the world number step for skilling.
-  if (stepId === 'worldType' && value === 'mass') {
-    creation.idx += 1;
-  }
   await advanceCreation(interaction, creation);
 }
 
@@ -1198,6 +1198,39 @@ async function handleRsnButton(interaction) {
   await interaction.showModal(modal).catch(() => {});
 }
 
+// ─── User defaults: region + party hub, set from the panel ──
+const DEFAULTS_FILE = path.join(__dirname, '..', 'data', 'user-defaults.json');
+
+function loadDefaults() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(DEFAULTS_FILE, 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDefaults(defaults) {
+  fs.mkdirSync(path.dirname(DEFAULTS_FILE), { recursive: true });
+  fs.writeFileSync(DEFAULTS_FILE, JSON.stringify(defaults, null, 2));
+}
+
+function getUserDefaults(userId) {
+  const d = loadDefaults()[userId];
+  if (!d || typeof d !== 'object') return {};
+  return { region: d.region || null, partyHub: d.partyHub || null };
+}
+
+function setUserDefault(userId, key, value) {
+  const defaults = loadDefaults();
+  const entry = (defaults[userId] && typeof defaults[userId] === 'object') ? defaults[userId] : {};
+  if (value) entry[key] = value;
+  else delete entry[key];
+  defaults[userId] = entry;
+  saveDefaults(defaults);
+  return getUserDefaults(userId);
+}
+
 // ─── My Spec Weapons: one-time toggle of owned spec weapons ──
 function specToggleRows(userId) {
   const owned = getSpecs(userId);
@@ -1323,6 +1356,289 @@ async function handleSpecShowToggle(interaction, msgId, specId) {
   await refreshListing(interaction.client, team).catch(() => {});
 }
 
+// ─── Panel defaults: region + party hub ──
+function defRegionRows(userId) {
+  const current = getUserDefaults(userId).region;
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const r of REGIONS) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:defregionset:${r.id}`)
+        .setLabel(r.id === current ? `✓ ${r.label}` : r.label)
+        .setStyle(r.id === current ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        .setEmoji(r.emoji)
+    );
+  }
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+function defRegionText(userId) {
+  const current = getUserDefaults(userId).region;
+  const label = REGIONS.find((r) => r.id === current)?.label;
+  return `${label ? `Your default region is **${label}**.` : 'You have no default region set.'}\nNew teams you post use it automatically.`;
+}
+
+async function handleDefRegionButton(interaction) {
+  await interaction
+    .reply({
+      content: defRegionText(interaction.user.id),
+      components: defRegionRows(interaction.user.id),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleDefRegionSet(interaction, regionId) {
+  if (!REGIONS.some((r) => r.id === regionId)) return;
+  setUserDefault(interaction.user.id, 'region', regionId);
+  await interaction
+    .update({
+      content: defRegionText(interaction.user.id),
+      components: defRegionRows(interaction.user.id),
+    })
+    .catch(() => {});
+}
+
+async function handleDefHubButton(interaction) {
+  const current = getUserDefaults(interaction.user.id).partyHub;
+  const modal = new ModalBuilder()
+    .setCustomId('team:defhubmodal')
+    .setTitle('Default party hub')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:defhubvalue')
+          .setLabel('Party hub name (RuneLite Party plugin)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(32)
+          .setPlaceholder('oath1')
+          .setValue(current || '')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleDefHubModal(interaction) {
+  let hub;
+  try {
+    hub = interaction.fields.getTextInputValue('team:defhubvalue').trim();
+  } catch {
+    hub = '';
+  }
+  setUserDefault(interaction.user.id, 'partyHub', hub || null);
+  await interaction
+    .reply({
+      content: hub ? `Your default party hub is **${hub}**. New teams you post use it.` : 'Default party hub cleared.',
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+// ─── Per-listing management: size lock, world, region, hub (organizer/staff) ──
+function canManageTeam(interaction, team) {
+  return interaction.user.id === team.organizerId || isStaff(interaction);
+}
+
+function teamSizeRows(team, msgId) {
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const o of sizeOptionsFor(team.activity) || []) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    const active = (o.id === 'mass' && team.mass) || (o.id !== 'mass' && o.id !== 'any' && team.size === parseInt(o.id, 10)) || (o.id === 'any' && team.size == null && !team.mass);
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:teamsizeset:${msgId}:${o.id}`)
+        .setLabel(active ? `✓ ${o.label}` : o.label)
+        .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    );
+  }
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+async function handleTeamSizeButton(interaction, msgId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction
+    .reply({
+      content: 'Lock this team to a size, or leave it open.',
+      components: teamSizeRows(team, msgId),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleTeamSizeSet(interaction, msgId, value) {
+  let team = findTeamByMsg(msgId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const state = loadState();
+  team = state.teams[msgId];
+  if (!team) return;
+  if (value === 'any') {
+    team.size = null;
+    team.mass = false;
+  } else if (value === 'mass') {
+    team.size = null;
+    team.mass = true;
+  } else if (/^\d+$/.test(value)) {
+    team.size = parseInt(value, 10);
+    team.mass = false;
+  }
+  saveState(state);
+  await interaction.update({ content: 'Size updated.', components: [] }).catch(() => {});
+  await refreshListing(interaction.client, team).catch(() => {});
+}
+
+async function handleTeamWorldButton(interaction, msgId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`team:teamworldmodal:${msgId}`)
+    .setTitle('Team world')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:worldvalue')
+          .setLabel('World number (blank to clear)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(6)
+          .setPlaceholder('420')
+          .setValue(team.world ? String(team.world) : '')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleTeamWorldModal(interaction, msgId) {
+  let team = findTeamByMsg(msgId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  let world;
+  try {
+    world = interaction.fields.getTextInputValue('team:worldvalue').trim();
+  } catch {
+    world = '';
+  }
+  const state = loadState();
+  team = state.teams[msgId];
+  if (!team) return;
+  team.world = /^\d+$/.test(world) ? parseInt(world, 10) : null;
+  saveState(state);
+  await interaction.reply({ content: team.world ? `World set to ${team.world}.` : 'World cleared.', ephemeral: true }).catch(() => {});
+  await refreshListing(interaction.client, team).catch(() => {});
+}
+
+function teamRegionRows(team, msgId) {
+  const rows = [];
+  let row = new ActionRowBuilder();
+  const opts = [...REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })), { id: 'none', label: 'No region' }];
+  for (const o of opts) {
+    if (row.components.length >= 4) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    const active = (o.id === 'none' && !team.region) || team.region === o.id;
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:teamregionset:${msgId}:${o.id}`)
+        .setLabel(active ? `✓ ${o.label}` : o.label)
+        .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        .setEmoji(o.emoji)
+    );
+  }
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+async function handleTeamRegionButton(interaction, msgId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction
+    .reply({
+      content: 'Region for this team:',
+      components: teamRegionRows(team, msgId),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleTeamRegionSet(interaction, msgId, regionId) {
+  let team = findTeamByMsg(msgId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const state = loadState();
+  team = state.teams[msgId];
+  if (!team) return;
+  team.region = regionId === 'none' ? null : regionId;
+  saveState(state);
+  await interaction.update({ content: 'Region updated.', components: [] }).catch(() => {});
+  await refreshListing(interaction.client, team).catch(() => {});
+}
+
+async function handleTeamHubButton(interaction, msgId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`team:teamhubmodal:${msgId}`)
+    .setTitle('Party hub')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:hubvalue')
+          .setLabel('Hub name, RuneLite Party plugin (blank to clear)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(32)
+          .setPlaceholder('oath1')
+          .setValue(team.hub || '')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleTeamHubModal(interaction, msgId) {
+  let team = findTeamByMsg(msgId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  let hub;
+  try {
+    hub = interaction.fields.getTextInputValue('team:hubvalue').trim();
+  } catch {
+    hub = '';
+  }
+  const state = loadState();
+  team = state.teams[msgId];
+  if (!team) return;
+  team.hub = hub || null;
+  saveState(state);
+  await interaction.reply({ content: team.hub ? `Party hub set to ${team.hub}.` : 'Party hub cleared.', ephemeral: true }).catch(() => {});
+  await refreshListing(interaction.client, team).catch(() => {});
+}
+
 async function handleRsnModal(interaction) {
   // customId 'team:rsnmodal'
   let rsn;
@@ -1372,6 +1688,10 @@ async function maybeNudgeRsn(interaction, userId) {
 
 async function handleTeamModal(interaction) {
   if (interaction.customId === 'team:rsnmodal') return handleRsnModal(interaction);
+  if (interaction.customId === 'team:defhubmodal') return handleDefHubModal(interaction);
+  const parts = interaction.customId.split(':');
+  if (parts[0] === 'team' && parts[1] === 'teamhubmodal') return handleTeamHubModal(interaction, parts[2]);
+  if (parts[0] === 'team' && parts[1] === 'teamworldmodal') return handleTeamWorldModal(interaction, parts[2]);
   return handleStepModal(interaction);
 }
 
@@ -1584,6 +1904,15 @@ async function handleTeamButton(interaction) {
   if (action === 'spectoggle') return handleSpecToggle(interaction, parts[2]);
   if (action === 'specshow') return handleSpecShowButton(interaction, parts[2]);
   if (action === 'specshowtoggle') return handleSpecShowToggle(interaction, parts[2], parts[3]);
+  if (action === 'defregion') return handleDefRegionButton(interaction);
+  if (action === 'defregionset') return handleDefRegionSet(interaction, parts[2]);
+  if (action === 'defhub') return handleDefHubButton(interaction);
+  if (action === 'teamsize') return handleTeamSizeButton(interaction, parts[2]);
+  if (action === 'teamsizeset') return handleTeamSizeSet(interaction, parts[2], parts[3]);
+  if (action === 'teamworld') return handleTeamWorldButton(interaction, parts[2]);
+  if (action === 'teamregion') return handleTeamRegionButton(interaction, parts[2]);
+  if (action === 'teamregionset') return handleTeamRegionSet(interaction, parts[2], parts[3]);
+  if (action === 'teamhub') return handleTeamHubButton(interaction, parts[2]);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
@@ -1676,6 +2005,7 @@ module.exports = {
   applyRoleClaim,
   buildTeamFromData,
   creationStepsFor,
+  activityRoleId,
   REGIONS,
   buildTeamEmbed,
   buildListingComponents,
@@ -1697,6 +2027,9 @@ module.exports = {
   getShowSpecs,
   toggleShowSpec,
   kcMetricForTeam,
+  getUserDefaults,
+  setUserDefault,
+  sizeOptionsFor,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,

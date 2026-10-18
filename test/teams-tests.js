@@ -21,6 +21,7 @@ const {
   applyRoleClaim,
   buildTeamFromData,
   creationStepsFor,
+  activityRoleId,
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
@@ -35,6 +36,7 @@ const {
   getShowSpecs,
   toggleShowSpec,
   kcMetricForTeam,
+  sizeOptionsFor,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
@@ -59,36 +61,31 @@ function test(name, fn) {
 
 // ─── Activity registry ──────────────────────────────────────────
 
-test('all 17 activities defined with name, category, and config role', () => {
+test('all 20 activities defined with name, category, and ping role', () => {
   const keys = Object.keys(ACTIVITIES);
-  assert.strictEqual(keys.length, 17, `expected 17 activities, got ${keys.length}`);
+  assert.strictEqual(keys.length, 20, `expected 20 activities, got ${keys.length}`);
   for (const [key, a] of Object.entries(ACTIVITIES)) {
     assert.ok(a.name, `${key} missing name`);
     assert.ok(['raids', 'skilling', 'bosses'].includes(a.category), `${key} bad category`);
-    assert.ok(
-      config.teams && config.teams.activityRoles && config.teams.activityRoles[key],
-      `${key} missing config.teams.activityRoles`
-    );
+    assert.ok(activityRoleId(key), `${key} missing ping role`);
   }
+  // Split raid modes share the 3 raid ping roles.
+  assert.strictEqual(activityRoleId('toa_expert'), activityRoleId('toa'));
+  assert.strictEqual(activityRoleId('cox_cm'), activityRoleId('cox'));
+  assert.strictEqual(activityRoleId('tob_hard'), activityRoleId('tob'));
 });
 
-test('creation steps exist for every activity and end with region/world/note', () => {
-  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano', 'wag'];
+test('creation steps are slim: activity-specific questions plus note only', () => {
   const noNote = ['wintertodt', 'gotr', 'tempoross', 'zalcano'];
   for (const key of Object.keys(ACTIVITIES)) {
     const pre = ACTIVITIES[key].pre
-      ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
+      ? { tobScale: '4s', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
       : null;
     const steps = creationStepsFor(key, pre);
-    // WAG is just a note (no region, no world, open size).
-    if (key === 'wag') {
-      assert.deepStrictEqual(steps.map((s) => s.id), ['note']);
-      continue;
-    }
-    assert.ok(steps.length >= 2, `${key} has no steps`);
     const ids = steps.map((s) => s.id);
-    if (!noRegion.includes(key)) {
-      assert.ok(ids.includes('region'), `${key} missing region step`);
+    // Size, world, region, hub are post-creation now.
+    for (const gone of ['sizeChoice', 'size', 'tier', 'region', 'world', 'hub']) {
+      assert.ok(!ids.includes(gone), `${key} should not ask ${gone} in creation`);
     }
     if (!noNote.includes(key)) {
       assert.ok(ids.includes('note'), `${key} missing note step`);
@@ -96,76 +93,56 @@ test('creation steps exist for every activity and end with region/world/note', (
     // No em dashes in prompts.
     for (const s of steps) assert.ok(!s.prompt.includes('—'), `${key} step ${s.id} has em dash`);
   }
+  // Raid-specific flows.
+  assert.deepStrictEqual(creationStepsFor('toa').map((s) => s.id), ['note'], 'toa is just a note');
+  assert.deepStrictEqual(creationStepsFor('toa_expert').map((s) => s.id), ['invo', 'note'], 'toa_expert asks invo');
+  assert.deepStrictEqual(creationStepsFor('cox').map((s) => s.id), ['raiders', 'scalers', 'layout', 'note'], 'cox');
+  assert.deepStrictEqual(creationStepsFor('cox_cm').map((s) => s.id), ['raiders', 'scalers', 'note'], 'cox_cm skips layout');
 });
 
-test('skilling activities and WAG skip the party hub step', () => {
-  for (const key of ['wintertodt', 'gotr', 'tempoross', 'wag']) {
-    const pre = key === 'wag' ? 'mass' : null;
-    const ids = creationStepsFor(key, pre).map((s) => s.id);
-    assert.ok(!ids.includes('hub'), `${key} should not have a hub step`);
-  }
-  assert.ok(creationStepsFor('zalcano', null).map((s) => s.id).includes('hub'), 'zalcano keeps hub');
+test('ToA Expert asks invo split, plain ToA asks nothing', () => {
+  const invo = creationStepsFor('toa_expert', null).find((s) => s.id === 'invo');
+  assert.strictEqual(invo.kind, 'buttons');
+  assert.deepStrictEqual(invo.options.map((o) => o.id), ['Expert', 'High Invo']);
 });
 
-test('ToA steps ask specific size first, then 2-8 and tier buttons', () => {
-  const steps = creationStepsFor('toa', null);
-  const choice = steps.find((s) => s.id === 'sizeChoice');
-  assert.strictEqual(choice.kind, 'buttons');
-  assert.deepStrictEqual(choice.options.map((o) => o.id), ['specific', 'any']);
-  const size = steps.find((s) => s.id === 'size');
-  assert.strictEqual(size.kind, 'buttons');
-  assert.deepStrictEqual(size.options.map((o) => o.id), ['2', '3', '4', '5', '6', '7', '8']);
-  const tier = steps.find((s) => s.id === 'tier');
-  assert.deepStrictEqual(tier.options.map((o) => o.id), ['Normal', 'Expert', 'High Invo']);
-});
-
-test('Mass button is on Nex and Hueycoatl only', () => {
-  const withMass = ['nex', 'huey'];
-  for (const key of withMass) {
-    const pre = key === 'huey' ? 'public' : null;
-    const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
-    assert.ok(size, `${key} missing size step`);
-    assert.ok(size.options.some((o) => o.id === 'mass'), `${key} size step missing Mass button`);
-  }
+test('sizeOptionsFor: post-creation Size button options per activity', () => {
+  // ToA: 2-8 + Any.
+  assert.deepStrictEqual(sizeOptionsFor('toa').map((o) => o.id), ['2', '3', '4', '5', '6', '7', '8', 'any']);
+  assert.deepStrictEqual(sizeOptionsFor('toa_expert').map((o) => o.id), ['2', '3', '4', '5', '6', '7', '8', 'any']);
   // Nex: 2, 3, 5, 8, Mass (wiki strat sizes).
-  const nexSize = creationStepsFor('nex', null).find((s) => s.id === 'size');
-  assert.deepStrictEqual(nexSize.options.map((o) => o.id), ['2', '3', '5', '8', 'mass']);
+  assert.deepStrictEqual(sizeOptionsFor('nex').map((o) => o.id), ['2', '3', '5', '8', 'mass', 'any']);
   // Hueycoatl: 3, 4, 5 + Mass.
-  const hueySize = creationStepsFor('huey', 'public').find((s) => s.id === 'size');
-  assert.deepStrictEqual(hueySize.options.map((o) => o.id), ['3', '4', '5', 'mass']);
-  // No one else gets a Mass button on the size step.
-  for (const key of Object.keys(ACTIVITIES)) {
-    if (withMass.includes(key)) continue;
-    const pre = ACTIVITIES[key].pre
-      ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
-      : null;
-    const size = creationStepsFor(key, pre).find((s) => s.id === 'size');
-    if (size) assert.ok(!size.options.some((o) => o.id === 'mass'), `${key} should not have a Mass button`);
+  assert.deepStrictEqual(sizeOptionsFor('huey').map((o) => o.id), ['3', '4', '5', 'mass', 'any']);
+  // Wilderness bosses: Mass + Any.
+  for (const key of ['venenatis', 'callisto', 'vetion']) {
+    assert.deepStrictEqual(sizeOptionsFor(key).map((o) => o.id), ['mass', 'any'], key);
+  }
+  // Fixed, role-based, and CoX (raiders in creation) get no Size button.
+  for (const key of ['yama', 'royals', 'ba', 'tob', 'tob_hard', 'cox', 'cox_cm', 'nm', 'wintertodt', 'wag']) {
+    assert.strictEqual(sizeOptionsFor(key), null, `${key} should have no Size button`);
   }
 });
 
-test('Venenatis, Callisto, and Vetion have no size step at all', () => {
-  for (const key of ['venenatis', 'callisto', 'vetion']) {
-    const ids = creationStepsFor(key, null).map((s) => s.id);
-    assert.ok(!ids.includes('size'), `${key} should not have a size step`);
-  }
-  const { team, error } = buildTeamFromData('venenatis', null, { region: 'US', world: '388', note: '' }, { id: 'org1', displayName: 'Alex' });
+test('Venenatis, Callisto, and Vetion start open', () => {
+  const { team, error } = buildTeamFromData('venenatis', null, { note: '' }, { id: 'org1', displayName: 'Alex' });
   assert.ok(!error, error);
   assert.strictEqual(team.size, null);
   assert.strictEqual(team.mass, false);
 });
 
-test('CoX steps are sizeChoice, raiders, scalers, layout', () => {
-  const steps = creationStepsFor('cox', 'normal');
-  const sizeChoice = steps.find((s) => s.id === 'sizeChoice');
+test('CoX steps are raiders, scalers, layout; CM skips layout', () => {
+  const steps = creationStepsFor('cox', null);
   const raiders = steps.find((s) => s.id === 'raiders');
   const scalers = steps.find((s) => s.id === 'scalers');
   const layout = steps.find((s) => s.id === 'layout');
-  assert.ok(sizeChoice && raiders && scalers && layout);
+  assert.ok(raiders && scalers && layout);
   assert.deepStrictEqual(raiders.options.map((o) => o.id).slice(0, 3), ['1', '2', '3']);
   assert.strictEqual(scalers.options[0].id, '0');
   assert.strictEqual(scalers.options[0].label, 'None');
   assert.deepStrictEqual(layout.options.map((o) => o.id), ['Normal', 'Large', 'Full']);
+  const cmSteps = creationStepsFor('cox_cm', null).map((s) => s.id);
+  assert.ok(!cmSteps.includes('layout'), 'CM has no layout step');
 });
 
 test('four regions are offered', () => {
@@ -233,13 +210,15 @@ test('parseSizeInput respects fixed, range, and mass', () => {
 });
 
 test('rolesFor returns the right role sets', () => {
-  assert.deepStrictEqual(rolesFor('tob', '5s-hard'), ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2']);
+  assert.deepStrictEqual(rolesFor('tob', '5s'), ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2']);
   assert.deepStrictEqual(rolesFor('tob', '4s'), ['Mage', 'North FZ', 'RDPS', 'MDPS']);
+  assert.deepStrictEqual(rolesFor('tob_hard', '5s'), ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2']);
   assert.deepStrictEqual(rolesFor('ba', null), ['Attacker', 'Defender', 'Collector', 'Healer', 'Flex']);
   assert.deepStrictEqual(rolesFor('yama', null), ['Mage', 'Melee']);
   assert.strictEqual(rolesFor('toa', null), null);
   assert.strictEqual(rolesFor('tob', 'bogus'), null);
   assert.strictEqual(roleModeFor('tob'), 'exclusive');
+  assert.strictEqual(roleModeFor('tob_hard'), 'exclusive');
   assert.strictEqual(roleModeFor('ba'), 'exclusive');
   assert.strictEqual(roleModeFor('yama'), 'pick');
   assert.strictEqual(roleModeFor('toa'), null);
@@ -345,60 +324,73 @@ const org = { id: 'org1', displayName: 'Alex' };
 test('buildTeamFromData builds a valid ToA team', () => {
   const { team, error } = buildTeamFromData(
     'toa', null,
-    { size: 4, tier: 'Normal', region: 'US', world: '388', hub: 'oath1', note: 'learners welcome' },
+    { note: 'learners welcome' },
     org
   );
   assert.ok(!error, error);
-  assert.strictEqual(team.size, 4);
-  assert.strictEqual(team.raidLevel, 'Normal');
-  assert.strictEqual(team.world, '388');
-  assert.strictEqual(team.region, 'US');
-  assert.strictEqual(team.hub, 'oath1');
+  assert.strictEqual(team.size, null, 'size starts open');
+  assert.strictEqual(team.raidLevel, null);
+  assert.strictEqual(team.world, null);
+  assert.strictEqual(team.region, null, 'no default region in tests');
+  assert.strictEqual(team.hub, null);
   assert.strictEqual(team.fillPing, true);
 });
 
-test('buildTeamFromData requires a ToA tier', () => {
-  const { error } = buildTeamFromData(
-    'toa', null,
-    { size: 4, region: 'US', world: '388' },
-    org
-  );
+test('buildTeamFromData builds ToA Expert with invo', () => {
+  const { team, error } = buildTeamFromData('toa_expert', null, { invo: 'High Invo', note: '' }, org);
+  assert.ok(!error, error);
+  assert.strictEqual(team.raidLevel, 'High Invo');
+});
+
+test('buildTeamFromData requires invo for ToA Expert', () => {
+  const { error } = buildTeamFromData('toa_expert', null, { note: '' }, org);
   assert.ok(error);
 });
 
 test('buildTeamFromData builds CoX scale from raiders and scalers', () => {
   const { team, error } = buildTeamFromData(
-    'cox', 'normal',
-    { raiders: 3, scalers: 2, region: 'US', world: '388', hub: 'oath1', note: '' },
+    'cox', null,
+    { raiders: 3, scalers: 2, layout: 'Full', note: '' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, 3);
   assert.deepStrictEqual(team.scale, { raiders: 3, scalers: 2 });
-  assert.strictEqual(team.pre, 'normal');
+  assert.strictEqual(team.layout, 'Full');
 });
 
-test('buildTeamFromData handles CoX with no scalers', () => {
+test('buildTeamFromData builds CoX CM with no layout', () => {
   const { team, error } = buildTeamFromData(
-    'cox', 'cm',
-    { raiders: 5, scalers: 0, region: 'UK' },
+    'cox_cm', null,
+    { raiders: 5, scalers: 0 },
     org
   );
   assert.ok(!error, error);
   assert.deepStrictEqual(team.scale, { raiders: 5, scalers: 0 });
+  assert.strictEqual(team.layout, null);
   assert.strictEqual(team.world, null);
-  assert.strictEqual(team.region, 'UK');
+});
+
+test('buildTeamFromData requires raiders for CoX', () => {
+  const { error } = buildTeamFromData('cox', null, { note: '' }, org);
+  assert.ok(error);
 });
 
 test('buildTeamFromData builds ToB with 5s roles', () => {
   const { team, error } = buildTeamFromData(
-    'tob', '5s-hard',
-    { region: 'US', world: '388', hub: 'oath1', note: '' },
+    'tob', '5s',
+    { note: '' },
     org
   );
   assert.ok(!error, error);
   assert.deepStrictEqual(team.roles, ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2']);
   assert.strictEqual(team.roleMode, 'exclusive');
+});
+
+test('buildTeamFromData builds ToB Hard Mode with 4s roles', () => {
+  const { team, error } = buildTeamFromData('tob_hard', '4s', { note: '' }, org);
+  assert.ok(!error, error);
+  assert.deepStrictEqual(team.roles, ['Mage', 'North FZ', 'RDPS', 'MDPS']);
 });
 
 test('buildTeamFromData builds BA with fixed size and roles', () => {
@@ -460,27 +452,13 @@ test('buildTeamFromData builds skilling mass without hub', () => {
   assert.strictEqual(team.fillPing, false);
 });
 
-test('buildTeamFromData sets mass flag on Nex Mass pick', () => {
-  const { team, error } = buildTeamFromData(
-    'nex', null,
-    { size: 'mass', region: 'US' },
-    org
-  );
-  assert.ok(!error, error);
-  assert.strictEqual(team.size, null);
-  assert.strictEqual(team.mass, true);
-  assert.strictEqual(team.fillPing, true);
-});
-
-test('buildTeamFromData sets mass flag on Hueycoatl Mass pick', () => {
-  const { team, error } = buildTeamFromData(
-    'huey', 'public',
-    { size: 'mass', region: 'DE', world: '422' },
-    org
-  );
-  assert.ok(!error, error);
-  assert.strictEqual(team.size, null);
-  assert.strictEqual(team.mass, true);
+test('buildTeamFromData starts Nex and Hueycoatl open (mass is post-creation)', () => {
+  for (const [key, pre] of [['nex', null], ['huey', 'public']]) {
+    const { team, error } = buildTeamFromData(key, pre, { note: '' }, org);
+    assert.ok(!error, error);
+    assert.strictEqual(team.size, null, `${key} starts open`);
+    assert.strictEqual(team.mass, false, `${key} mass not set at creation`);
+  }
 });
 
 test('buildTeamEmbed shows Mass for mass teams', () => {
@@ -497,13 +475,25 @@ test('buildTeamEmbed shows Mass for mass teams', () => {
 
 test('buildTeamEmbed shows region only when world is skipped', () => {
   const team = {
-    activity: 'toa', status: 'open', size: 4, roleMode: null,
+    activity: 'toa_expert', status: 'open', size: 4, roleMode: null,
     members: { org1: true }, memberNames: { org1: 'Alex' },
     organizerId: 'org1', region: 'UK', raidLevel: 'Expert', messageId: 'm1',
   };
   const desc = buildTeamEmbed(team).toJSON().description;
   assert.ok(desc.includes('Region:** UK') || desc.includes('Region: UK'), `expected region line, got: ${desc}`);
-  assert.ok(desc.includes('Raid level: Expert'), `expected tier line, got: ${desc}`);
+  assert.ok(desc.includes('Raid level: Expert (300-349)'), `expected invo line, got: ${desc}`);
+});
+
+test('buildTeamEmbed hides world/region/hub lines when unset', () => {
+  const team = {
+    activity: 'toa', status: 'open', size: null, roleMode: null,
+    members: { org1: true }, memberNames: { org1: 'Alex' },
+    organizerId: 'org1', world: null, region: null, hub: null, messageId: 'm1',
+  };
+  const desc = buildTeamEmbed(team).toJSON().description;
+  assert.ok(!desc.includes('World:'), 'no world line');
+  assert.ok(!desc.includes('Region:'), 'no region line');
+  assert.ok(!desc.includes('Party hub:'), 'no hub line');
 });
 
 test('buildTeamEmbed shows world with region in parentheses', () => {
@@ -520,29 +510,41 @@ test('buildTeamEmbed shows world with region in parentheses', () => {
 
 test('buildTeamEmbed uses Zamorak red and has no em dashes', () => {
   const team = {
-    activity: 'toa', status: 'open', size: 4, roleMode: null, roles: null,
+    activity: 'toa_expert', status: 'open', size: 4, roleMode: null, roles: null,
     members: { u1: true }, memberNames: { u1: 'Alex', org1: 'Alex' },
     organizerId: 'org1', world: '388', region: 'US', hub: 'oath1', note: 'learners welcome',
-    raidLevel: 'Normal', messageId: 'm1',
+    raidLevel: 'High Invo', messageId: 'm1',
   };
   const embed = buildTeamEmbed(team);
   const json = embed.toJSON();
   assert.strictEqual(json.color, ZAMORAK_RED);
   assert.ok(!json.description.includes('—'), 'em dash found in embed');
   assert.ok(!json.title.includes('—'), 'em dash found in title');
-  assert.ok(json.description.includes('Raid level: Normal'), 'raid level tier label missing');
+  assert.ok(json.description.includes('Raid level: High Invo (350+)'), 'raid level invo label missing');
   assert.ok(json.description.includes('1/4'));
 });
 
 test('buildTeamEmbed shows ToB pre label in the title', () => {
   const team = {
-    activity: 'tob', status: 'open', pre: '5s-hard', roleMode: 'exclusive',
+    activity: 'tob', status: 'open', pre: '5s', roleMode: 'exclusive',
     roles: ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     members: {}, memberNames: { org1: 'Alex' }, organizerId: 'org1',
     world: '388', hub: 'oath1', note: null, size: 5, messageId: 'm1',
   };
   const json = buildTeamEmbed(team).toJSON();
-  assert.ok(json.title.includes('5s Hard Mode'), `title was: ${json.title}`);
+  assert.ok(json.title.includes('(5s)'), `title was: ${json.title}`);
+});
+
+test('buildTeamEmbed titles the split raid modes', () => {
+  for (const [key, short] of [['toa_expert', 'ToA Expert'], ['cox_cm', 'CoX CM'], ['tob_hard', 'ToB Hard Mode']]) {
+    const team = {
+      activity: key, status: 'open', roleMode: null,
+      members: { org1: true }, memberNames: { org1: 'Alex' },
+      organizerId: 'org1', messageId: 'm1',
+    };
+    const title = buildTeamEmbed(team).toJSON().title;
+    assert.ok(title.includes(`${short} - Find a Team`), `${key} title was: ${title}`);
+  }
 });
 
 test('buildListingComponents: role mode gets role buttons plus organizer row', () => {
@@ -553,22 +555,29 @@ test('buildListingComponents: role mode gets role buttons plus organizer row', (
     messageId: 'm1',
   };
   const rows = buildListingComponents(team);
-  assert.strictEqual(rows.length, 2);
+  assert.strictEqual(rows.length, 3);
   const roleRow = rows[0].toJSON();
   assert.strictEqual(roleRow.components.length, 4);
   assert.ok(roleRow.components[0].custom_id === 'team:role:m1:0');
   assert.ok(roleRow.components[0].label.includes('Alex'), 'claimed role shows holder');
   const orgRow = rows[1].toJSON();
   assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1', 'team:delete:m1', 'team:specshow:m1']);
+  const manageRow = rows[2].toJSON();
+  assert.deepStrictEqual(manageRow.components.map((c) => c.custom_id), ['team:teamworld:m1', 'team:teamregion:m1', 'team:teamhub:m1'], 'tob has no Size button');
 });
 
 test('buildListingComponents: headcount gets Join/Leave plus organizer row', () => {
   const team = { activity: 'nex', status: 'open', roleMode: null, members: {}, messageId: 'm2' };
   const rows = buildListingComponents(team);
-  assert.strictEqual(rows.length, 2);
+  assert.strictEqual(rows.length, 3);
   assert.deepStrictEqual(
     rows[0].toJSON().components.map((c) => c.custom_id),
     ['team:join:m2', 'team:leave:m2']
+  );
+  assert.deepStrictEqual(
+    rows[2].toJSON().components.map((c) => c.custom_id),
+    ['team:teamsize:m2', 'team:teamworld:m2', 'team:teamregion:m2', 'team:teamhub:m2'],
+    'nex gets the full manage row'
   );
 });
 
@@ -666,22 +675,24 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
 test('specsForActivity: relevance per boss', () => {
   const def4 = ['bgs', 'dwh', 'eldermaul', 'tonalztics'];
   assert.deepEqual(specsForActivity('toa'), [...def4, 'soulflame', 'zcb'], 'toa');
+  assert.deepEqual(specsForActivity('toa_expert'), [...def4, 'soulflame', 'zcb'], 'toa_expert');
   assert.deepEqual(specsForActivity('cox'), [...def4, 'soulflame', 'zcb'], 'cox');
+  assert.deepEqual(specsForActivity('cox_cm'), [...def4, 'soulflame', 'zcb'], 'cox_cm');
   assert.deepEqual(specsForActivity('tob'), [...def4, 'zcb'], 'tob skips the horn');
+  assert.deepEqual(specsForActivity('tob_hard'), [...def4, 'zcb'], 'tob_hard skips the horn');
   assert.deepEqual(specsForActivity('yama'), [...def4, 'accursed', 'soulflame', 'zcb'], 'yama');
   assert.deepEqual(specsForActivity('nex'), ['zcb'], 'nex');
   assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
 });
 
-test('kcMetricForTeam: raids use the picked mode', () => {
-  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'Normal' }), 'tombs_of_amascut');
-  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'Expert' }), 'tombs_of_amascut_expert');
-  assert.equal(kcMetricForTeam({ activity: 'toa', raidLevel: 'High Invo' }), 'tombs_of_amascut_expert');
-  assert.equal(kcMetricForTeam({ activity: 'cox', pre: 'normal' }), 'chambers_of_xeric');
-  assert.equal(kcMetricForTeam({ activity: 'cox', pre: 'cm' }), 'chambers_of_xeric_challenge_mode');
-  assert.equal(kcMetricForTeam({ activity: 'tob', pre: '5s' }), 'theatre_of_blood');
-  assert.equal(kcMetricForTeam({ activity: 'tob', pre: '5s-hard' }), 'theatre_of_blood_hard_mode');
+test('kcMetricForTeam: split raid modes map directly', () => {
+  assert.equal(kcMetricForTeam({ activity: 'toa' }), 'tombs_of_amascut');
+  assert.equal(kcMetricForTeam({ activity: 'toa_expert' }), 'tombs_of_amascut_expert');
+  assert.equal(kcMetricForTeam({ activity: 'cox' }), 'chambers_of_xeric');
+  assert.equal(kcMetricForTeam({ activity: 'cox_cm' }), 'chambers_of_xeric_challenge_mode');
+  assert.equal(kcMetricForTeam({ activity: 'tob' }), 'theatre_of_blood');
+  assert.equal(kcMetricForTeam({ activity: 'tob_hard' }), 'theatre_of_blood_hard_mode');
   assert.equal(kcMetricForTeam({ activity: 'yama' }), 'yama');
   assert.equal(kcMetricForTeam({ activity: 'nex' }), 'nex');
   assert.equal(kcMetricForTeam({ activity: 'nm' }), 'nightmare');
