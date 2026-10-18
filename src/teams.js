@@ -250,8 +250,63 @@ function getRsn(userId) {
   return links[userId] ? links[userId].rsn : null;
 }
 
-// The board only makes sense where combat stats matter: headcount PvM
-// teams. Role-based teams (ToB, BA, Yama) and skilling minigames keep text.
+// ─── Spec weapons (defence-lowering specials members own) ──
+const SPECS = [
+  { id: 'bgs', label: 'BGS', name: 'Bandos godsword' },
+  { id: 'dwh', label: 'DWH', name: 'Dragon warhammer' },
+  { id: 'eldermaul', label: 'Elder maul', name: 'Elder maul' },
+  { id: 'tonalztics', label: 'Tonalztics', name: 'Tonalztics of Ralos' },
+  { id: 'accursed', label: 'Accursed', name: 'Accursed sceptre' },
+];
+// Which spec icons render per activity. Raids only; the accursed
+// sceptre is Yama-only.
+const SPEC_DISPLAY = {
+  toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
+  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
+  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
+  yama: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'],
+};
+function specsForActivity(activity) {
+  return SPEC_DISPLAY[activity] || [];
+}
+
+const SPECS_FILE = path.join(__dirname, '..', 'data', 'specs.json');
+
+function loadSpecs() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(SPECS_FILE, 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSpecs(specs) {
+  fs.mkdirSync(path.dirname(SPECS_FILE), { recursive: true });
+  fs.writeFileSync(SPECS_FILE, JSON.stringify(specs, null, 2));
+}
+
+function getSpecs(userId) {
+  const specs = loadSpecs();
+  const list = specs[userId];
+  if (!Array.isArray(list)) return [];
+  return list.filter((id) => SPECS.some((s) => s.id === id));
+}
+
+function toggleSpec(userId, specId) {
+  if (!SPECS.some((s) => s.id === specId)) return getSpecs(userId);
+  const specs = loadSpecs();
+  const list = getSpecs(userId);
+  const i = list.indexOf(specId);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(specId);
+  specs[userId] = list;
+  saveSpecs(specs);
+  return list;
+}
+
+// The board renders on every PvM team (headcount and role-claim).
+// Skilling minigames keep text.
 function boardApplies(team) {
   const act = ACTIVITIES[team.activity];
   return !!act && act.category !== 'skilling';
@@ -270,13 +325,16 @@ async function partyBoardFile(team) {
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
+  const specStore = loadSpecs();
+  const allowedSpecs = specsForActivity(team.activity);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
     const stats = st && !st.notFound
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
     const rsn = links[id] && links[id].rsn;
-    return { name: rsn || (team.memberNames || {})[id] || 'member', stats };
+    const specs = (specStore[id] || []).filter((s) => allowedSpecs.includes(s));
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs };
   });
   if (!rows.some((r) => r.stats)) return null;
   const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS));
@@ -523,7 +581,8 @@ function teamPanelPayload() {
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
-        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('🔗')
+        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('🔗'),
+        new ButtonBuilder().setCustomId('team:specs').setLabel('My Specs').setStyle(ButtonStyle.Danger).setEmoji('🗡️')
       ),
     ],
   };
@@ -1055,6 +1114,61 @@ async function handleRsnButton(interaction) {
   await interaction.showModal(modal).catch(() => {});
 }
 
+// ─── My Specs: one-time toggle of owned defence-lowering spec weapons ──
+function specToggleRows(userId) {
+  const owned = getSpecs(userId);
+  const row = new ActionRowBuilder();
+  for (const spec of SPECS) {
+    const has = owned.includes(spec.id);
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:spectoggle:${spec.id}`)
+        .setLabel(has ? `✓ ${spec.label}` : spec.label)
+        .setStyle(has ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    );
+  }
+  return [row];
+}
+
+function specToggleText(userId) {
+  const owned = getSpecs(userId);
+  const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
+  const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
+  return `${line}\nTap to add or remove. They show on raid party boards.`;
+}
+
+async function handleSpecsButton(interaction) {
+  await interaction
+    .reply({
+      content: specToggleText(interaction.user.id),
+      components: specToggleRows(interaction.user.id),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleSpecToggle(interaction, specId) {
+  toggleSpec(interaction.user.id, specId);
+  await interaction
+    .update({
+      content: specToggleText(interaction.user.id),
+      components: specToggleRows(interaction.user.id),
+    })
+    .catch(() => {});
+  // Refresh open raid teams so the board picks up the change now.
+  const state = loadState();
+  for (const team of Object.values(state.teams)) {
+    if (
+      team.status === 'open' &&
+      team.members &&
+      team.members[interaction.user.id] &&
+      specsForActivity(team.activity).length
+    ) {
+      await refreshListing(interaction.client, team).catch(() => {});
+    }
+  }
+}
+
 async function handleRsnModal(interaction) {
   // customId 'team:rsnmodal'
   let rsn;
@@ -1295,7 +1409,8 @@ async function handleTeamButton(interaction) {
   // customId: team:create | team:cat:<id> | team:pre:<act>:<pre> |
   // team:mk:<step>:<value> | team:mktype:<step> | team:mkskip:<step> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
-  // team:close:<msg> | team:delete:<msg> | team:rsn
+  // team:close:<msg> | team:delete:<msg> | team:rsn | team:specs |
+  // team:spectoggle:<specId>
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'create') return handleCreate(interaction);
@@ -1310,6 +1425,8 @@ async function handleTeamButton(interaction) {
   if (action === 'close') return handleClose(interaction, parts[2]);
   if (action === 'delete') return handleDelete(interaction, parts[2]);
   if (action === 'rsn') return handleRsnButton(interaction);
+  if (action === 'specs') return handleSpecsButton(interaction);
+  if (action === 'spectoggle') return handleSpecToggle(interaction, parts[2]);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
@@ -1414,6 +1531,11 @@ module.exports = {
   boardApplies,
   loadRsnLinks,
   getRsn,
+  SPECS,
+  specsForActivity,
+  loadSpecs,
+  getSpecs,
+  toggleSpec,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
