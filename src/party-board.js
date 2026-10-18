@@ -17,8 +17,34 @@ const COL_W = 106;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
-const SPEC_ICON_MAX = 56;
-const SPEC_ICON_MIN = 32;
+const SPEC_ICON_MAX = 64;
+const SPEC_ICON_MIN = 36;
+
+// Crop an icon to its ink bounding box (+pad) so thin shapes like weapons
+// fill the box they're drawn in instead of floating in empty canvas.
+function inkCrop(icon, pad = 2) {
+  const { w, h, rgba } = icon;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (rgba[(y * w + x) * 4 + 3] > 10) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  if (x1 < 0) return icon; // fully transparent: leave alone
+  x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+  x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1;
+  const out = Buffer.alloc(cw * ch * 4);
+  for (let y = 0; y < ch; y++) {
+    rgba.copy(out, y * cw * 4, ((y0 + y) * w + x0) * 4, ((y0 + y) * w + x0 + cw) * 4);
+  }
+  return { w: cw, h: ch, rgba: out };
+}
 const MAX_ROWS = 12;
 const MAX_NAME_CHARS = 14;
 
@@ -158,7 +184,7 @@ function loadAssets() {
   }
   for (const id of SPEC_IDS) {
     try {
-      specIcons[id] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`)));
+      specIcons[id] = inkCrop(decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`))));
     } catch {
       // icon missing: that spec just won't draw
     }
