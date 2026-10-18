@@ -175,6 +175,7 @@ let atlasSmall = null; // 22px variant for labels
 const SPEC_LABELS = { bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS', accursed: 'ACCURSED', soulflame: 'SOULFLAME HORN', zcb: 'ZCB' };
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
+const bossIcons = {}; // WOM metric -> { w, h, rgba }
 const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'];
 
 function loadAssets() {
@@ -199,6 +200,27 @@ function loadAssets() {
       // icon missing: that spec just won't draw
     }
   }
+  // WOM boss icons for the KC column header.
+  try {
+    for (const f of fs.readdirSync(path.join(ASSET_DIR, 'boss-icons'))) {
+      if (!f.endsWith('.png')) continue;
+      try {
+        bossIcons[f.slice(0, -4)] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'boss-icons', f)));
+      } catch {
+        // icon missing: KC header falls back to text
+      }
+    }
+  } catch {
+    // no boss-icons dir: KC header falls back to text
+  }
+}
+
+// WOM metric key -> boss icon key (strip raid mode suffixes).
+function bossIconKey(metric) {
+  return String(metric || '')
+    .replace(/_expert$/, '')
+    .replace(/_challenge_mode$/, '')
+    .replace(/_hard_mode$/, '');
 }
 
 // ─── Drawing ────────────────────────────────────────────────────────
@@ -315,7 +337,7 @@ function shortDisplayName(name) {
 // extraCount: members beyond MAX_ROWS not shown.
 // Layout: line 1 has name + stats; line 2 has big spec-weapon icons with labels.
 const SPEC_ROW_H = 178;
-function renderPartyBoard(rows, extraCount) {
+function renderPartyBoard(rows, extraCount, opts = {}) {
   loadAssets();
   if (!rows.length) return null;
   const shown = rows.slice(0, MAX_ROWS);
@@ -327,13 +349,16 @@ function renderPartyBoard(rows, extraCount) {
   const H = HEADER_H + SPEC_ROW_H * shown.length + footerH;
   const cv = newCanvas(BOARD_W, H, 26, 18, 16);
 
-  // Icon header, plus a KC text header in the last column.
+  // Icon header. The KC column gets the boss icon (WOM's), falling
+  // back to "KC" text when the icon is missing.
   const cy = HEADER_H / 2;
   COLUMNS.forEach((name, i) => {
     const cx = ox + NAME_W + COL_W * i + COL_W / 2;
     drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
   });
-  drawCentered(cv, kcCx, Math.round(cy - 22), 'KC');
+  const bossIcon = opts.bossIcon && bossIcons[bossIconKey(opts.bossIcon)];
+  if (bossIcon) drawIcon(cv, bossIcon, kcCx, cy, 64);
+  else drawCentered(cv, kcCx, Math.round(cy - 22), 'KC');
 
   let y = HEADER_H;
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
@@ -378,4 +403,4 @@ function boardHeight(rowCount) {
   return HEADER_H + SPEC_ROW_H * shown + (rowCount > MAX_ROWS ? 56 : 24);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, COLUMNS, MAX_ROWS, encodePng, decodePng };
+module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng };

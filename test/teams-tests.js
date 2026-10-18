@@ -37,7 +37,7 @@ const {
   kcMetricForTeam,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
-const { renderPartyBoard, boardHeight, shortDisplayName } = require('../src/party-board');
+const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
 
@@ -688,6 +688,14 @@ test('kcMetricForTeam: raids use the picked mode', () => {
   assert.equal(kcMetricForTeam({ activity: 'huey' }), 'the_hueycoatl');
   assert.equal(kcMetricForTeam({ activity: 'royals' }), 'the_royal_titans');
   assert.equal(kcMetricForTeam({ activity: 'venenatis' }), 'venenatis');
+});
+
+test('bossIconKey strips raid mode suffixes', () => {
+  assert.equal(bossIconKey('tombs_of_amascut_expert'), 'tombs_of_amascut');
+  assert.equal(bossIconKey('chambers_of_xeric_challenge_mode'), 'chambers_of_xeric');
+  assert.equal(bossIconKey('theatre_of_blood_hard_mode'), 'theatre_of_blood');
+  assert.equal(bossIconKey('yama'), 'yama');
+  assert.equal(bossIconKey('the_hueycoatl'), 'the_hueycoatl');
 });
 
 test('renderPartyBoard accepts a kc per row', () => {

@@ -20,7 +20,7 @@ const path = require('path');
 const config = require('./config');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
 const { getStats } = require('./wom');
-const { renderPartyBoard, MAX_ROWS } = require('./party-board');
+const { renderPartyBoard, MAX_ROWS, bossIconKey } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
@@ -410,7 +410,7 @@ async function partyBoardFile(team) {
     return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null };
   });
   if (!rows.some((r) => r.stats)) return null;
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS));
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { bossIcon: bossIconKey(kcMetric) });
   return new AttachmentBuilder(buf, { name: 'party-board.png' });
 }
 
