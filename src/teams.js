@@ -362,15 +362,15 @@ function getSpecEntry(userId) {
   return { specs, entry };
 }
 
-function getSpecs(userId) {
+function getOwnedSpecs(userId) {
   const { entry } = getSpecEntry(userId);
   return entry.owned.filter(validSpecId);
 }
 
-function toggleSpec(userId, specId) {
-  if (!validSpecId(specId)) return getSpecs(userId);
+function toggleOwnedSpec(userId, specId) {
+  if (!validSpecId(specId)) return getOwnedSpecs(userId);
   const { specs, entry } = getSpecEntry(userId);
-  const list = getSpecs(userId);
+  const list = getOwnedSpecs(userId);
   const i = list.indexOf(specId);
   if (i >= 0) list.splice(i, 1);
   else list.push(specId);
@@ -386,19 +386,19 @@ function toggleSpec(userId, specId) {
 
 // Specs a member shows for an activity: their per-boss pick, defaulting
 // to everything they own that is relevant there.
-function getShowSpecs(userId, activity) {
+function getShownSpecs(userId, activity) {
   const { entry } = getSpecEntry(userId);
-  const ownedRelevant = getSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
+  const ownedRelevant = getOwnedSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
   const sel = entry.show[activity];
   if (!Array.isArray(sel)) return ownedRelevant;
   return sel.filter((id) => ownedRelevant.includes(id));
 }
 
-function toggleShowSpec(userId, activity, specId) {
-  const ownedRelevant = getSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
-  if (!ownedRelevant.includes(specId)) return getShowSpecs(userId, activity);
+function toggleShownSpec(userId, activity, specId) {
+  const ownedRelevant = getOwnedSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
+  if (!ownedRelevant.includes(specId)) return getShownSpecs(userId, activity);
   const { specs, entry } = getSpecEntry(userId);
-  const sel = getShowSpecs(userId, activity).slice();
+  const sel = getShownSpecs(userId, activity).slice();
   const i = sel.indexOf(specId);
   if (i >= 0) sel.splice(i, 1);
   else sel.push(specId);
@@ -473,7 +473,7 @@ async function partyBoardFile(team, client) {
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
     const rsn = links[id] && links[id].rsn;
-    const specs = getShowSpecs(id, team.activity);
+    const specs = getShownSpecs(id, team.activity);
     const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
     const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
     return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null, badge };
@@ -681,7 +681,7 @@ function shortName(name, max = 24) {
 function buildListingComponents(team) {
   const rows = [];
   if (team.status === 'closed') return rows;
-  const msgId = team.messageId;
+  const messageId = team.messageId;
 
   if (team.roleMode) {
     const names = team.memberNames || {};
@@ -690,7 +690,7 @@ function buildListingComponents(team) {
       const holder = Object.entries(team.members || {}).find(([, r]) => r === role);
       const label = holder ? `${role}: ${shortName(names[holder[0]] || 'taken')}` : role;
       roleRow.addComponents(
-        new ButtonBuilder().setCustomId(`team:role:${msgId}:${idx}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`team:role:${messageId}:${idx}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Danger)
       );
     });
     // Discord allows max 5 buttons per row; BA/ToB-5s have exactly 5.
@@ -698,19 +698,19 @@ function buildListingComponents(team) {
   } else {
     rows.push(
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`team:join:${msgId}`).setLabel('Join').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`team:leave:${msgId}`).setLabel('Leave').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`team:join:${messageId}`).setLabel('Join').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId(`team:leave:${messageId}`).setLabel('Leave').setStyle(ButtonStyle.Danger)
       )
     );
   }
 
   const closeRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`team:delete:${msgId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId(`team:close:${messageId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`team:delete:${messageId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
   );
   if (specsForActivity(team.activity).length) {
     closeRow.addComponents(
-      new ButtonBuilder().setCustomId(`team:specshow:${msgId}`).setLabel('Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+      new ButtonBuilder().setCustomId(`team:specshow:${messageId}`).setLabel('Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
     );
   }
   rows.push(closeRow);
@@ -718,13 +718,13 @@ function buildListingComponents(team) {
   const manageRow = new ActionRowBuilder();
   if (sizeOptionsFor(team.activity)) {
     manageRow.addComponents(
-      new ButtonBuilder().setCustomId(`team:teamsize:${msgId}`).setLabel('Size').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`team:teamsize:${messageId}`).setLabel('Size').setStyle(ButtonStyle.Secondary)
     );
   }
   manageRow.addComponents(
-    new ButtonBuilder().setCustomId(`team:teamworld:${msgId}`).setLabel('World').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`team:teamregion:${msgId}`).setLabel('Region').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`team:teamhub:${msgId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`team:teamworld:${messageId}`).setLabel('World').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamregion:${messageId}`).setLabel('Region').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamhub:${messageId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary)
   );
   rows.push(manageRow);
   return rows;
@@ -1325,7 +1325,7 @@ async function handleRsnButton(interaction) {
 const BADGES_FILE = path.join(__dirname, '..', 'data', 'badges.json');
 // Badge ids match assets/party-board/badge-icons/<id>.png.
 const BADGES = [
-  { id: 'iron', label: 'Ironman' },
+  { id: 'ironman', label: 'Ironman' },
   { id: 'hc', label: 'Hardcore' },
   { id: 'ult', label: 'Ultimate' },
   { id: 'gim', label: 'Group Ironman' },
@@ -1365,7 +1365,7 @@ function setManualBadge(userId, badgeId) {
 // WOM account types -> badge ids. Regular covers mains AND group irons
 // (WOM can't tell them apart), so regular maps to the main badge and
 // group badges are manual-only.
-const WOM_BADGE = { ironman: 'iron', hardcore: 'hc', ultimate: 'ult', regular: 'main' };
+const WOM_BADGE = { ironman: 'ironman', hardcore: 'hc', ultimate: 'ult', regular: 'main' };
 
 function getBadge(userId, member, stats) {
   const manual = getManualBadge(userId);
@@ -1413,8 +1413,8 @@ function setUserDefault(userId, key, value) {
 }
 
 // ─── My Spec Weapons: one-time toggle of owned spec weapons ──
-function specToggleRows(userId) {
-  const owned = getSpecs(userId);
+function mySpecsRows(userId) {
+  const owned = getOwnedSpecs(userId);
   const rows = [];
   for (const cat of SPEC_CATS) {
     const row = new ActionRowBuilder();
@@ -1432,29 +1432,29 @@ function specToggleRows(userId) {
   return rows;
 }
 
-function specToggleText(userId) {
-  const owned = getSpecs(userId);
+function mySpecsText(userId) {
+  const owned = getOwnedSpecs(userId);
   const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
   const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
   return `${line}\nTop row lowers defense, middle row is offensive, bottom row is utility.\nTap to add or remove. They show on party boards where they're useful.`;
 }
 
-async function handleSpecsButton(interaction) {
+async function handleMySpecsButton(interaction) {
   await interaction
     .reply({
-      content: specToggleText(interaction.user.id),
-      components: specToggleRows(interaction.user.id),
+      content: mySpecsText(interaction.user.id),
+      components: mySpecsRows(interaction.user.id),
       ephemeral: true,
     })
     .catch(() => {});
 }
 
-async function handleSpecToggle(interaction, specId) {
-  toggleSpec(interaction.user.id, specId);
+async function handleMySpecsToggle(interaction, specId) {
+  toggleOwnedSpec(interaction.user.id, specId);
   await interaction
     .update({
-      content: specToggleText(interaction.user.id),
-      components: specToggleRows(interaction.user.id),
+      content: mySpecsText(interaction.user.id),
+      components: mySpecsRows(interaction.user.id),
     })
     .catch(() => {});
   // Refresh open raid teams so the board picks up the change now.
@@ -1462,15 +1462,15 @@ async function handleSpecToggle(interaction, specId) {
 }
 
 // ─── Per-team Specs button: pick which owned specs show for that boss ──
-function specShowRows(userId, team, msgId) {
-  const showing = getShowSpecs(userId, team.activity);
-  const owned = getSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
+function teamSpecsRows(userId, team, messageId) {
+  const showing = getShownSpecs(userId, team.activity);
+  const owned = getOwnedSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
   const row = new ActionRowBuilder();
   for (const spec of SPECS.filter((s) => owned.includes(s.id))) {
     const on = showing.includes(spec.id);
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`team:specshowtoggle:${msgId}:${spec.id}`)
+        .setCustomId(`team:specshowtoggle:${messageId}:${spec.id}`)
         .setLabel(on ? `✓ ${spec.label}` : spec.label)
         .setStyle(on ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
@@ -1478,26 +1478,26 @@ function specShowRows(userId, team, msgId) {
   return [row];
 }
 
-function specShowText(userId, team) {
+function teamSpecsText(userId, team) {
   const act = ACTIVITIES[team.activity] || {};
   return `Specs you'll show on this ${act.short || act.name || 'team'} team:\nTap to add or remove. Change it anytime.`;
 }
 
-function findTeamByMsg(msgId) {
+function findTeamByMessage(messageId) {
   const state = loadState();
-  const team = state.teams[msgId];
+  const team = state.teams[messageId];
   return team && team.status === 'open' ? team : undefined;
 }
 
-async function handleSpecShowButton(interaction, msgId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamSpecsButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   const userId = interaction.user.id;
   if (!team.members || !team.members[userId]) {
     await interaction.reply({ content: 'Join the team first.', ephemeral: true }).catch(() => {});
     return;
   }
-  const owned = getSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
+  const owned = getOwnedSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
   if (!owned.length) {
     const act = ACTIVITIES[team.activity] || {};
     await interaction
@@ -1507,26 +1507,26 @@ async function handleSpecShowButton(interaction, msgId) {
   }
   await interaction
     .reply({
-      content: specShowText(userId, team),
-      components: specShowRows(userId, team, msgId),
+      content: teamSpecsText(userId, team),
+      components: teamSpecsRows(userId, team, messageId),
       ephemeral: true,
     })
     .catch(() => {});
 }
 
-async function handleSpecShowToggle(interaction, msgId, specId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamSpecsToggle(interaction, messageId, specId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   if (!team.members || !team.members[interaction.user.id]) {
     await interaction.reply({ content: 'Join the team first.', ephemeral: true })
       .catch((err) => console.warn('Spec show toggle reply failed:', err.message));
     return;
   }
-  toggleShowSpec(interaction.user.id, team.activity, specId);
+  toggleShownSpec(interaction.user.id, team.activity, specId);
   await interaction
     .update({
-      content: specShowText(interaction.user.id, team),
-      components: specShowRows(interaction.user.id, team, msgId),
+      content: teamSpecsText(interaction.user.id, team),
+      components: teamSpecsRows(interaction.user.id, team, messageId),
     })
     .catch(() => {});
   await refreshListing(interaction.client, team).catch(() => {});
@@ -1622,7 +1622,7 @@ function canManageTeam(interaction, team) {
   return interaction.user.id === team.organizerId || isStaff(interaction);
 }
 
-function teamSizeRows(team, msgId) {
+function teamSizeRows(team, messageId) {
   const rows = [];
   let row = new ActionRowBuilder();
   for (const o of sizeOptionsFor(team.activity) || []) {
@@ -1633,7 +1633,7 @@ function teamSizeRows(team, msgId) {
     const active = (o.id === 'mass' && team.mass) || (o.id !== 'mass' && o.id !== 'any' && team.size === parseInt(o.id, 10)) || (o.id === 'any' && team.size == null && !team.mass);
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`team:teamsizeset:${msgId}:${o.id}`)
+        .setCustomId(`team:teamsizeset:${messageId}:${o.id}`)
         .setLabel(active ? `✓ ${o.label}` : o.label)
         .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
@@ -1642,8 +1642,8 @@ function teamSizeRows(team, msgId) {
   return rows;
 }
 
-async function handleTeamSizeButton(interaction, msgId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamSizeButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
@@ -1652,18 +1652,18 @@ async function handleTeamSizeButton(interaction, msgId) {
   await interaction
     .reply({
       content: 'Lock this team to a size, or leave it open.',
-      components: teamSizeRows(team, msgId),
+      components: teamSizeRows(team, messageId),
       ephemeral: true,
     })
     .catch(() => {});
 }
 
-async function handleTeamSizeSet(interaction, msgId, value) {
-  let team = findTeamByMsg(msgId);
+async function handleTeamSizeSet(interaction, messageId, value) {
+  let team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
   if (!['any', 'mass'].includes(value) && !/^\d+$/.test(value || '')) return;
   const res = await mutateTeams((state) => {
-    const t = state.teams[msgId];
+    const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     if (value === 'any') {
       t.size = null;
@@ -1683,19 +1683,19 @@ async function handleTeamSizeSet(interaction, msgId, value) {
   if (res.error) return;
   await interaction.update({ content: 'Size updated.', components: [] })
     .catch((err) => console.warn('Team size update failed:', err.message));
-  team = loadState().teams[msgId];
+  team = loadState().teams[messageId];
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team size refresh failed:', err.message));
 }
 
-async function handleTeamWorldButton(interaction, msgId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamWorldButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
   }
   const modal = new ModalBuilder()
-    .setCustomId(`team:teamworldmodal:${msgId}`)
+    .setCustomId(`team:teamworldmodal:${messageId}`)
     .setTitle('Team world')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -1712,8 +1712,8 @@ async function handleTeamWorldButton(interaction, msgId) {
   await interaction.showModal(modal).catch(() => {});
 }
 
-async function handleTeamWorldModal(interaction, msgId) {
-  let team = findTeamByMsg(msgId);
+async function handleTeamWorldModal(interaction, messageId) {
+  let team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
   let world;
   try {
@@ -1728,7 +1728,7 @@ async function handleTeamWorldModal(interaction, msgId) {
     return;
   }
   const res = await mutateTeams((state) => {
-    const t = state.teams[msgId];
+    const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.world = worldNum;
     return { ok: true, world: worldNum };
@@ -1739,11 +1739,11 @@ async function handleTeamWorldModal(interaction, msgId) {
   if (res.error) return;
   await interaction.reply({ content: res.world ? `World set to ${res.world}.` : 'World cleared.', ephemeral: true })
     .catch((err) => console.warn('Team world reply failed:', err.message));
-  team = loadState().teams[msgId];
+  team = loadState().teams[messageId];
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team world refresh failed:', err.message));
 }
 
-function teamRegionRows(team, msgId) {
+function teamRegionRows(team, messageId) {
   const rows = [];
   let row = new ActionRowBuilder();
   const opts = [...REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })), { id: 'none', label: 'No region' }];
@@ -1755,7 +1755,7 @@ function teamRegionRows(team, msgId) {
     const active = (o.id === 'none' && !team.region) || team.region === o.id;
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`team:teamregionset:${msgId}:${o.id}`)
+        .setCustomId(`team:teamregionset:${messageId}:${o.id}`)
         .setLabel(active ? `✓ ${o.label}` : o.label)
         .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
         .setEmoji(o.emoji)
@@ -1765,8 +1765,8 @@ function teamRegionRows(team, msgId) {
   return rows;
 }
 
-async function handleTeamRegionButton(interaction, msgId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamRegionButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
@@ -1775,19 +1775,19 @@ async function handleTeamRegionButton(interaction, msgId) {
   await interaction
     .reply({
       content: 'Region for this team:',
-      components: teamRegionRows(team, msgId),
+      components: teamRegionRows(team, messageId),
       ephemeral: true,
     })
     .catch(() => {});
 }
 
-async function handleTeamRegionSet(interaction, msgId, regionId) {
-  let team = findTeamByMsg(msgId);
+async function handleTeamRegionSet(interaction, messageId, regionId) {
+  let team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
   const validRegion = regionId === 'none' || REGIONS.some((r) => r.id === regionId);
   if (!validRegion) return;
   const res = await mutateTeams((state) => {
-    const t = state.teams[msgId];
+    const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.region = regionId === 'none' ? null : regionId;
     return { ok: true };
@@ -1798,19 +1798,19 @@ async function handleTeamRegionSet(interaction, msgId, regionId) {
   if (res.error) return;
   await interaction.update({ content: 'Region updated.', components: [] })
     .catch((err) => console.warn('Team region update failed:', err.message));
-  team = loadState().teams[msgId];
+  team = loadState().teams[messageId];
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team region refresh failed:', err.message));
 }
 
-async function handleTeamHubButton(interaction, msgId) {
-  const team = findTeamByMsg(msgId);
+async function handleTeamHubButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
   if (!team) return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
   }
   const modal = new ModalBuilder()
-    .setCustomId(`team:teamhubmodal:${msgId}`)
+    .setCustomId(`team:teamhubmodal:${messageId}`)
     .setTitle('Party hub')
     .addComponents(
       new ActionRowBuilder().addComponents(
@@ -1827,8 +1827,8 @@ async function handleTeamHubButton(interaction, msgId) {
   await interaction.showModal(modal).catch(() => {});
 }
 
-async function handleTeamHubModal(interaction, msgId) {
-  let team = findTeamByMsg(msgId);
+async function handleTeamHubModal(interaction, messageId) {
+  let team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
   let hub;
   try {
@@ -1838,7 +1838,7 @@ async function handleTeamHubModal(interaction, msgId) {
   }
   const hubVal = hub || null;
   const res = await mutateTeams((state) => {
-    const t = state.teams[msgId];
+    const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.hub = hubVal;
     return { ok: true };
@@ -1849,7 +1849,7 @@ async function handleTeamHubModal(interaction, msgId) {
   if (res.error) return;
   await interaction.reply({ content: hubVal ? `Party hub set to ${hubVal}.` : 'Party hub cleared.', ephemeral: true })
     .catch((err) => console.warn('Team hub reply failed:', err.message));
-  team = loadState().teams[msgId];
+  team = loadState().teams[messageId];
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team hub refresh failed:', err.message));
 }
 
@@ -1992,10 +1992,10 @@ async function sendFillPing(client, team) {
   }
 }
 
-async function handleJoin(interaction, msgId) {
+async function handleJoin(interaction, messageId) {
   const userId = interaction.user.id;
   const res = await mutateTeams((state) => {
-    const team = state.teams[msgId];
+    const team = state.teams[messageId];
     if (!team) return { error: 'That team is gone.' };
     const r = applyJoin(team, userId);
     if (!r.ok) return { error: r.error };
@@ -2019,10 +2019,10 @@ async function handleJoin(interaction, msgId) {
   await maybeNudgeRsn(interaction, userId);
 }
 
-async function handleLeave(interaction, msgId) {
+async function handleLeave(interaction, messageId) {
   const userId = interaction.user.id;
   const res = await mutateTeams((state) => {
-    const team = state.teams[msgId];
+    const team = state.teams[messageId];
     if (!team) return { error: 'That team is gone.' };
     const r = applyLeave(team, userId);
     if (!r.ok) return { error: r.error };
@@ -2041,10 +2041,10 @@ async function handleLeave(interaction, msgId) {
   if (team) await refreshListing(interaction.client, team);
 }
 
-async function handleRoleClaim(interaction, msgId, roleIdx) {
+async function handleRoleClaim(interaction, messageId, roleIdx) {
   const userId = interaction.user.id;
   const res = await mutateTeams((state) => {
-    const team = state.teams[msgId];
+    const team = state.teams[messageId];
     if (!team) return { error: 'That team is gone.' };
     const r = applyRoleClaim(team, userId, roleIdx);
     if (!r.ok) return { error: r.error };
@@ -2068,9 +2068,9 @@ async function handleRoleClaim(interaction, msgId, roleIdx) {
   await maybeNudgeRsn(interaction, userId);
 }
 
-async function handleClose(interaction, msgId) {
+async function handleClose(interaction, messageId) {
   const res = await mutateTeams((state) => {
-    const team = state.teams[msgId];
+    const team = state.teams[messageId];
     if (!team || team.status !== 'open') return { error: 'That team is already closed.' };
     if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
       return { error: 'Only the organizer or staff can close this.' };
@@ -2092,14 +2092,14 @@ async function handleClose(interaction, msgId) {
   if (team) await refreshListing(interaction.client, team);
 }
 
-async function handleDelete(interaction, msgId) {
+async function handleDelete(interaction, messageId) {
   const res = await mutateTeams((state) => {
-    const team = state.teams[msgId];
+    const team = state.teams[messageId];
     if (!team) return { error: 'That team is already gone.' };
     if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
       return { error: 'Only the organizer or staff can delete this.' };
     }
-    delete state.teams[msgId];
+    delete state.teams[messageId];
     return { ok: true, channelId: team.channelId, fillPingMsgId: team.fillPingMsgId };
   }).catch((err) => {
     console.warn('Team delete mutation failed:', err.message);
@@ -2113,7 +2113,7 @@ async function handleDelete(interaction, msgId) {
   // Delete the listing message and the fill ping if there is one.
   const channel = await interaction.client.channels.fetch(res.channelId).catch(() => null);
   if (channel && channel.isTextBased()) {
-    await channel.messages.delete(msgId).catch((err) => console.warn('Team listing delete failed:', err.message));
+    await channel.messages.delete(messageId).catch((err) => console.warn('Team listing delete failed:', err.message));
     if (res.fillPingMsgId) {
       await channel.messages.delete(res.fillPingMsgId).catch((err) => console.warn('Fill ping delete failed:', err.message));
     }
@@ -2143,10 +2143,10 @@ async function handleTeamButton(interaction) {
   if (action === 'close') return handleClose(interaction, parts[2]);
   if (action === 'delete') return handleDelete(interaction, parts[2]);
   if (action === 'rsn') return handleRsnButton(interaction);
-  if (action === 'specs') return handleSpecsButton(interaction);
-  if (action === 'spectoggle') return handleSpecToggle(interaction, parts[2]);
-  if (action === 'specshow') return handleSpecShowButton(interaction, parts[2]);
-  if (action === 'specshowtoggle') return handleSpecShowToggle(interaction, parts[2], parts[3]);
+  if (action === 'specs') return handleMySpecsButton(interaction);
+  if (action === 'spectoggle') return handleMySpecsToggle(interaction, parts[2]);
+  if (action === 'specshow') return handleTeamSpecsButton(interaction, parts[2]);
+  if (action === 'specshowtoggle') return handleTeamSpecsToggle(interaction, parts[2], parts[3]);
   if (action === 'defregion') return handleDefRegionButton(interaction);
   if (action === 'defregionset') return handleDefRegionSet(interaction, parts[2]);
   if (action === 'defhub') return handleDefHubButton(interaction);
@@ -2282,10 +2282,10 @@ module.exports = {
   SPEC_CATS,
   specsForActivity,
   loadSpecs,
-  getSpecs,
-  toggleSpec,
-  getShowSpecs,
-  toggleShowSpec,
+  getOwnedSpecs,
+  toggleOwnedSpec,
+  getShownSpecs,
+  toggleShownSpec,
   kcMetricForTeam,
   getUserDefaults,
   setUserDefault,
