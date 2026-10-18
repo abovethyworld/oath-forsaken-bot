@@ -625,11 +625,14 @@ function creationStepsFor(activityKey, preId) {
       modalPlaceholder: 'None',
     });
   }
-  steps.push({
-    id: 'note', kind: 'optionalText', prompt: 'Add a note?',
-    typeLabel: 'note', modalTitle: 'Note', modalLabel: 'Note',
-    modalPlaceholder: 'Learners welcome', paragraph: true,
-  });
+  // Skilling minigames and Zalcano skip the note.
+  if (!['wintertodt', 'gotr', 'tempoross', 'zalcano'].includes(activityKey)) {
+    steps.push({
+      id: 'note', kind: 'optionalText', prompt: 'Add a note?',
+      typeLabel: 'note', modalTitle: 'Note', modalLabel: 'Note',
+      modalPlaceholder: 'Learners welcome', paragraph: true,
+    });
+  }
 
   return steps;
 }
