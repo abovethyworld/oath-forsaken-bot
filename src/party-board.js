@@ -183,7 +183,7 @@ const specIcons = {}; // spec id -> { w, h, rgba }
 const bossIcons = {}; // WOM metric -> { w, h, rgba }
 const badgeIcons = {}; // badge id -> { w, h, rgba }
 // Badge ids: iron, hc, ult, gim, hcgim, main, ironsworn.
-const BADGE_IDS = ['iron', 'hc', 'ult', 'gim', 'hcgim', 'main', 'ironsworn'];
+const BADGE_IDS = ['ironman', 'hc', 'ult', 'gim', 'hcgim', 'main', 'ironsworn'];
 const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'sgs', 'zgs', 'dinhs'];
 
 function loadAssets() {
