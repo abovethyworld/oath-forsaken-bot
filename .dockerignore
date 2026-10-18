@@ -2,7 +2,8 @@
 .env
 node_modules
 data
-assets
+assets/*
+!assets/party-board/
 deploy
 tools
 docs
