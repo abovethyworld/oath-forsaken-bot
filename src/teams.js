@@ -576,7 +576,14 @@ function teamPanelPayload() {
       new EmbedBuilder()
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Find a Team ⛧')
-        .setDescription('Need a group? Post a team and fill it.\n\nTap below to get started.'),
+        .setDescription(
+          'Need a group? Pick an activity, set it up, post it.\n\n' +
+          '⛧ Link RSN ⛧\n' +
+          'Link your RuneScape name once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
+          '⛧ My Spec Weapons ⛧\n' +
+          'Tap the spec weapons you own, so you can show what you have.\n\n' +
+          'Tap below to get started.'
+        ),
     ],
     components: [
       new ActionRowBuilder().addComponents(
