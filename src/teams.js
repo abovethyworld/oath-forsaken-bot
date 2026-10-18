@@ -367,7 +367,8 @@ function buildTeamEmbed(team) {
   const lines = [];
 
   if (team.activity === 'toa' && team.raidLevel) {
-    lines.push(`Raid level: ${team.raidLevel}`);
+    const tierLabels = { 'Normal': 'Normal (150-299)', 'Expert': 'Expert (300-349)', 'High Invo': 'High Invo (350+)' };
+    lines.push(`Raid level: ${tierLabels[team.raidLevel] || team.raidLevel}`);
   }
   if (team.activity === 'cox' && team.scale) {
     const s = team.scale;
