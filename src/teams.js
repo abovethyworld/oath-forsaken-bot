@@ -572,7 +572,7 @@ function creationStepsFor(activityKey, preId) {
     options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
   });
   steps.push({
-    id: 'world', kind: 'optionalText', prompt: 'Add the specific world number?',
+    id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
     typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
     modalPlaceholder: '420',
   });
