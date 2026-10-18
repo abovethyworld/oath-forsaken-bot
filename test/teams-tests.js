@@ -642,12 +642,13 @@ test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
 
 // ─── Party board ──────────────────────────────────────────────────
 
-test('boardApplies: raids and bosses yes, role teams and skilling no', () => {
+test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
   assert.ok(boardApplies({ activity: 'toa' }), 'toa');
   assert.ok(boardApplies({ activity: 'nex' }), 'nex');
   assert.ok(boardApplies({ activity: 'cox' }), 'cox');
-  assert.ok(!boardApplies({ activity: 'tob', roleMode: 'exclusive' }), 'tob roles');
-  assert.ok(!boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba roles');
+  assert.ok(boardApplies({ activity: 'tob', roleMode: 'exclusive' }), 'tob roles');
+  assert.ok(!boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba is skilling-category');
+  assert.ok(boardApplies({ activity: 'yama', roleMode: 'pick' }), 'yama roles');
   assert.ok(!boardApplies({ activity: 'wintertodt' }), 'wintertodt');
   assert.ok(!boardApplies({ activity: 'zalcano' }), 'zalcano');
   assert.ok(!boardApplies({ activity: 'wag' }), 'wag');
