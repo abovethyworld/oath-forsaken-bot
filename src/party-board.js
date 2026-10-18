@@ -172,11 +172,20 @@ function decodePng(buf) {
 let atlas = null; // { img, glyphs }
 let atlasSmall = null; // 22px variant for labels
 
-const SPEC_LABELS = { bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS', accursed: 'ACCURSED', soulflame: 'SOULFLAME HORN', zcb: 'ZCB' };
+const SPEC_LABELS = {
+  bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS',
+  accursed: 'ACCURSED', bonedagger: 'BONE DAGGER', emberlight: 'EMBERLIGHT',
+  eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME HORN', zcb: 'ZCB',
+  voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'BURNING CLAWS',
+  webweaver: 'WEBWEAVER', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
+};
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
 const bossIcons = {}; // WOM metric -> { w, h, rgba }
-const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'];
+const badgeIcons = {}; // badge id -> { w, h, rgba }
+// Badge ids: iron, hc, ult, gim, hcgim, main, ironsworn.
+const BADGE_IDS = ['iron', 'hc', 'ult', 'gim', 'hcgim', 'main', 'ironsworn'];
+const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'sgs', 'zgs', 'dinhs'];
 
 function loadAssets() {
   if (atlas) return;
@@ -198,6 +207,14 @@ function loadAssets() {
       specIcons[id] = inkCrop(decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`))));
     } catch {
       // icon missing: that spec just won't draw
+    }
+  }
+  // Account badge icons (clan emojis) for the name column.
+  for (const id of BADGE_IDS) {
+    try {
+      badgeIcons[id] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'badge-icons', `${id}.png`)));
+    } catch {
+      // badge missing: that badge just won't draw
     }
   }
   // WOM boss icons for the KC column header.
@@ -335,8 +352,25 @@ function shortDisplayName(name) {
 
 // rows: [{ name, stats: [cb,atk,str,rng,mag,def,hp,pry] | null, specs: [specId] }]
 // extraCount: members beyond MAX_ROWS not shown.
-// Layout: line 1 has name + stats; line 2 has big spec-weapon icons with labels.
-const SPEC_ROW_H = 178;
+// Layout: line 1 has badge + name + stats; below it, spec-weapon icons
+// stacked by category (Defense Lowering, Offensive, Utility), each with
+// a small header. Row height grows with the number of non-empty groups.
+const SPEC_CAT_ORDER = [
+  ['DEFENSE LOWERING', ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak']],
+  ['OFFENSIVE', ['soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver']],
+  ['UTILITY', ['sgs', 'zgs', 'dinhs']],
+];
+const GROUP_H = 160;
+function specGroupsFor(specs) {
+  const known = (specs || []).filter((id) => specIcons[id]);
+  return SPEC_CAT_ORDER
+    .map(([catName, catIds]) => [catName, known.filter((id) => catIds.includes(id))])
+    .filter(([, ids]) => ids.length);
+}
+function rowHeightFor(specs) {
+  return 62 + specGroupsFor(specs).length * GROUP_H;
+}
+const BADGE_H = 48;
 function renderPartyBoard(rows, extraCount, opts = {}) {
   loadAssets();
   if (!rows.length) return null;
@@ -346,7 +380,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   const ox = Math.round((BOARD_W - gridW) / 2);
   const kcCx = ox + NAME_W + statsW + KC_COL_W / 2;
   const footerH = extraCount > 0 ? 56 : 24;
-  const H = HEADER_H + SPEC_ROW_H * shown.length + footerH;
+  const H = HEADER_H + shown.reduce((a, r) => a + rowHeightFor(r.specs), 0) + footerH;
   const cv = newCanvas(BOARD_W, H, 26, 18, 16);
 
   // Icon header. The KC column gets the boss icon (WOM's), falling
@@ -364,12 +398,17 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   const smallA = atlasSmall || atlas;
-  shown.forEach(({ name, stats, specs, kc }) => {
+  shown.forEach(({ name, stats, specs, kc, badge }) => {
     const label = shortDisplayName(name);
-    const known = (specs || []).filter((id) => specIcons[id]);
-    // Line 1: name + stats + KC.
+    // Line 1: badge + name + stats + KC.
     const ry = y + 12;
-    drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
+    let nameX = ox + 20;
+    const badgeIcon = badge && badgeIcons[badge];
+    if (badgeIcon) {
+      drawIcon(cv, badgeIcon, nameX + 24, Math.round(ry + 14), BADGE_H);
+      nameX += 56;
+    }
+    drawText(cv, nameX, Math.round(ry), label, stats ? undefined : gray);
     COLUMNS.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
@@ -377,19 +416,27 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
     drawCentered(cv, kcCx, Math.round(ry),
       typeof kc === 'number' ? `${kc.toLocaleString('en-US')} KC` : '-',
       stats ? undefined : gray);
-    // Line 2: big spec-weapon icons with labels.
-    const labs = known.map((id) => SPEC_LABELS[id] || id.toUpperCase());
-    const lws = labs.map((lab) => textWidth(lab, smallA));
-    let ix = ox + 20 + 40;
-    const icy = y + 72 + 38;
-    known.forEach((specId, idx) => {
-      drawIcon(cv, specIcons[specId], ix, icy, 72);
-      const lw = lws[idx];
-      drawText(cv, Math.round(ix - lw / 2), Math.round(icy + 40), labs[idx], undefined, smallA);
-      const nextW = idx + 1 < known.length ? lws[idx + 1] : 0;
-      ix += Math.max(110, (lw + nextW) / 2 + 48);
-    });
-    y += SPEC_ROW_H;
+    // Spec groups, stacked: header + icons + labels each.
+    let sy = y + 62;
+    for (const [catName, ids] of specGroupsFor(specs)) {
+      drawText(cv, ox + 20, Math.round(sy), catName, [150, 150, 150], smallA);
+      sy += 30;
+      const icy = sy + 38;
+      let ix = ox + 20 + 40;
+      const labs = ids.map((id) => SPEC_LABELS[id] || id.toUpperCase());
+      const lws = labs.map((lab) => textWidth(lab, smallA));
+      ids.forEach((specId, idx) => {
+        drawIcon(cv, specIcons[specId], ix, icy, 72);
+        const lw = lws[idx];
+        // Clamp labels inside the content area so long names never clip.
+        const lx = Math.max(Math.round(ix - lw / 2), ox + 20);
+        drawText(cv, lx, Math.round(icy + 40), labs[idx], undefined, smallA);
+        const nextW = idx + 1 < ids.length ? lws[idx + 1] : 0;
+        ix += Math.max(110, (lw + nextW) / 2 + 48);
+      });
+      sy = icy + 78;
+    }
+    y += rowHeightFor(specs);
     hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
   });
   if (extraCount > 0) {
@@ -399,8 +446,9 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
 }
 
 function boardHeight(rowCount) {
+  // Estimate: base row height, no spec groups.
   const shown = Math.min(rowCount, MAX_ROWS);
-  return HEADER_H + SPEC_ROW_H * shown + (rowCount > MAX_ROWS ? 56 : 24);
+  return HEADER_H + 62 * shown + (rowCount > MAX_ROWS ? 56 : 24);
 }
 
 module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng };
