@@ -7,7 +7,7 @@ const path = require('path');
 
 const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
-const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache.json');
+const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache-v2.json');
 const CACHE_MS = 24 * 3600 * 1000;
 const MIN_GAP_MS = 1200; // min time between WOM requests
 
@@ -84,7 +84,12 @@ function parseStats(playerJson) {
     return entry && typeof entry.level === 'number';
   });
   if (!hasAny) return null;
-  return { combat: combatLevel(levels), ...levels };
+  const bosses = (snap.data && snap.data.bosses) || snap.bosses || {};
+  const kc = {};
+  for (const [key, entry] of Object.entries(bosses)) {
+    if (entry && typeof entry.kills === 'number') kc[key] = entry.kills;
+  }
+  return { combat: combatLevel(levels), ...levels, kc };
 }
 
 async function fetchPlayerDetails(username) {
