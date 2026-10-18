@@ -583,10 +583,14 @@ function creationStepsFor(activityKey, preId) {
   // roles. Skilling, Zalcano, WAG, Venenatis, Callisto, Vet'ion, and
   // NM mass are open.
 
-  steps.push({
-    id: 'region', kind: 'buttons', prompt: 'Which region?',
-    options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
-  });
+  // Skilling minigames and Zalcano don't need a region.
+  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano'].includes(activityKey);
+  if (!noRegion) {
+    steps.push({
+      id: 'region', kind: 'buttons', prompt: 'Which region?',
+      options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
+    });
+  }
   steps.push({
     id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
     typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
