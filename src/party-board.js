@@ -11,9 +11,10 @@ const ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
 // Column order: combat, attack, strength, ranged, magic, defence, hitpoints, prayer.
 const COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
 
-const BOARD_W = 1400;
+const BOARD_W = 1560;
 const NAME_W = 520;
 const COL_W = 106;
+const KC_COL_W = 150;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
@@ -318,33 +319,39 @@ function renderPartyBoard(rows, extraCount) {
   loadAssets();
   if (!rows.length) return null;
   const shown = rows.slice(0, MAX_ROWS);
-  const gridW = NAME_W + COL_W * COLUMNS.length;
+  const statsW = COL_W * COLUMNS.length;
+  const gridW = NAME_W + statsW + KC_COL_W;
   const ox = Math.round((BOARD_W - gridW) / 2);
+  const kcCx = ox + NAME_W + statsW + KC_COL_W / 2;
   const footerH = extraCount > 0 ? 56 : 24;
   const H = HEADER_H + SPEC_ROW_H * shown.length + footerH;
   const cv = newCanvas(BOARD_W, H, 26, 18, 16);
 
-  // Icon header
+  // Icon header, plus a KC text header in the last column.
   const cy = HEADER_H / 2;
   COLUMNS.forEach((name, i) => {
     const cx = ox + NAME_W + COL_W * i + COL_W / 2;
     drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
   });
+  drawCentered(cv, kcCx, Math.round(cy - 22), 'KC');
 
   let y = HEADER_H;
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   const smallA = atlasSmall || atlas;
-  shown.forEach(({ name, stats, specs }) => {
+  shown.forEach(({ name, stats, specs, kc }) => {
     const label = shortDisplayName(name);
     const known = (specs || []).filter((id) => specIcons[id]);
-    // Line 1: name + stats.
+    // Line 1: name + stats + KC.
     const ry = y + 12;
     drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
     COLUMNS.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
     });
+    drawCentered(cv, kcCx, Math.round(ry),
+      typeof kc === 'number' ? kc.toLocaleString('en-US') : '-',
+      stats ? undefined : gray);
     // Line 2: big spec-weapon icons with labels.
     const labs = known.map((id) => SPEC_LABELS[id] || id.toUpperCase());
     const lws = labs.map((lab) => textWidth(lab, smallA));
