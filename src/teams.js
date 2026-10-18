@@ -252,19 +252,26 @@ function getRsn(userId) {
 
 // ─── Spec weapons (defence-lowering specials members own) ──
 const SPECS = [
-  { id: 'bgs', label: 'BGS', name: 'Bandos godsword' },
-  { id: 'dwh', label: 'DWH', name: 'Dragon warhammer' },
-  { id: 'eldermaul', label: 'Elder maul', name: 'Elder maul' },
-  { id: 'tonalztics', label: 'Tonalztics', name: 'Tonalztics of Ralos' },
-  { id: 'accursed', label: 'Accursed', name: 'Accursed sceptre' },
+  { id: 'bgs', label: 'BGS', name: 'Bandos godsword', cat: 'def' },
+  { id: 'dwh', label: 'DWH', name: 'Dragon warhammer', cat: 'def' },
+  { id: 'eldermaul', label: 'Elder maul', name: 'Elder maul', cat: 'def' },
+  { id: 'tonalztics', label: 'Tonalztics', name: 'Tonalztics of Ralos', cat: 'def' },
+  { id: 'accursed', label: 'Accursed', name: 'Accursed sceptre', cat: 'def' },
+  { id: 'soulflame', label: 'Soulflame', name: 'Soulflame horn', cat: 'off' },
+  { id: 'zcb', label: 'ZCB', name: 'Zaryte crossbow', cat: 'off' },
 ];
-// Which spec icons render per activity. Raids only; the accursed
-// sceptre is Yama-only.
+const SPEC_CATS = [
+  { id: 'def', label: 'Defense Lowering' },
+  { id: 'off', label: 'Offensive' },
+];
+// Which spec icons can show per activity (hard relevance rules).
+// The accursed sceptre is Yama-only; the horn skips ToB for now.
 const SPEC_DISPLAY = {
-  toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
-  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
-  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics'],
-  yama: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'],
+  toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
+  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
+  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb'],
+  yama: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'],
+  nex: ['zcb'],
 };
 function specsForActivity(activity) {
   return SPEC_DISPLAY[activity] || [];
@@ -286,23 +293,66 @@ function saveSpecs(specs) {
   fs.writeFileSync(SPECS_FILE, JSON.stringify(specs, null, 2));
 }
 
-function getSpecs(userId) {
+function validSpecId(id) {
+  return SPECS.some((s) => s.id === id);
+}
+
+// Entry shape: { owned: [specId], show: { activity: [specId] } }.
+// Migrates the old flat { userId: [specId] } shape on read.
+function getSpecEntry(userId) {
   const specs = loadSpecs();
-  const list = specs[userId];
-  if (!Array.isArray(list)) return [];
-  return list.filter((id) => SPECS.some((s) => s.id === id));
+  let entry = specs[userId];
+  if (Array.isArray(entry)) entry = { owned: entry, show: {} };
+  if (!entry || typeof entry !== 'object') entry = { owned: [], show: {} };
+  if (!Array.isArray(entry.owned)) entry.owned = [];
+  if (!entry.show || typeof entry.show !== 'object') entry.show = {};
+  return { specs, entry };
+}
+
+function getSpecs(userId) {
+  const { entry } = getSpecEntry(userId);
+  return entry.owned.filter(validSpecId);
 }
 
 function toggleSpec(userId, specId) {
-  if (!SPECS.some((s) => s.id === specId)) return getSpecs(userId);
-  const specs = loadSpecs();
+  if (!validSpecId(specId)) return getSpecs(userId);
+  const { specs, entry } = getSpecEntry(userId);
   const list = getSpecs(userId);
   const i = list.indexOf(specId);
   if (i >= 0) list.splice(i, 1);
   else list.push(specId);
-  specs[userId] = list;
+  entry.owned = list;
+  // Dropping ownership also drops it from every per-boss selection.
+  for (const act of Object.keys(entry.show)) {
+    entry.show[act] = (entry.show[act] || []).filter((id) => list.includes(id));
+  }
+  specs[userId] = entry;
   saveSpecs(specs);
   return list;
+}
+
+// Specs a member shows for an activity: their per-boss pick, defaulting
+// to everything they own that is relevant there.
+function getShowSpecs(userId, activity) {
+  const { entry } = getSpecEntry(userId);
+  const ownedRelevant = getSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
+  const sel = entry.show[activity];
+  if (!Array.isArray(sel)) return ownedRelevant;
+  return sel.filter((id) => ownedRelevant.includes(id));
+}
+
+function toggleShowSpec(userId, activity, specId) {
+  const ownedRelevant = getSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
+  if (!ownedRelevant.includes(specId)) return getShowSpecs(userId, activity);
+  const { specs, entry } = getSpecEntry(userId);
+  const sel = getShowSpecs(userId, activity).slice();
+  const i = sel.indexOf(specId);
+  if (i >= 0) sel.splice(i, 1);
+  else sel.push(specId);
+  entry.show[activity] = sel;
+  specs[userId] = entry;
+  saveSpecs(specs);
+  return sel;
 }
 
 // The board renders on every PvM team (headcount and role-claim).
@@ -325,15 +375,13 @@ async function partyBoardFile(team) {
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
-  const specStore = loadSpecs();
-  const allowedSpecs = specsForActivity(team.activity);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
     const stats = st && !st.notFound
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
     const rsn = links[id] && links[id].rsn;
-    const specs = (specStore[id] || []).filter((s) => allowedSpecs.includes(s));
+    const specs = getShowSpecs(id, team.activity);
     return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs };
   });
   if (!rows.some((r) => r.stats)) return null;
@@ -561,12 +609,16 @@ function buildListingComponents(team) {
     );
   }
 
-  rows.push(
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`team:delete:${msgId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
-    )
+  const closeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`team:delete:${msgId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
   );
+  if (specsForActivity(team.activity).length) {
+    closeRow.addComponents(
+      new ButtonBuilder().setCustomId(`team:specshow:${msgId}`).setLabel('Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+    );
+  }
+  rows.push(closeRow);
   return rows;
 }
 
@@ -1121,27 +1173,31 @@ async function handleRsnButton(interaction) {
   await interaction.showModal(modal).catch(() => {});
 }
 
-// ─── My Spec Weapons: one-time toggle of owned defence-lowering spec weapons ──
+// ─── My Spec Weapons: one-time toggle of owned spec weapons ──
 function specToggleRows(userId) {
   const owned = getSpecs(userId);
-  const row = new ActionRowBuilder();
-  for (const spec of SPECS) {
-    const has = owned.includes(spec.id);
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`team:spectoggle:${spec.id}`)
-        .setLabel(has ? `✓ ${spec.label}` : spec.label)
-        .setStyle(has ? ButtonStyle.Danger : ButtonStyle.Secondary)
-    );
+  const rows = [];
+  for (const cat of SPEC_CATS) {
+    const row = new ActionRowBuilder();
+    for (const spec of SPECS.filter((s) => s.cat === cat.id)) {
+      const has = owned.includes(spec.id);
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`team:spectoggle:${spec.id}`)
+          .setLabel(has ? `✓ ${spec.label}` : spec.label)
+          .setStyle(has ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      );
+    }
+    rows.push(row);
   }
-  return [row];
+  return rows;
 }
 
 function specToggleText(userId) {
   const owned = getSpecs(userId);
   const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
   const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
-  return `${line}\nTap to add or remove. They show on raid party boards.`;
+  return `${line}\nTop row lowers defense, bottom row is offensive.\nTap to add or remove. They show on party boards where they're useful.`;
 }
 
 async function handleSpecsButton(interaction) {
@@ -1174,6 +1230,71 @@ async function handleSpecToggle(interaction, specId) {
       await refreshListing(interaction.client, team).catch(() => {});
     }
   }
+}
+
+// ─── Per-team Specs button: pick which owned specs show for that boss ──
+function specShowRows(userId, team, msgId) {
+  const showing = getShowSpecs(userId, team.activity);
+  const owned = getSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
+  const row = new ActionRowBuilder();
+  for (const spec of SPECS.filter((s) => owned.includes(s.id))) {
+    const on = showing.includes(spec.id);
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:specshowtoggle:${msgId}:${spec.id}`)
+        .setLabel(on ? `✓ ${spec.label}` : spec.label)
+        .setStyle(on ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    );
+  }
+  return [row];
+}
+
+function specShowText(userId, team) {
+  const act = ACTIVITIES[team.activity] || {};
+  return `Specs you'll show on this ${act.short || act.name || 'team'} team:\nTap to add or remove. Change it anytime.`;
+}
+
+function findTeamByMsg(msgId) {
+  const state = loadState();
+  return Object.values(state.teams).find((t) => t.msgId === msgId && t.status === 'open');
+}
+
+async function handleSpecShowButton(interaction, msgId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  const userId = interaction.user.id;
+  if (!team.members || !team.members[userId]) {
+    await interaction.reply({ content: 'Join the team first.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const owned = getSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
+  if (!owned.length) {
+    const act = ACTIVITIES[team.activity] || {};
+    await interaction
+      .reply({ content: `You don't own any spec weapons useful for ${act.short || act.name || 'this'}. Set them with My Spec Weapons first.`, ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+  await interaction
+    .reply({
+      content: specShowText(userId, team),
+      components: specShowRows(userId, team, msgId),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleSpecShowToggle(interaction, msgId, specId) {
+  const team = findTeamByMsg(msgId);
+  if (!team) return;
+  toggleShowSpec(interaction.user.id, team.activity, specId);
+  await interaction
+    .update({
+      content: specShowText(interaction.user.id, team),
+      components: specShowRows(interaction.user.id, team, msgId),
+    })
+    .catch(() => {});
+  await refreshListing(interaction.client, team).catch(() => {});
 }
 
 async function handleRsnModal(interaction) {
@@ -1417,7 +1538,8 @@ async function handleTeamButton(interaction) {
   // team:mk:<step>:<value> | team:mktype:<step> | team:mkskip:<step> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
   // team:close:<msg> | team:delete:<msg> | team:rsn | team:specs |
-  // team:spectoggle:<specId>
+  // team:spectoggle:<specId> | team:specshow:<msg> |
+  // team:specshowtoggle:<msg>:<specId>
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'create') return handleCreate(interaction);
@@ -1434,6 +1556,8 @@ async function handleTeamButton(interaction) {
   if (action === 'rsn') return handleRsnButton(interaction);
   if (action === 'specs') return handleSpecsButton(interaction);
   if (action === 'spectoggle') return handleSpecToggle(interaction, parts[2]);
+  if (action === 'specshow') return handleSpecShowButton(interaction, parts[2]);
+  if (action === 'specshowtoggle') return handleSpecShowToggle(interaction, parts[2], parts[3]);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
@@ -1539,10 +1663,13 @@ module.exports = {
   loadRsnLinks,
   getRsn,
   SPECS,
+  SPEC_CATS,
   specsForActivity,
   loadSpecs,
   getSpecs,
   toggleSpec,
+  getShowSpecs,
+  toggleShowSpec,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
