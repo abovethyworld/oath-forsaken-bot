@@ -11,10 +11,10 @@ const ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
 // Column order: combat, attack, strength, ranged, magic, defence, hitpoints, prayer.
 const COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
 
-const BOARD_W = 1560;
+const BOARD_W = 1630;
 const NAME_W = 520;
 const COL_W = 106;
-const KC_COL_W = 150;
+const KC_COL_W = 220;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
@@ -375,7 +375,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
     });
     drawCentered(cv, kcCx, Math.round(ry),
-      typeof kc === 'number' ? kc.toLocaleString('en-US') : '-',
+      typeof kc === 'number' ? `${kc.toLocaleString('en-US')} KC` : '-',
       stats ? undefined : gray);
     // Line 2: big spec-weapon icons with labels.
     const labs = known.map((id) => SPEC_LABELS[id] || id.toUpperCase());
