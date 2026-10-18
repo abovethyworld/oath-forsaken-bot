@@ -31,10 +31,10 @@ const {
   SPECS,
   specsForActivity,
   loadSpecs,
-  getSpecs,
-  toggleSpec,
-  getShowSpecs,
-  toggleShowSpec,
+  getOwnedSpecs,
+  toggleOwnedSpec,
+  getShownSpecs,
+  toggleShownSpec,
   kcMetricForTeam,
   sizeOptionsFor,
   getBadge,
@@ -755,7 +755,7 @@ test('SPECS has seventeen weapons in three categories with unique ids', () => {
   assert.equal(SPECS.filter((s) => s.cat === 'util').length, 3, 'utility');
 });
 
-test('toggleSpec adds, removes, and ignores bad ids', () => {
+test('toggleOwnedSpec adds, removes, and ignores bad ids', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const file = path.join(__dirname, '..', 'data', 'specs.json');
@@ -763,12 +763,12 @@ test('toggleSpec adds, removes, and ignores bad ids', () => {
   try {
     if (fs.existsSync(file)) fs.unlinkSync(file);
     const u = 'test-user-specs';
-    assert.deepEqual(getSpecs(u), [], 'starts empty');
-    assert.deepEqual(toggleSpec(u, 'dwh'), ['dwh'], 'add dwh');
-    assert.deepEqual(toggleSpec(u, 'bgs'), ['dwh', 'bgs'], 'add bgs');
-    assert.deepEqual(getSpecs(u), ['dwh', 'bgs'], 'persists');
-    assert.deepEqual(toggleSpec(u, 'dwh'), ['bgs'], 'remove dwh');
-    assert.deepEqual(toggleSpec(u, 'nope'), ['bgs'], 'bad id ignored');
+    assert.deepEqual(getOwnedSpecs(u), [], 'starts empty');
+    assert.deepEqual(toggleOwnedSpec(u, 'dwh'), ['dwh'], 'add dwh');
+    assert.deepEqual(toggleOwnedSpec(u, 'bgs'), ['dwh', 'bgs'], 'add bgs');
+    assert.deepEqual(getOwnedSpecs(u), ['dwh', 'bgs'], 'persists');
+    assert.deepEqual(toggleOwnedSpec(u, 'dwh'), ['bgs'], 'remove dwh');
+    assert.deepEqual(toggleOwnedSpec(u, 'nope'), ['bgs'], 'bad id ignored');
     assert.deepEqual(loadSpecs()[u].owned, ['bgs'], 'stored');
   } finally {
     if (backup !== null) fs.writeFileSync(file, backup);
@@ -783,14 +783,14 @@ test('spec store migrates the old flat array shape', () => {
   const backup = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
   try {
     fs.writeFileSync(file, JSON.stringify({ 'test-user-mig': ['dwh', 'bgs'] }));
-    assert.deepEqual(getSpecs('test-user-mig'), ['dwh', 'bgs'], 'old shape reads as owned');
+    assert.deepEqual(getOwnedSpecs('test-user-mig'), ['dwh', 'bgs'], 'old shape reads as owned');
   } finally {
     if (backup !== null) fs.writeFileSync(file, backup);
     else if (fs.existsSync(file)) fs.unlinkSync(file);
   }
 });
 
-test('getShowSpecs defaults to owned and relevant; toggleShowSpec narrows it', () => {
+test('getShownSpecs defaults to owned and relevant; toggleShownSpec narrows it', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const file = path.join(__dirname, '..', 'data', 'specs.json');
@@ -798,26 +798,26 @@ test('getShowSpecs defaults to owned and relevant; toggleShowSpec narrows it', (
   try {
     if (fs.existsSync(file)) fs.unlinkSync(file);
     const u = 'test-user-show';
-    toggleSpec(u, 'dwh');
-    toggleSpec(u, 'bgs');
-    toggleSpec(u, 'accursed');
-    toggleSpec(u, 'zcb');
+    toggleOwnedSpec(u, 'dwh');
+    toggleOwnedSpec(u, 'bgs');
+    toggleOwnedSpec(u, 'accursed');
+    toggleOwnedSpec(u, 'zcb');
     // Default: owned ∩ relevant.
-    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa default');
-    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama default');
-    assert.deepEqual(getShowSpecs(u, 'nex'), ['zcb'], 'nex default');
+    assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa default');
+    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama default');
+    assert.deepEqual(getShownSpecs(u, 'nex'), ['zcb'], 'nex default');
     // Narrow the ToA pick; other bosses unaffected.
-    toggleShowSpec(u, 'toa', 'zcb');
-    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'toa narrowed');
-    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama untouched');
-    toggleShowSpec(u, 'toa', 'zcb');
-    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa restored');
+    toggleShownSpec(u, 'toa', 'zcb');
+    assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'toa narrowed');
+    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama untouched');
+    toggleShownSpec(u, 'toa', 'zcb');
+    assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa restored');
     // Irrelevant or unowned ids are ignored.
-    toggleShowSpec(u, 'nex', 'bgs');
-    assert.deepEqual(getShowSpecs(u, 'nex'), ['zcb'], 'bgs not relevant on nex');
+    toggleShownSpec(u, 'nex', 'bgs');
+    assert.deepEqual(getShownSpecs(u, 'nex'), ['zcb'], 'bgs not relevant on nex');
     // Dropping ownership clears it from per-boss picks.
-    toggleSpec(u, 'zcb');
-    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'ownership drop clears picks');
+    toggleOwnedSpec(u, 'zcb');
+    assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'ownership drop clears picks');
   } finally {
     if (backup !== null) fs.writeFileSync(file, backup);
     else if (fs.existsSync(file)) fs.unlinkSync(file);
@@ -901,7 +901,7 @@ test('getBadge: manual beats WOM beats role', () => {
     // WOM beats role.
     assert.strictEqual(getBadge(u, mainMember, { accountType: 'hardcore' }), 'hc', 'wom hardcore');
     assert.strictEqual(getBadge(u, ironMember, { accountType: 'ultimate' }), 'ult', 'wom ultimate');
-    assert.strictEqual(getBadge(u, null, { accountType: 'ironman' }), 'iron', 'wom ironman');
+    assert.strictEqual(getBadge(u, null, { accountType: 'ironman' }), 'ironman', 'wom ironman');
     assert.strictEqual(getBadge(u, null, { accountType: 'regular' }), 'main', 'wom regular');
     // Manual beats everything.
     setManualBadge(u, 'gim');
@@ -918,7 +918,7 @@ test('getBadge: manual beats WOM beats role', () => {
 
 test('renderPartyBoard draws badges and stacked spec groups', () => {
   const rows = [
-    { name: 'Irons', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker', 'sgs'], kc: 10, badge: 'iron' },
+    { name: 'Irons', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker', 'sgs'], kc: 10, badge: 'ironman' },
     { name: 'Mains', stats: [100, 70, 70, 70, 70, 70, 70, 60], specs: [], kc: null, badge: 'main' },
   ];
   const buf = renderPartyBoard(rows, 0, {});
