@@ -266,31 +266,48 @@ function getRsn(userId) {
   return links[userId] ? links[userId].rsn : null;
 }
 
-// ─── Spec weapons (defence-lowering specials members own) ──
+// ─── Spec weapons (special-attack weapons members own) ──
 const SPECS = [
   { id: 'bgs', label: 'BGS', name: 'Bandos godsword', cat: 'def' },
   { id: 'dwh', label: 'DWH', name: 'Dragon warhammer', cat: 'def' },
   { id: 'eldermaul', label: 'Elder maul', name: 'Elder maul', cat: 'def' },
   { id: 'tonalztics', label: 'Tonalztics', name: 'Tonalztics of Ralos', cat: 'def' },
   { id: 'accursed', label: 'Accursed', name: 'Accursed sceptre', cat: 'def' },
+  { id: 'bonedagger', label: 'Bone dagger', name: 'Bone dagger', cat: 'def' },
+  { id: 'emberlight', label: 'Emberlight', name: 'Emberlight', cat: 'def' },
+  { id: 'eyeofayak', label: 'Eye of Ayak', name: 'Eye of Ayak', cat: 'def' },
   { id: 'soulflame', label: 'Soulflame', name: 'Soulflame horn', cat: 'off' },
   { id: 'zcb', label: 'ZCB', name: 'Zaryte crossbow', cat: 'off' },
+  { id: 'voidwaker', label: 'Voidwaker', name: 'Voidwaker', cat: 'off' },
+  { id: 'dragonclaws', label: 'D claws', name: 'Dragon claws', cat: 'off' },
+  { id: 'burningclaws', label: 'Burning claws', name: 'Burning claws', cat: 'off' },
+  { id: 'webweaver', label: 'Webweaver', name: 'Webweaver bow', cat: 'off' },
+  { id: 'sgs', label: 'SGS', name: 'Saradomin godsword', cat: 'util' },
+  { id: 'zgs', label: 'ZGS', name: 'Zamorak godsword', cat: 'util' },
+  { id: 'dinhs', label: "Dinh's", name: "Dinh's bulwark", cat: 'util' },
 ];
 const SPEC_CATS = [
   { id: 'def', label: 'Defense Lowering' },
   { id: 'off', label: 'Offensive' },
+  { id: 'util', label: 'Utility' },
 ];
-// Which spec icons can show per activity (hard relevance rules).
-// The accursed sceptre is Yama-only; the horn skips ToB for now.
+// Which spec icons can show per activity (wiki strategy pages, 2026-10-18).
 const SPEC_DISPLAY = {
-  toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
-  toa_expert: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
-  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
-  cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb'],
-  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb'],
-  tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb'],
-  yama: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'],
-  nex: ['zcb'],
+  toa: ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
+  toa_expert: ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
+  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
+  cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
+  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+  tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+  yama: ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
+  nex: ['zcb', 'voidwaker', 'burningclaws'],
+  huey: ['dragonclaws', 'burningclaws'],
+  royals: ['zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+  venenatis: ['dwh', 'eldermaul', 'webweaver', 'dinhs'],
+  callisto: ['dwh', 'accursed', 'zcb', 'webweaver'],
+  vetion: ['eldermaul'],
+  nm: ['bgs', 'dwh', 'eldermaul', 'voidwaker', 'dragonclaws', 'sgs'],
+  ba: ['dinhs', 'dragonclaws'],
 };
 function specsForActivity(activity) {
   return SPEC_DISPLAY[activity] || [];
@@ -401,7 +418,7 @@ function kcMetricForTeam(team) {
 
 // Builds the party-board image for a team, or null when it shouldn't show
 // (not a board team, or nobody has linked an RSN yet).
-async function partyBoardFile(team) {
+async function partyBoardFile(team, client) {
   if (!boardApplies(team)) return null;
   const ids = Object.keys(team.members || {});
   if (!ids.length) return null;
@@ -412,6 +429,26 @@ async function partyBoardFile(team) {
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
+  // Guild members for role-based badge fallback. Only fetched when needed.
+  let membersById = null;
+  const needRoles = ids.some((id, i) => {
+    const st = statsList[i];
+    return !getManualBadge(id) && !(st && !st.notFound && WOM_BADGE[st.accountType]);
+  });
+  if (needRoles && client) {
+    try {
+      const guild = client.guilds.cache.get(config.guildId) || await client.guilds.fetch(config.guildId).catch(() => null);
+      if (guild) {
+        const fetched = await guild.members.fetch({ user: ids }).catch(() => null);
+        if (fetched) {
+          membersById = {};
+          for (const [mid, m] of fetched) membersById[mid] = m;
+        }
+      }
+    } catch {
+      // role fallback unavailable; badges just won't show for these members
+    }
+  }
   const kcMetric = kcMetricForTeam(team);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
@@ -421,7 +458,8 @@ async function partyBoardFile(team) {
     const rsn = links[id] && links[id].rsn;
     const specs = getShowSpecs(id, team.activity);
     const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
-    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null };
+    const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null, badge };
   });
   if (!rows.some((r) => r.stats)) return null;
   const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { bossIcon: bossIconKey(kcMetric) });
@@ -713,6 +751,8 @@ function teamPanelPayload() {
           'Set your default region. New teams post with it.\n\n' +
           '⛧ Party Hub ⛧\n' +
           'Set your default party hub. New teams post with it.\n\n' +
+          '⛧ Account Badge ⛧\n' +
+          'Pick the badge shown by your name on the team board.\n\n' +
           'Tap below to get started.'
         ),
     ],
@@ -724,8 +764,67 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:defregion').setLabel('Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
         new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('👥')
       ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('team:badge').setLabel('Account Badge').setStyle(ButtonStyle.Danger).setEmoji('🛡️')
+      ),
     ],
   };
+}
+
+function badgeRows(userId) {
+  const current = getManualBadge(userId);
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const b of BADGES) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:badgeset:${b.id}`)
+        .setLabel(b.id === current ? `✓ ${b.label}` : b.label)
+        .setStyle(b.id === current ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    );
+  }
+  if (row.components.length) rows.push(row);
+  // Clear row.
+  rows.push(
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('team:badgeset:none')
+        .setLabel(current ? 'Clear (use auto)' : 'Auto')
+        .setStyle(ButtonStyle.Secondary)
+    )
+  );
+  return rows;
+}
+
+async function handleBadgeButton(interaction) {
+  await interaction
+    .reply({
+      content: 'Pick your account badge. This overrides the automatic badge on the team board.',
+      components: badgeRows(interaction.user.id),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleBadgeSet(interaction, badgeId) {
+  setManualBadge(interaction.user.id, badgeId === 'none' ? null : badgeId);
+  await interaction
+    .update({
+      content: 'Pick your account badge. This overrides the automatic badge on the team board.',
+      components: badgeRows(interaction.user.id),
+    })
+    .catch(() => {});
+  // Refresh open teams so the board picks up the badge now.
+  const state = loadState();
+  for (const team of Object.values(state.teams)) {
+    if (team.status === 'open' && team.members && team.members[interaction.user.id] && boardApplies(team)) {
+      await refreshListing(interaction.client, team).catch(() => {});
+    }
+  }
 }
 
 // ─── Creation flow ──────────────────────────────────────────────────
@@ -1023,7 +1122,7 @@ async function finalizeCreation(interaction, creation) {
   let msg;
   try {
     team.channelId = channel.id;
-    const file = await partyBoardFile(team).catch(() => null);
+    const file = await partyBoardFile(team, interaction.client).catch(() => null);
     const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
     if (file) embed.setImage('attachment://party-board.png');
     msg = await channel.send({
@@ -1196,6 +1295,64 @@ async function handleRsnButton(interaction) {
       )
     );
   await interaction.showModal(modal).catch(() => {});
+}
+
+// ─── Account badges: manual pick overrides WOM type, else Discord role ──
+const BADGES_FILE = path.join(__dirname, '..', 'data', 'badges.json');
+// Badge ids match assets/party-board/badge-icons/<id>.png.
+const BADGES = [
+  { id: 'iron', label: 'Ironman' },
+  { id: 'hc', label: 'Hardcore' },
+  { id: 'ult', label: 'Ultimate' },
+  { id: 'gim', label: 'Group Ironman' },
+  { id: 'hcgim', label: 'HC Group Ironman' },
+  { id: 'main', label: 'Main' },
+  { id: 'ironsworn', label: 'Iron Sworn' },
+];
+const IRON_SWORN_ROLE = '1558540424048803860';
+const UNBOUND_ROLE = '1558540434652008569';
+
+function loadBadges() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(BADGES_FILE, 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveBadges(badges) {
+  fs.mkdirSync(path.dirname(BADGES_FILE), { recursive: true });
+  fs.writeFileSync(BADGES_FILE, JSON.stringify(badges, null, 2));
+}
+
+function getManualBadge(userId) {
+  const id = loadBadges()[userId];
+  return BADGES.some((b) => b.id === id) ? id : null;
+}
+
+function setManualBadge(userId, badgeId) {
+  const badges = loadBadges();
+  if (badgeId && BADGES.some((b) => b.id === badgeId)) badges[userId] = badgeId;
+  else delete badges[userId];
+  saveBadges(badges);
+}
+
+// WOM account types -> badge ids. Regular covers mains AND group irons
+// (WOM can't tell them apart), so regular maps to the main badge and
+// group badges are manual-only.
+const WOM_BADGE = { ironman: 'iron', hardcore: 'hc', ultimate: 'ult', regular: 'main' };
+
+function getBadge(userId, member, stats) {
+  const manual = getManualBadge(userId);
+  if (manual) return manual;
+  if (stats && WOM_BADGE[stats.accountType]) return WOM_BADGE[stats.accountType];
+  const roles = (member && member.roles && member.roles.cache) || null;
+  if (roles) {
+    if (roles.has(IRON_SWORN_ROLE)) return 'ironsworn';
+    if (roles.has(UNBOUND_ROLE)) return 'main';
+  }
+  return null;
 }
 
 // ─── User defaults: region + party hub, set from the panel ──
@@ -1747,7 +1904,7 @@ async function refreshListing(client, team) {
     saveState(state);
     return null;
   }
-  const file = await partyBoardFile(team).catch((err) => {
+  const file = await partyBoardFile(team, client).catch((err) => {
     console.warn('Party board failed:', err.message);
     return null;
   });
@@ -1907,6 +2064,8 @@ async function handleTeamButton(interaction) {
   if (action === 'defregion') return handleDefRegionButton(interaction);
   if (action === 'defregionset') return handleDefRegionSet(interaction, parts[2]);
   if (action === 'defhub') return handleDefHubButton(interaction);
+  if (action === 'badge') return handleBadgeButton(interaction);
+  if (action === 'badgeset') return handleBadgeSet(interaction, parts[2]);
   if (action === 'teamsize') return handleTeamSizeButton(interaction, parts[2]);
   if (action === 'teamsizeset') return handleTeamSizeSet(interaction, parts[2], parts[3]);
   if (action === 'teamworld') return handleTeamWorldButton(interaction, parts[2]);
@@ -2030,6 +2189,10 @@ module.exports = {
   getUserDefaults,
   setUserDefault,
   sizeOptionsFor,
+  getBadge,
+  getManualBadge,
+  setManualBadge,
+  BADGES,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,

@@ -37,6 +37,9 @@ const {
   toggleShowSpec,
   kcMetricForTeam,
   sizeOptionsFor,
+  getBadge,
+  getManualBadge,
+  setManualBadge,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
@@ -672,16 +675,33 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
   assert.ok(!boardApplies({ activity: 'nope' }), 'unknown activity');
 });
 
-test('specsForActivity: relevance per boss', () => {
-  const def4 = ['bgs', 'dwh', 'eldermaul', 'tonalztics'];
-  assert.deepEqual(specsForActivity('toa'), [...def4, 'soulflame', 'zcb'], 'toa');
-  assert.deepEqual(specsForActivity('toa_expert'), [...def4, 'soulflame', 'zcb'], 'toa_expert');
-  assert.deepEqual(specsForActivity('cox'), [...def4, 'soulflame', 'zcb'], 'cox');
-  assert.deepEqual(specsForActivity('cox_cm'), [...def4, 'soulflame', 'zcb'], 'cox_cm');
-  assert.deepEqual(specsForActivity('tob'), [...def4, 'zcb'], 'tob skips the horn');
-  assert.deepEqual(specsForActivity('tob_hard'), [...def4, 'zcb'], 'tob_hard skips the horn');
-  assert.deepEqual(specsForActivity('yama'), [...def4, 'accursed', 'soulflame', 'zcb'], 'yama');
-  assert.deepEqual(specsForActivity('nex'), ['zcb'], 'nex');
+test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
+  assert.deepEqual(
+    specsForActivity('toa'),
+    ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
+    'toa'
+  );
+  assert.deepEqual(specsForActivity('toa_expert'), specsForActivity('toa'), 'toa_expert');
+  assert.deepEqual(
+    specsForActivity('cox'),
+    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
+    'cox'
+  );
+  assert.deepEqual(specsForActivity('cox_cm'), specsForActivity('cox'), 'cox_cm');
+  assert.deepEqual(
+    specsForActivity('tob'),
+    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+    'tob'
+  );
+  assert.deepEqual(specsForActivity('tob_hard'), specsForActivity('tob'), 'tob_hard');
+  assert.deepEqual(
+    specsForActivity('yama'),
+    ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
+    'yama'
+  );
+  assert.deepEqual(specsForActivity('nex'), ['zcb', 'voidwaker', 'burningclaws'], 'nex');
+  assert.deepEqual(specsForActivity('huey'), ['dragonclaws', 'burningclaws'], 'huey');
+  assert.deepEqual(specsForActivity('venenatis'), ['dwh', 'eldermaul', 'webweaver', 'dinhs'], 'venenatis');
   assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
 });
@@ -723,14 +743,15 @@ test('renderPartyBoard accepts a kc per row', () => {
   assert.ok(Buffer.isBuffer(buf2), 'renders without kc');
 });
 
-test('SPECS has seven weapons in two categories with unique ids', () => {
-  assert.equal(SPECS.length, 7);
-  assert.equal(new Set(SPECS.map((s) => s.id)).size, 7);
+test('SPECS has seventeen weapons in three categories with unique ids', () => {
+  assert.equal(SPECS.length, 17);
+  assert.equal(new Set(SPECS.map((s) => s.id)).size, 17);
   for (const s of SPECS) assert.ok(s.label && s.name && s.cat, s.id);
   const cats = new Set(SPECS.map((s) => s.cat));
-  assert.deepEqual([...cats].sort(), ['def', 'off'], 'two categories');
-  assert.equal(SPECS.filter((s) => s.cat === 'def').length, 5, 'defense lowering');
-  assert.equal(SPECS.filter((s) => s.cat === 'off').length, 2, 'offensive');
+  assert.deepEqual([...cats].sort(), ['def', 'off', 'util'], 'three categories');
+  assert.equal(SPECS.filter((s) => s.cat === 'def').length, 8, 'defense lowering');
+  assert.equal(SPECS.filter((s) => s.cat === 'off').length, 6, 'offensive');
+  assert.equal(SPECS.filter((s) => s.cat === 'util').length, 3, 'utility');
 });
 
 test('toggleSpec adds, removes, and ignores bad ids', () => {
@@ -782,12 +803,12 @@ test('getShowSpecs defaults to owned and relevant; toggleShowSpec narrows it', (
     toggleSpec(u, 'zcb');
     // Default: owned ∩ relevant.
     assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa default');
-    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama default');
+    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama default');
     assert.deepEqual(getShowSpecs(u, 'nex'), ['zcb'], 'nex default');
     // Narrow the ToA pick; other bosses unaffected.
     toggleShowSpec(u, 'toa', 'zcb');
     assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'toa narrowed');
-    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama untouched');
+    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama untouched');
     toggleShowSpec(u, 'toa', 'zcb');
     assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa restored');
     // Irrelevant or unowned ids are ignored.
@@ -860,6 +881,47 @@ test('boardHeight grows with rows and caps', () => {
 test('shortDisplayName truncates long names', () => {
   assert.strictEqual(shortDisplayName('Alex'), 'Alex');
   assert.ok(shortDisplayName('averylongdisplaynameindeed').endsWith('…'), 'truncates with ellipsis');
+});
+
+test('getBadge: manual beats WOM beats role', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, '..', 'data', 'badges.json');
+  const backup = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  try {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    const u = 'test-user-badge';
+    const ironMember = { roles: { cache: new Map([['1558540424048803860', {}]]) } };
+    const mainMember = { roles: { cache: new Map([['1558540434652008569', {}]]) } };
+    // Role fallback.
+    assert.strictEqual(getBadge(u, ironMember, null), 'ironsworn', 'iron sworn role');
+    assert.strictEqual(getBadge(u, mainMember, null), 'main', 'unbound role');
+    assert.strictEqual(getBadge(u, null, null), null, 'no info, no badge');
+    // WOM beats role.
+    assert.strictEqual(getBadge(u, mainMember, { accountType: 'hardcore' }), 'hc', 'wom hardcore');
+    assert.strictEqual(getBadge(u, ironMember, { accountType: 'ultimate' }), 'ult', 'wom ultimate');
+    assert.strictEqual(getBadge(u, null, { accountType: 'ironman' }), 'iron', 'wom ironman');
+    assert.strictEqual(getBadge(u, null, { accountType: 'regular' }), 'main', 'wom regular');
+    // Manual beats everything.
+    setManualBadge(u, 'gim');
+    assert.strictEqual(getManualBadge(u), 'gim');
+    assert.strictEqual(getBadge(u, ironMember, { accountType: 'hardcore' }), 'gim', 'manual wins');
+    setManualBadge(u, null);
+    assert.strictEqual(getManualBadge(u), null, 'cleared');
+    assert.strictEqual(getBadge(u, ironMember, null), 'ironsworn', 'back to auto');
+  } finally {
+    if (backup !== null) fs.writeFileSync(file, backup);
+    else if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test('renderPartyBoard draws badges and stacked spec groups', () => {
+  const rows = [
+    { name: 'Irons', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker', 'sgs'], kc: 10, badge: 'iron' },
+    { name: 'Mains', stats: [100, 70, 70, 70, 70, 70, 70, 60], specs: [], kc: null, badge: 'main' },
+  ];
+  const buf = renderPartyBoard(rows, 0, {});
+  assert.ok(Buffer.isBuffer(buf) && buf.length > 1000, 'renders a board');
 });
 
 // ─── Report ───────────────────────────────────────────────────────

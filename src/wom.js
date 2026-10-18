@@ -89,7 +89,8 @@ function parseStats(playerJson) {
   for (const [key, entry] of Object.entries(bosses)) {
     if (entry && typeof entry.kills === 'number') kc[key] = entry.kills;
   }
-  return { combat: combatLevel(levels), ...levels, kc };
+  const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
+  return { combat: combatLevel(levels), ...levels, kc, accountType };
 }
 
 async function fetchPlayerDetails(username) {
