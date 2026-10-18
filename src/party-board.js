@@ -171,10 +171,10 @@ function decodePng(buf) {
 let atlas = null; // { img, glyphs }
 let atlasSmall = null; // 22px variant for labels
 
-const SPEC_LABELS = { bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS', accursed: 'ACCURSED' };
+const SPEC_LABELS = { bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS', accursed: 'ACCURSED', soulflame: 'SOULFLAME HORN', zcb: 'ZCB' };
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
-const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'];
+const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'soulflame', 'zcb'];
 
 function loadAssets() {
   if (atlas) return;
