@@ -1256,7 +1256,8 @@ function specShowText(userId, team) {
 
 function findTeamByMsg(msgId) {
   const state = loadState();
-  return Object.values(state.teams).find((t) => t.msgId === msgId && t.status === 'open');
+  const team = state.teams[msgId];
+  return team && team.status === 'open' ? team : undefined;
 }
 
 async function handleSpecShowButton(interaction, msgId) {
