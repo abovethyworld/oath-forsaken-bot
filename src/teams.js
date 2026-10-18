@@ -254,7 +254,7 @@ function getRsn(userId) {
 // teams. Role-based teams (ToB, BA, Yama) and skilling minigames keep text.
 function boardApplies(team) {
   const act = ACTIVITIES[team.activity];
-  return !!act && !team.roleMode && act.category !== 'skilling';
+  return !!act && act.category !== 'skilling';
 }
 
 // Builds the party-board image for a team, or null when it shouldn't show
