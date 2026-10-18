@@ -734,6 +734,7 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     size: null,
     mass: false,
     fillPing: !!act.fillPing,
+    fillPingMsgId: null,
     status: 'open',
     createdAt: Date.now(),
     closedAt: null,
@@ -1028,7 +1029,15 @@ async function sendFillPing(client, team) {
       .map((id) => `<@${id}>`)
       .join(' ');
     const where = team.hub ? `World ${team.world}, hub ${team.hub}.` : `World ${team.world}.`;
-    await channel.send(`${mentions} Team's full. ${where}`).catch(() => {});
+    const msg = await channel.send(`${mentions} Team's full. ${where}`).catch(() => null);
+    if (msg) {
+      team.fillPingMsgId = msg.id;
+      const state = loadState();
+      if (state.teams[team.messageId]) {
+        state.teams[team.messageId].fillPingMsgId = msg.id;
+        saveState(state);
+      }
+    }
   } catch (err) {
     console.warn('Team fill ping failed:', err.message);
   }
@@ -1118,10 +1127,13 @@ async function handleDelete(interaction, msgId) {
     await interaction.reply({ content: 'Only the organizer or staff can delete this.', ephemeral: true }).catch(() => {});
     return;
   }
-  // Delete the listing message and drop the state.
+  // Delete the listing message, the fill ping if there is one, and drop the state.
   const channel = await interaction.client.channels.fetch(team.channelId).catch(() => null);
   if (channel && channel.isTextBased()) {
     await channel.messages.delete(msgId).catch(() => {});
+    if (team.fillPingMsgId) {
+      await channel.messages.delete(team.fillPingMsgId).catch(() => {});
+    }
   }
   delete state.teams[msgId];
   saveState(state);
