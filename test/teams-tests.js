@@ -32,6 +32,8 @@ const {
   loadSpecs,
   getSpecs,
   toggleSpec,
+  getShowSpecs,
+  toggleShowSpec,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName } = require('../src/party-board');
@@ -556,7 +558,7 @@ test('buildListingComponents: role mode gets role buttons plus organizer row', (
   assert.ok(roleRow.components[0].custom_id === 'team:role:m1:0');
   assert.ok(roleRow.components[0].label.includes('Alex'), 'claimed role shows holder');
   const orgRow = rows[1].toJSON();
-  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1', 'team:delete:m1']);
+  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1', 'team:delete:m1', 'team:specshow:m1']);
 });
 
 test('buildListingComponents: headcount gets Join/Leave plus organizer row', () => {
@@ -660,21 +662,25 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
   assert.ok(!boardApplies({ activity: 'nope' }), 'unknown activity');
 });
 
-test('specsForActivity: raids get spec icons, accursed is Yama-only', () => {
-  for (const raid of ['toa', 'cox', 'tob']) {
-    const shown = specsForActivity(raid);
-    assert.deepEqual(shown, ['bgs', 'dwh', 'eldermaul', 'tonalztics'], raid);
-  }
-  assert.deepEqual(specsForActivity('yama'), ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'], 'yama');
-  assert.deepEqual(specsForActivity('nex'), [], 'non-raid boss');
+test('specsForActivity: relevance per boss', () => {
+  const def4 = ['bgs', 'dwh', 'eldermaul', 'tonalztics'];
+  assert.deepEqual(specsForActivity('toa'), [...def4, 'soulflame', 'zcb'], 'toa');
+  assert.deepEqual(specsForActivity('cox'), [...def4, 'soulflame', 'zcb'], 'cox');
+  assert.deepEqual(specsForActivity('tob'), [...def4, 'zcb'], 'tob skips the horn');
+  assert.deepEqual(specsForActivity('yama'), [...def4, 'accursed', 'soulflame', 'zcb'], 'yama');
+  assert.deepEqual(specsForActivity('nex'), ['zcb'], 'nex');
   assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
 });
 
-test('SPECS has five weapons with unique ids', () => {
-  assert.equal(SPECS.length, 5);
-  assert.equal(new Set(SPECS.map((s) => s.id)).size, 5);
-  for (const s of SPECS) assert.ok(s.label && s.name, s.id);
+test('SPECS has seven weapons in two categories with unique ids', () => {
+  assert.equal(SPECS.length, 7);
+  assert.equal(new Set(SPECS.map((s) => s.id)).size, 7);
+  for (const s of SPECS) assert.ok(s.label && s.name && s.cat, s.id);
+  const cats = new Set(SPECS.map((s) => s.cat));
+  assert.deepEqual([...cats].sort(), ['def', 'off'], 'two categories');
+  assert.equal(SPECS.filter((s) => s.cat === 'def').length, 5, 'defense lowering');
+  assert.equal(SPECS.filter((s) => s.cat === 'off').length, 2, 'offensive');
 });
 
 test('toggleSpec adds, removes, and ignores bad ids', () => {
@@ -691,7 +697,55 @@ test('toggleSpec adds, removes, and ignores bad ids', () => {
     assert.deepEqual(getSpecs(u), ['dwh', 'bgs'], 'persists');
     assert.deepEqual(toggleSpec(u, 'dwh'), ['bgs'], 'remove dwh');
     assert.deepEqual(toggleSpec(u, 'nope'), ['bgs'], 'bad id ignored');
-    assert.deepEqual(loadSpecs()[u], ['bgs'], 'stored');
+    assert.deepEqual(loadSpecs()[u].owned, ['bgs'], 'stored');
+  } finally {
+    if (backup !== null) fs.writeFileSync(file, backup);
+    else if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test('spec store migrates the old flat array shape', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, '..', 'data', 'specs.json');
+  const backup = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ 'test-user-mig': ['dwh', 'bgs'] }));
+    assert.deepEqual(getSpecs('test-user-mig'), ['dwh', 'bgs'], 'old shape reads as owned');
+  } finally {
+    if (backup !== null) fs.writeFileSync(file, backup);
+    else if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+});
+
+test('getShowSpecs defaults to owned and relevant; toggleShowSpec narrows it', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const file = path.join(__dirname, '..', 'data', 'specs.json');
+  const backup = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  try {
+    if (fs.existsSync(file)) fs.unlinkSync(file);
+    const u = 'test-user-show';
+    toggleSpec(u, 'dwh');
+    toggleSpec(u, 'bgs');
+    toggleSpec(u, 'accursed');
+    toggleSpec(u, 'zcb');
+    // Default: owned ∩ relevant.
+    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa default');
+    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama default');
+    assert.deepEqual(getShowSpecs(u, 'nex'), ['zcb'], 'nex default');
+    // Narrow the ToA pick; other bosses unaffected.
+    toggleShowSpec(u, 'toa', 'zcb');
+    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'toa narrowed');
+    assert.deepEqual(getShowSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama untouched');
+    toggleShowSpec(u, 'toa', 'zcb');
+    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa restored');
+    // Irrelevant or unowned ids are ignored.
+    toggleShowSpec(u, 'nex', 'bgs');
+    assert.deepEqual(getShowSpecs(u, 'nex'), ['zcb'], 'bgs not relevant on nex');
+    // Dropping ownership clears it from per-boss picks.
+    toggleSpec(u, 'zcb');
+    assert.deepEqual(getShowSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'ownership drop clears picks');
   } finally {
     if (backup !== null) fs.writeFileSync(file, backup);
     else if (fs.existsSync(file)) fs.unlinkSync(file);
