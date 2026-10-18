@@ -580,7 +580,7 @@ function creationStepsFor(activityKey, preId) {
   if (act.partyHub) {
     steps.push({
       id: 'hub', kind: 'optionalText',
-      prompt: 'Party hub? (from the RuneLite Party plugin - the hub name you host under)',
+      prompt: 'Party hub name? (RuneLite Party plugin)',
       typeLabel: 'hub name', modalTitle: 'Party hub', modalLabel: 'Party hub name',
       modalPlaceholder: 'oath1',
     });
