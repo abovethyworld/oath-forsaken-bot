@@ -589,7 +589,20 @@ function creationStepsFor(activityKey, preId) {
       options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
     });
   }
-  if (activityKey !== 'wag') {
+  // Wintertodt, GotR, Tempoross: mass world or small team? World question only for small team.
+  const skillingChoice = ['wintertodt', 'gotr', 'tempoross'].includes(activityKey);
+  if (skillingChoice) {
+    steps.push({
+      id: 'worldType', kind: 'buttons', prompt: 'Mass world or small team?',
+      options: [{ id: 'mass', label: 'Mass world' }, { id: 'team', label: 'Small team' }],
+    });
+    steps.push({
+      id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
+      typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
+      modalPlaceholder: '420',
+    });
+  }
+  if (activityKey !== 'wag' && !skillingChoice) {
     steps.push({
       id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
       typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
@@ -841,6 +854,10 @@ async function handleStepButton(interaction, stepId, value) {
   // "Any size" skips the size steps. ToA skips 1 (size), CoX skips 2 (raiders + scalers).
   if (stepId === 'sizeChoice' && value === 'any') {
     creation.idx += creation.activity === 'cox' ? 2 : 1;
+  }
+  // "Mass world" skips the world number step for skilling.
+  if (stepId === 'worldType' && value === 'mass') {
+    creation.idx += 1;
   }
   await advanceCreation(interaction, creation);
 }
