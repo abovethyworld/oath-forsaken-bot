@@ -13,11 +13,14 @@ const {
   TextInputBuilder,
   TextInputStyle,
   PermissionFlagsBits,
+  AttachmentBuilder,
 } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
+const { getStats } = require('./wom');
+const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
@@ -226,6 +229,59 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+// ─── RSN links (Discord user -> RuneScape name, for the party board) ──
+const RSN_FILE = path.join(__dirname, '..', 'data', 'rsn-links.json');
+
+function loadRsnLinks() {
+  try {
+    return JSON.parse(fs.readFileSync(RSN_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveRsnLinks(links) {
+  fs.mkdirSync(path.dirname(RSN_FILE), { recursive: true });
+  fs.writeFileSync(RSN_FILE, JSON.stringify(links, null, 2));
+}
+
+function getRsn(userId) {
+  const links = loadRsnLinks();
+  return links[userId] ? links[userId].rsn : null;
+}
+
+// The board only makes sense where combat stats matter: headcount PvM
+// teams. Role-based teams (ToB, BA, Yama) and skilling minigames keep text.
+function boardApplies(team) {
+  const act = ACTIVITIES[team.activity];
+  return !!act && !team.roleMode && act.category !== 'skilling';
+}
+
+// Builds the party-board image for a team, or null when it shouldn't show
+// (not a board team, or nobody has linked an RSN yet).
+async function partyBoardFile(team) {
+  if (!boardApplies(team)) return null;
+  const ids = Object.keys(team.members || {});
+  if (!ids.length) return null;
+  const links = loadRsnLinks();
+  const statsList = await Promise.all(
+    ids.map((id) => {
+      const rsn = links[id] && links[id].rsn;
+      return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
+    })
+  );
+  const rows = ids.map((id, i) => {
+    const st = statsList[i];
+    const stats = st && !st.notFound
+      ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
+      : null;
+    return { name: (team.memberNames || {})[id] || 'member', stats };
+  });
+  if (!rows.some((r) => r.stats)) return null;
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS));
+  return new AttachmentBuilder(buf, { name: 'party-board.png' });
+}
+
 // ─── Pure helpers (unit-tested) ─────────────────────────────────────
 
 // ToA raid level -> mode, per the OSRS wiki.
@@ -362,9 +418,10 @@ function teamTitle(team) {
   return pre ? `${emoji}${base} (${pre})` : `${emoji}${base}`;
 }
 
-function buildTeamEmbed(team) {
+function buildTeamEmbed(team, opts) {
   const act = ACTIVITIES[team.activity] || {};
   const lines = [];
+  const hideSignedUp = !!(opts && opts.hideSignedUp);
 
   if (team.activity === 'toa' && team.raidLevel) {
     const tierLabels = { 'Normal': 'Normal (150-299)', 'Expert': 'Expert (300-349)', 'High Invo': 'High Invo (350+)' };
@@ -393,7 +450,7 @@ function buildTeamEmbed(team) {
         .map(([id]) => names[id] || 'claimed');
       lines.push(`**${style}:** ${holders.length ? holders.join(', ') : 'open'}`);
     }
-  } else {
+  } else if (!hideSignedUp) {
     const memberIds = Object.keys(team.members || {});
     lines.push(`**Signed up:** ${memberIds.length ? memberIds.map((id) => names[id] || 'claimed').join(', ') : 'no one yet'}`);
   }
@@ -464,7 +521,8 @@ function teamPanelPayload() {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('⚔️')
+        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
+        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('🔗')
       ),
     ],
   };
@@ -813,10 +871,14 @@ async function finalizeCreation(interaction, creation) {
   let msg;
   try {
     team.channelId = channel.id;
+    const file = await partyBoardFile(team).catch(() => null);
+    const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
+    if (file) embed.setImage('attachment://party-board.png');
     msg = await channel.send({
       content,
-      embeds: [buildTeamEmbed(team)],
+      embeds: [embed],
       components: buildListingComponents({ ...team, messageId: 'pending' }),
+      files: file ? [file] : [],
     });
   } catch (err) {
     console.error('Team post failed:', err.message);
@@ -833,6 +895,7 @@ async function finalizeCreation(interaction, creation) {
   await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
 
   await interaction.followUp({ content: 'Team posted.', ephemeral: true }).catch(() => {});
+  await maybeNudgeRsn(interaction, interaction.user.id);
 }
 
 // ─── Step interaction handlers ──────────────────────────────────────
@@ -963,6 +1026,86 @@ async function handleStepModal(interaction) {
   await advanceCreation(interaction, creation);
 }
 
+// ─── RSN linking (party board) ──────────────────────────────────────
+
+function rsnLinkRow() {
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('🔗')
+    ),
+  ];
+}
+
+async function handleRsnButton(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId('team:rsnmodal')
+    .setTitle('Link your RuneScape name')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:rsnvalue')
+          .setLabel('RuneScape name')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(12)
+          .setPlaceholder('MyRSN')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleRsnModal(interaction) {
+  // customId 'team:rsnmodal'
+  let rsn;
+  try {
+    rsn = interaction.fields.getTextInputValue('team:rsnvalue').trim().replace(/\s+/g, ' ');
+  } catch {
+    rsn = '';
+  }
+  if (!/^[A-Za-z0-9 ]{1,12}$/.test(rsn)) {
+    await interaction.reply({ content: 'That name has characters RuneScape does not allow. Try again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  const stats = await getStats(rsn).catch(() => null);
+  if (stats && stats.notFound) {
+    await interaction.editReply('Could not find that RuneScape name. Check the spelling and try again.').catch(() => {});
+    return;
+  }
+  if (!stats) {
+    await interaction.editReply('Could not reach the stats service right now. Your name was not linked, try again in a bit.').catch(() => {});
+    return;
+  }
+  const links = loadRsnLinks();
+  links[interaction.user.id] = { rsn, linkedAt: Date.now() };
+  saveRsnLinks(links);
+  await interaction.editReply(`Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`).catch(() => {});
+  // Refresh any open teams they're in so the board picks them up now.
+  const state = loadState();
+  for (const team of Object.values(state.teams)) {
+    if (team.status === 'open' && team.members && team.members[interaction.user.id]) {
+      await refreshListing(interaction.client, team).catch(() => {});
+    }
+  }
+}
+
+// One-time nudge after joining/creating without a linked RSN. Never blocks.
+async function maybeNudgeRsn(interaction, userId) {
+  if (getRsn(userId)) return;
+  await interaction
+    .followUp({
+      content: 'Want your combat stats on the party board? Link your RuneScape name (one time).',
+      components: rsnLinkRow(),
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
+async function handleTeamModal(interaction) {
+  if (interaction.customId === 'team:rsnmodal') return handleRsnModal(interaction);
+  return handleStepModal(interaction);
+}
+
 async function handleCreate(interaction) {
   const row = new ActionRowBuilder();
   for (const c of CATEGORIES) {
@@ -1015,9 +1158,14 @@ async function refreshListing(client, team) {
     saveState(state);
     return null;
   }
-  await msg
-    .edit({ embeds: [buildTeamEmbed(team)], components: buildListingComponents(team) })
-    .catch((err) => console.warn('Team refresh failed:', err.message));
+  const file = await partyBoardFile(team).catch((err) => {
+    console.warn('Party board failed:', err.message);
+    return null;
+  });
+  const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
+  const payload = { embeds: [embed], components: buildListingComponents(team), files: file ? [file] : [] };
+  if (file) embed.setImage('attachment://party-board.png');
+  await msg.edit(payload).catch((err) => console.warn('Team refresh failed:', err.message));
   return msg;
 }
 
@@ -1060,6 +1208,7 @@ async function handleJoin(interaction, msgId) {
   await interaction.deferUpdate().catch(() => {});
   await refreshListing(interaction.client, team);
   if (res.filled && team.fillPing) await sendFillPing(interaction.client, team);
+  await maybeNudgeRsn(interaction, interaction.user.id);
 }
 
 async function handleLeave(interaction, msgId) {
@@ -1096,6 +1245,7 @@ async function handleRoleClaim(interaction, msgId, roleIdx) {
   await interaction.deferUpdate().catch(() => {});
   await refreshListing(interaction.client, team);
   if (res.filled && team.fillPing) await sendFillPing(interaction.client, team);
+  await maybeNudgeRsn(interaction, interaction.user.id);
 }
 
 async function handleClose(interaction, msgId) {
@@ -1144,7 +1294,7 @@ async function handleTeamButton(interaction) {
   // customId: team:create | team:cat:<id> | team:pre:<act>:<pre> |
   // team:mk:<step>:<value> | team:mktype:<step> | team:mkskip:<step> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
-  // team:close:<msg> | team:delete:<msg>
+  // team:close:<msg> | team:delete:<msg> | team:rsn
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'create') return handleCreate(interaction);
@@ -1158,6 +1308,7 @@ async function handleTeamButton(interaction) {
   if (action === 'role') return handleRoleClaim(interaction, parts[2], parseInt(parts[3], 10));
   if (action === 'close') return handleClose(interaction, parts[2]);
   if (action === 'delete') return handleDelete(interaction, parts[2]);
+  if (action === 'rsn') return handleRsnButton(interaction);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
@@ -1257,7 +1408,11 @@ module.exports = {
   handleTeamButton,
   handleTeamSelect,
   handleStepSelect,
-  handleTeamModal: handleStepModal,
+  handleTeamStepSelect: handleStepSelect,
+  handleTeamModal,
+  boardApplies,
+  loadRsnLinks,
+  getRsn,
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
