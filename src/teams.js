@@ -582,7 +582,7 @@ function teamPanelPayload() {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
-        new ButtonBuilder().setCustomId('team:specs').setLabel('My Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+        new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
       ),
     ],
   };
@@ -1114,7 +1114,7 @@ async function handleRsnButton(interaction) {
   await interaction.showModal(modal).catch(() => {});
 }
 
-// ─── My Specs: one-time toggle of owned defence-lowering spec weapons ──
+// ─── My Spec Weapons: one-time toggle of owned defence-lowering spec weapons ──
 function specToggleRows(userId) {
   const owned = getSpecs(userId);
   const row = new ActionRowBuilder();
