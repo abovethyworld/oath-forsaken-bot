@@ -42,14 +42,27 @@ function paced(fn) {
   return run;
 }
 
+const FETCH_TIMEOUT_MS = 15000;
+
 async function womFetch(method, endpoint, body) {
   const headers = { 'User-Agent': USER_AGENT, 'Content-Type': 'application/json' };
   if (process.env.WOM_API_KEY) headers['x-api-key'] = process.env.WOM_API_KEY;
-  const res = await fetch(`${BASE}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  let res;
+  try {
+    res = await fetch(`${BASE}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error(`WOM request timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 429) {
     const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
     const err = new Error(`WOM rate limited, retry after ${retryAfter}s`);
