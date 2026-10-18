@@ -40,6 +40,7 @@ const {
   getBadge,
   getManualBadge,
   setManualBadge,
+  mutateTeams,
 } = require('../src/teams');
 const { combatLevel, parseStats } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
@@ -922,6 +923,33 @@ test('renderPartyBoard draws badges and stacked spec groups', () => {
   ];
   const buf = renderPartyBoard(rows, 0, {});
   assert.ok(Buffer.isBuffer(buf) && buf.length > 1000, 'renders a board');
+});
+
+test('mutateTeams serializes concurrent mutations (no lost updates)', async () => {
+  // Simulate two interleaved read-modify-writes. Without the queue the
+  // second write would clobber the first.
+  const order = [];
+  const slow = mutateTeams(() => {
+    order.push('slow-start');
+    return new Promise((resolve) => setTimeout(() => {
+      order.push('slow-end');
+      resolve('slow');
+    }, 30));
+  });
+  const fast = mutateTeams(() => {
+    order.push('fast');
+    return 'fast';
+  });
+  const [slowRes, fastRes] = await Promise.all([slow, fast]);
+  assert.strictEqual(slowRes, 'slow');
+  assert.strictEqual(fastRes, 'fast');
+  assert.deepEqual(order, ['slow-start', 'slow-end', 'fast'], 'second waits for first');
+});
+
+test('mutateTeams chain survives a failure', async () => {
+  await mutateTeams(() => { throw new Error('boom'); }).catch(() => {});
+  const res = await mutateTeams(() => 'recovered');
+  assert.strictEqual(res, 'recovered', 'queue keeps working after a throw');
 });
 
 // ─── Report ───────────────────────────────────────────────────────

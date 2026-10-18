@@ -16,7 +16,6 @@ const NAME_W = 520;
 const COL_W = 106;
 const KC_COL_W = 220;
 const HEADER_H = 96;
-const ROW_H = 68;
 const ICON_SIZE = 60;
 
 

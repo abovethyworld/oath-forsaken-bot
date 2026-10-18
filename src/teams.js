@@ -245,6 +245,23 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+// ─── Serialized state mutations ─────────────────────────────────────
+// Every teams.json read-modify-write goes through this queue. Node is
+// single-threaded but awaits interleave, so without this two taps can
+// read the same state and the last write wins (lost joins, overfills).
+let stateQueue = Promise.resolve();
+function mutateTeams(fn) {
+  const run = stateQueue.then(() => {
+    const state = loadState();
+    const result = fn(state);
+    saveState(state);
+    return result;
+  });
+  // A failure must not break the chain for later mutations.
+  stateQueue = run.catch(() => {});
+  return run;
+}
+
 // ─── RSN links (Discord user -> RuneScape name, for the party board) ──
 const RSN_FILE = path.join(__dirname, '..', 'data', 'rsn-links.json');
 
@@ -560,6 +577,7 @@ function applyLeave(team, userId) {
   if (team.status !== 'open') return { ok: false, error: 'This team is no longer open.' };
   if (!team.members[userId]) return { ok: false, error: 'You are not in this team.' };
   delete team.members[userId];
+  if (team.memberNames) delete team.memberNames[userId];
   return { ok: true };
 }
 
@@ -819,11 +837,17 @@ async function handleBadgeSet(interaction, badgeId) {
     })
     .catch(() => {});
   // Refresh open teams so the board picks up the badge now.
+  await refreshUserTeams(interaction.client, interaction.user.id, boardApplies);
+}
+
+// Refresh every open team a user is in, optionally filtered (e.g. only
+// teams where the board or specs apply). Serial, so it paces itself.
+async function refreshUserTeams(client, userId, filter) {
   const state = loadState();
   for (const team of Object.values(state.teams)) {
-    if (team.status === 'open' && team.members && team.members[interaction.user.id] && boardApplies(team)) {
-      await refreshListing(interaction.client, team).catch(() => {});
-    }
+    if (team.status !== 'open' || !team.members || !team.members[userId]) continue;
+    if (filter && !filter(team)) continue;
+    await refreshListing(client, team).catch((err) => console.warn('User team refresh failed:', err.message));
   }
 }
 
@@ -1412,7 +1436,7 @@ function specToggleText(userId) {
   const owned = getSpecs(userId);
   const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
   const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
-  return `${line}\nTop row lowers defense, bottom row is offensive.\nTap to add or remove. They show on party boards where they're useful.`;
+  return `${line}\nTop row lowers defense, middle row is offensive, bottom row is utility.\nTap to add or remove. They show on party boards where they're useful.`;
 }
 
 async function handleSpecsButton(interaction) {
@@ -1434,17 +1458,7 @@ async function handleSpecToggle(interaction, specId) {
     })
     .catch(() => {});
   // Refresh open raid teams so the board picks up the change now.
-  const state = loadState();
-  for (const team of Object.values(state.teams)) {
-    if (
-      team.status === 'open' &&
-      team.members &&
-      team.members[interaction.user.id] &&
-      specsForActivity(team.activity).length
-    ) {
-      await refreshListing(interaction.client, team).catch(() => {});
-    }
-  }
+  await refreshUserTeams(interaction.client, interaction.user.id, (team) => specsForActivity(team.activity).length > 0);
 }
 
 // ─── Per-team Specs button: pick which owned specs show for that boss ──
@@ -1503,6 +1517,11 @@ async function handleSpecShowButton(interaction, msgId) {
 async function handleSpecShowToggle(interaction, msgId, specId) {
   const team = findTeamByMsg(msgId);
   if (!team) return;
+  if (!team.members || !team.members[interaction.user.id]) {
+    await interaction.reply({ content: 'Join the team first.', ephemeral: true })
+      .catch((err) => console.warn('Spec show toggle reply failed:', err.message));
+    return;
+  }
   toggleShowSpec(interaction.user.id, team.activity, specId);
   await interaction
     .update({
@@ -1642,22 +1661,30 @@ async function handleTeamSizeButton(interaction, msgId) {
 async function handleTeamSizeSet(interaction, msgId, value) {
   let team = findTeamByMsg(msgId);
   if (!team || !canManageTeam(interaction, team)) return;
-  const state = loadState();
-  team = state.teams[msgId];
-  if (!team) return;
-  if (value === 'any') {
-    team.size = null;
-    team.mass = false;
-  } else if (value === 'mass') {
-    team.size = null;
-    team.mass = true;
-  } else if (/^\d+$/.test(value)) {
-    team.size = parseInt(value, 10);
-    team.mass = false;
-  }
-  saveState(state);
-  await interaction.update({ content: 'Size updated.', components: [] }).catch(() => {});
-  await refreshListing(interaction.client, team).catch(() => {});
+  if (!['any', 'mass'].includes(value) && !/^\d+$/.test(value || '')) return;
+  const res = await mutateTeams((state) => {
+    const t = state.teams[msgId];
+    if (!t || t.status !== 'open') return { error: 'That team is gone.' };
+    if (value === 'any') {
+      t.size = null;
+      t.mass = false;
+    } else if (value === 'mass') {
+      t.size = null;
+      t.mass = true;
+    } else {
+      t.size = parseInt(value, 10);
+      t.mass = false;
+    }
+    return { ok: true };
+  }).catch((err) => {
+    console.warn('Team size mutation failed:', err.message);
+    return { error: true };
+  });
+  if (res.error) return;
+  await interaction.update({ content: 'Size updated.', components: [] })
+    .catch((err) => console.warn('Team size update failed:', err.message));
+  team = loadState().teams[msgId];
+  if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team size refresh failed:', err.message));
 }
 
 async function handleTeamWorldButton(interaction, msgId) {
@@ -1694,13 +1721,26 @@ async function handleTeamWorldModal(interaction, msgId) {
   } catch {
     world = '';
   }
-  const state = loadState();
-  team = state.teams[msgId];
-  if (!team) return;
-  team.world = /^\d+$/.test(world) ? parseInt(world, 10) : null;
-  saveState(state);
-  await interaction.reply({ content: team.world ? `World set to ${team.world}.` : 'World cleared.', ephemeral: true }).catch(() => {});
-  await refreshListing(interaction.client, team).catch(() => {});
+  const worldNum = validateWorld(world) ? parseInt(world, 10) : null;
+  if (world && !worldNum) {
+    await interaction.reply({ content: 'World must be a 3-digit number.', ephemeral: true })
+      .catch((err) => console.warn('Team world reply failed:', err.message));
+    return;
+  }
+  const res = await mutateTeams((state) => {
+    const t = state.teams[msgId];
+    if (!t || t.status !== 'open') return { error: 'That team is gone.' };
+    t.world = worldNum;
+    return { ok: true, world: worldNum };
+  }).catch((err) => {
+    console.warn('Team world mutation failed:', err.message);
+    return { error: true };
+  });
+  if (res.error) return;
+  await interaction.reply({ content: res.world ? `World set to ${res.world}.` : 'World cleared.', ephemeral: true })
+    .catch((err) => console.warn('Team world reply failed:', err.message));
+  team = loadState().teams[msgId];
+  if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team world refresh failed:', err.message));
 }
 
 function teamRegionRows(team, msgId) {
@@ -1744,13 +1784,22 @@ async function handleTeamRegionButton(interaction, msgId) {
 async function handleTeamRegionSet(interaction, msgId, regionId) {
   let team = findTeamByMsg(msgId);
   if (!team || !canManageTeam(interaction, team)) return;
-  const state = loadState();
-  team = state.teams[msgId];
-  if (!team) return;
-  team.region = regionId === 'none' ? null : regionId;
-  saveState(state);
-  await interaction.update({ content: 'Region updated.', components: [] }).catch(() => {});
-  await refreshListing(interaction.client, team).catch(() => {});
+  const validRegion = regionId === 'none' || REGIONS.some((r) => r.id === regionId);
+  if (!validRegion) return;
+  const res = await mutateTeams((state) => {
+    const t = state.teams[msgId];
+    if (!t || t.status !== 'open') return { error: 'That team is gone.' };
+    t.region = regionId === 'none' ? null : regionId;
+    return { ok: true };
+  }).catch((err) => {
+    console.warn('Team region mutation failed:', err.message);
+    return { error: true };
+  });
+  if (res.error) return;
+  await interaction.update({ content: 'Region updated.', components: [] })
+    .catch((err) => console.warn('Team region update failed:', err.message));
+  team = loadState().teams[msgId];
+  if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team region refresh failed:', err.message));
 }
 
 async function handleTeamHubButton(interaction, msgId) {
@@ -1787,13 +1836,21 @@ async function handleTeamHubModal(interaction, msgId) {
   } catch {
     hub = '';
   }
-  const state = loadState();
-  team = state.teams[msgId];
-  if (!team) return;
-  team.hub = hub || null;
-  saveState(state);
-  await interaction.reply({ content: team.hub ? `Party hub set to ${team.hub}.` : 'Party hub cleared.', ephemeral: true }).catch(() => {});
-  await refreshListing(interaction.client, team).catch(() => {});
+  const hubVal = hub || null;
+  const res = await mutateTeams((state) => {
+    const t = state.teams[msgId];
+    if (!t || t.status !== 'open') return { error: 'That team is gone.' };
+    t.hub = hubVal;
+    return { ok: true };
+  }).catch((err) => {
+    console.warn('Team hub mutation failed:', err.message);
+    return { error: true };
+  });
+  if (res.error) return;
+  await interaction.reply({ content: hubVal ? `Party hub set to ${hubVal}.` : 'Party hub cleared.', ephemeral: true })
+    .catch((err) => console.warn('Team hub reply failed:', err.message));
+  team = loadState().teams[msgId];
+  if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team hub refresh failed:', err.message));
 }
 
 async function handleRsnModal(interaction) {
@@ -1823,12 +1880,7 @@ async function handleRsnModal(interaction) {
   saveRsnLinks(links);
   await interaction.editReply(`Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`).catch(() => {});
   // Refresh any open teams they're in so the board picks them up now.
-  const state = loadState();
-  for (const team of Object.values(state.teams)) {
-    if (team.status === 'open' && team.members && team.members[interaction.user.id]) {
-      await refreshListing(interaction.client, team).catch(() => {});
-    }
-  }
+  await refreshUserTeams(interaction.client, interaction.user.id);
 }
 
 // One-time nudge after joining/creating without a linked RSN. Never blocks.
@@ -1923,14 +1975,17 @@ async function sendFillPing(client, team) {
       .map((id) => `<@${id}>`)
       .join(' ');
     const where = team.hub ? `World ${team.world}, hub ${team.hub}.` : `World ${team.world}.`;
-    const msg = await channel.send(`${mentions} Team's full. ${where}`).catch(() => null);
+    const msg = await channel.send(`${mentions} Team's full. ${where}`).catch((err) => {
+      console.warn('Fill ping send failed:', err.message);
+      return null;
+    });
     if (msg) {
-      team.fillPingMsgId = msg.id;
-      const state = loadState();
-      if (state.teams[team.messageId]) {
-        state.teams[team.messageId].fillPingMsgId = msg.id;
-        saveState(state);
-      }
+      // Store the ping id through the mutex so a concurrent join/leave
+      // can't be clobbered by this save.
+      await mutateTeams((state) => {
+        const t = state.teams[team.messageId];
+        if (t) t.fillPingMsgId = msg.id;
+      }).catch((err) => console.warn('Fill ping id save failed:', err.message));
     }
   } catch (err) {
     console.warn('Team fill ping failed:', err.message);
@@ -1938,102 +1993,133 @@ async function sendFillPing(client, team) {
 }
 
 async function handleJoin(interaction, msgId) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team) {
-    await interaction.reply({ content: 'That team is gone.', ephemeral: true }).catch(() => {});
+  const userId = interaction.user.id;
+  const res = await mutateTeams((state) => {
+    const team = state.teams[msgId];
+    if (!team) return { error: 'That team is gone.' };
+    const r = applyJoin(team, userId);
+    if (!r.ok) return { error: r.error };
+    team.memberNames[userId] = interaction.user.displayName;
+    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId };
+  }).catch((err) => {
+    console.warn('Team join mutation failed:', err.message);
+    return { error: 'Something went wrong. Try again.' };
+  });
+  if (res.error || !res.ok) {
+    await interaction.reply({ content: res.error || 'Something went wrong.', ephemeral: true })
+      .catch((err) => console.warn('Team join reply failed:', err.message));
     return;
   }
-  const res = applyJoin(team, interaction.user.id);
-  if (!res.ok) {
-    await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
-    return;
+  await interaction.deferUpdate().catch((err) => console.warn('Team join defer failed:', err.message));
+  const team = loadState().teams[res.messageId];
+  if (team) {
+    await refreshListing(interaction.client, team);
+    if (res.filled && res.fillPing) await sendFillPing(interaction.client, team);
   }
-  team.memberNames[interaction.user.id] = interaction.user.displayName;
-  saveState(state);
-  await interaction.deferUpdate().catch(() => {});
-  await refreshListing(interaction.client, team);
-  if (res.filled && team.fillPing) await sendFillPing(interaction.client, team);
-  await maybeNudgeRsn(interaction, interaction.user.id);
+  await maybeNudgeRsn(interaction, userId);
 }
 
 async function handleLeave(interaction, msgId) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team) {
-    await interaction.reply({ content: 'That team is gone.', ephemeral: true }).catch(() => {});
+  const userId = interaction.user.id;
+  const res = await mutateTeams((state) => {
+    const team = state.teams[msgId];
+    if (!team) return { error: 'That team is gone.' };
+    const r = applyLeave(team, userId);
+    if (!r.ok) return { error: r.error };
+    return { ok: true, messageId: team.messageId };
+  }).catch((err) => {
+    console.warn('Team leave mutation failed:', err.message);
+    return { error: 'Something went wrong. Try again.' };
+  });
+  if (res.error || !res.ok) {
+    await interaction.reply({ content: res.error || 'Something went wrong.', ephemeral: true })
+      .catch((err) => console.warn('Team leave reply failed:', err.message));
     return;
   }
-  const res = applyLeave(team, interaction.user.id);
-  if (!res.ok) {
-    await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
-    return;
-  }
-  saveState(state);
-  await interaction.deferUpdate().catch(() => {});
-  await refreshListing(interaction.client, team);
+  await interaction.deferUpdate().catch((err) => console.warn('Team leave defer failed:', err.message));
+  const team = loadState().teams[res.messageId];
+  if (team) await refreshListing(interaction.client, team);
 }
 
 async function handleRoleClaim(interaction, msgId, roleIdx) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team) {
-    await interaction.reply({ content: 'That team is gone.', ephemeral: true }).catch(() => {});
+  const userId = interaction.user.id;
+  const res = await mutateTeams((state) => {
+    const team = state.teams[msgId];
+    if (!team) return { error: 'That team is gone.' };
+    const r = applyRoleClaim(team, userId, roleIdx);
+    if (!r.ok) return { error: r.error };
+    team.memberNames[userId] = interaction.user.displayName;
+    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId };
+  }).catch((err) => {
+    console.warn('Team role claim mutation failed:', err.message);
+    return { error: 'Something went wrong. Try again.' };
+  });
+  if (res.error || !res.ok) {
+    await interaction.reply({ content: res.error || 'Something went wrong.', ephemeral: true })
+      .catch((err) => console.warn('Team role claim reply failed:', err.message));
     return;
   }
-  const res = applyRoleClaim(team, interaction.user.id, roleIdx);
-  if (!res.ok) {
-    await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
-    return;
+  await interaction.deferUpdate().catch((err) => console.warn('Team role claim defer failed:', err.message));
+  const team = loadState().teams[res.messageId];
+  if (team) {
+    await refreshListing(interaction.client, team);
+    if (res.filled && res.fillPing) await sendFillPing(interaction.client, team);
   }
-  team.memberNames[interaction.user.id] = interaction.user.displayName;
-  saveState(state);
-  await interaction.deferUpdate().catch(() => {});
-  await refreshListing(interaction.client, team);
-  if (res.filled && team.fillPing) await sendFillPing(interaction.client, team);
-  await maybeNudgeRsn(interaction, interaction.user.id);
+  await maybeNudgeRsn(interaction, userId);
 }
 
 async function handleClose(interaction, msgId) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team || team.status !== 'open') {
-    await interaction.reply({ content: 'That team is already closed.', ephemeral: true }).catch(() => {});
+  const res = await mutateTeams((state) => {
+    const team = state.teams[msgId];
+    if (!team || team.status !== 'open') return { error: 'That team is already closed.' };
+    if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
+      return { error: 'Only the organizer or staff can close this.' };
+    }
+    team.status = 'closed';
+    team.closedAt = Date.now();
+    return { ok: true, messageId: team.messageId };
+  }).catch((err) => {
+    console.warn('Team close mutation failed:', err.message);
+    return { error: 'Something went wrong. Try again.' };
+  });
+  if (res.error || !res.ok) {
+    await interaction.reply({ content: res.error || 'Something went wrong.', ephemeral: true })
+      .catch((err) => console.warn('Team close reply failed:', err.message));
     return;
   }
-  if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
-    await interaction.reply({ content: 'Only the organizer or staff can close this.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  team.status = 'closed';
-  team.closedAt = Date.now();
-  saveState(state);
-  await interaction.deferUpdate().catch(() => {});
-  await refreshListing(interaction.client, team);
+  await interaction.deferUpdate().catch((err) => console.warn('Team close defer failed:', err.message));
+  const team = loadState().teams[res.messageId];
+  if (team) await refreshListing(interaction.client, team);
 }
 
 async function handleDelete(interaction, msgId) {
-  const state = loadState();
-  const team = state.teams[msgId];
-  if (!team) {
-    await interaction.reply({ content: 'That team is already gone.', ephemeral: true }).catch(() => {});
+  const res = await mutateTeams((state) => {
+    const team = state.teams[msgId];
+    if (!team) return { error: 'That team is already gone.' };
+    if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
+      return { error: 'Only the organizer or staff can delete this.' };
+    }
+    delete state.teams[msgId];
+    return { ok: true, channelId: team.channelId, fillPingMsgId: team.fillPingMsgId };
+  }).catch((err) => {
+    console.warn('Team delete mutation failed:', err.message);
+    return { error: 'Something went wrong. Try again.' };
+  });
+  if (res.error || !res.ok) {
+    await interaction.reply({ content: res.error || 'Something went wrong.', ephemeral: true })
+      .catch((err) => console.warn('Team delete reply failed:', err.message));
     return;
   }
-  if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
-    await interaction.reply({ content: 'Only the organizer or staff can delete this.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  // Delete the listing message, the fill ping if there is one, and drop the state.
-  const channel = await interaction.client.channels.fetch(team.channelId).catch(() => null);
+  // Delete the listing message and the fill ping if there is one.
+  const channel = await interaction.client.channels.fetch(res.channelId).catch(() => null);
   if (channel && channel.isTextBased()) {
-    await channel.messages.delete(msgId).catch(() => {});
-    if (team.fillPingMsgId) {
-      await channel.messages.delete(team.fillPingMsgId).catch(() => {});
+    await channel.messages.delete(msgId).catch((err) => console.warn('Team listing delete failed:', err.message));
+    if (res.fillPingMsgId) {
+      await channel.messages.delete(res.fillPingMsgId).catch((err) => console.warn('Fill ping delete failed:', err.message));
     }
   }
-  delete state.teams[msgId];
-  saveState(state);
-  await interaction.reply({ content: 'Team deleted.', ephemeral: true }).catch(() => {});
+  await interaction.reply({ content: 'Team deleted.', ephemeral: true })
+    .catch((err) => console.warn('Team delete reply failed:', err.message));
 }
 
 async function handleTeamButton(interaction) {
@@ -2072,6 +2158,7 @@ async function handleTeamButton(interaction) {
   if (action === 'teamregion') return handleTeamRegionButton(interaction, parts[2]);
   if (action === 'teamregionset') return handleTeamRegionSet(interaction, parts[2], parts[3]);
   if (action === 'teamhub') return handleTeamHubButton(interaction, parts[2]);
+  console.warn('Unknown team button action:', interaction.customId);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────
@@ -2091,30 +2178,43 @@ function shouldAutoClose(team, now) {
 }
 
 async function sweepExpiredTeams(client) {
-  const state = loadState();
   const now = Date.now();
-  let changed = false;
+  // Decide what to sweep first (read-only), then mutate through the queue
+  // so a sweep can't clobber a concurrent join.
+  const state = loadState();
+  const toClose = [];
+  const toDelete = [];
   for (const [id, team] of Object.entries(state.teams)) {
-    // Auto-close filled teams at 24h: mark closed, strip buttons, no ping.
-    if (shouldAutoClose(team, now)) {
-      team.status = 'closed';
-      team.closedAt = now;
-      changed = true;
-      await refreshListing(client, team).catch((err) => console.warn('Team auto-close refresh failed:', err.message));
-      continue;
+    if (shouldAutoClose(team, now)) toClose.push(id);
+    else if (shouldSweepTeam(team, now)) toDelete.push(id);
+  }
+  if (!toClose.length && !toDelete.length) return;
+  await mutateTeams((s) => {
+    for (const id of toClose) {
+      const t = s.teams[id];
+      if (t && t.status === 'open') {
+        t.status = 'closed';
+        t.closedAt = now;
+      }
     }
-    if (!shouldSweepTeam(team, now)) continue;
-    changed = true;
+    for (const id of toDelete) delete s.teams[id];
+  }).catch((err) => console.warn('Team sweep mutation failed:', err.message));
+  const fresh = loadState();
+  for (const id of toClose) {
+    const team = fresh.teams[id];
+    if (team) await refreshListing(client, team).catch((err) => console.warn('Team auto-close refresh failed:', err.message));
+  }
+  for (const id of toDelete) {
+    const team = state.teams[id];
+    if (!team) continue;
     try {
       const channel = await client.channels.fetch(team.channelId).catch(() => null);
       const msg = channel && channel.isTextBased() ? await channel.messages.fetch(id).catch(() => null) : null;
-      if (msg) await msg.delete().catch(() => {});
+      if (msg) await msg.delete().catch((err) => console.warn('Team sweep delete failed:', err.message));
     } catch (err) {
       console.warn('Team sweep delete failed:', err.message);
     }
-    delete state.teams[id];
   }
-  if (changed) saveState(state);
 }
 
 // ─── Admin: post the panel ──────────────────────────────────────────
@@ -2162,6 +2262,7 @@ module.exports = {
   applyJoin,
   applyLeave,
   applyRoleClaim,
+  mutateTeams,
   buildTeamFromData,
   creationStepsFor,
   activityRoleId,
