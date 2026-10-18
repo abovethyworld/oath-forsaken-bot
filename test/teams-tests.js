@@ -133,14 +133,17 @@ test('Venenatis, Callisto, and Vetion have no size step at all', () => {
   assert.strictEqual(team.mass, false);
 });
 
-test('CoX steps are raiders then scalers', () => {
+test('CoX steps are sizeChoice, raiders, scalers, layout', () => {
   const steps = creationStepsFor('cox', 'normal');
+  const sizeChoice = steps.find((s) => s.id === 'sizeChoice');
   const raiders = steps.find((s) => s.id === 'raiders');
   const scalers = steps.find((s) => s.id === 'scalers');
-  assert.ok(raiders && scalers);
+  const layout = steps.find((s) => s.id === 'layout');
+  assert.ok(sizeChoice && raiders && scalers && layout);
   assert.deepStrictEqual(raiders.options.map((o) => o.id).slice(0, 3), ['1', '2', '3']);
   assert.strictEqual(scalers.options[0].id, '0');
   assert.strictEqual(scalers.options[0].label, 'None');
+  assert.deepStrictEqual(layout.options.map((o) => o.id), ['Normal', 'Large', 'Full']);
 });
 
 test('four regions are offered', () => {

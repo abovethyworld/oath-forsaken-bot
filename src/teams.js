@@ -374,6 +374,9 @@ function buildTeamEmbed(team) {
     const s = team.scale;
     lines.push(`Scale ${s.raiders}${s.scalers ? `+${s.scalers}` : ''}`);
   }
+  if (team.activity === 'cox' && team.layout) {
+    lines.push(`Layout: ${team.layout}`);
+  }
   if (team.contract) lines.push(`Contract: ${team.contract}`);
 
   // Roles / members block
@@ -545,10 +548,21 @@ function creationStepsFor(activityKey, preId) {
       ],
     });
   } else if (activityKey === 'cox') {
+    steps.push({
+      id: 'sizeChoice', kind: 'buttons', prompt: 'Want a specific team size?',
+      options: [{ id: 'specific', label: 'Yes, pick a size' }, { id: 'any', label: 'No, any size' }],
+    });
     steps.push({ id: 'raiders', kind: 'buttons', prompt: 'How many raiders?', options: numOptions(1, 10) });
     steps.push({
       id: 'scalers', kind: 'buttons', prompt: 'How many scaler alts?', options: [
         { id: '0', label: 'None' }, ...numOptions(1, 5),
+      ],
+    });
+    steps.push({
+      id: 'layout', kind: 'buttons', prompt: 'Which raid layout?', options: [
+        { id: 'Normal', label: 'Normal' },
+        { id: 'Large', label: 'Large' },
+        { id: 'Full', label: 'Full' },
       ],
     });
   } else if (activityKey === 'nex') {
@@ -695,6 +709,7 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     contract: null,
     scale: null,
     raidLevel: null,
+    layout: null,
     size: null,
     mass: false,
     fillPing: !!act.fillPing,
@@ -735,9 +750,12 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     team.raidLevel = data.tier;
   }
   if (activityKey === 'cox') {
-    if (!data.raiders) return { error: 'Pick how many raiders.' };
-    team.scale = { raiders: data.raiders, scalers: data.scalers || 0 };
-    team.size = data.raiders;
+    if (data.sizeChoice === 'specific' && !data.raiders) return { error: 'Pick how many raiders.' };
+    if (data.raiders) {
+      team.scale = { raiders: data.raiders, scalers: data.scalers || 0 };
+      team.size = data.raiders;
+    }
+    team.layout = data.layout || null;
   }
   if (activityKey === 'tob' && !team.roles) return { error: 'Pick 4s or 5s first.' };
   if (activityKey === 'yama') team.contract = data.contract || null;
@@ -813,8 +831,10 @@ async function handleStepButton(interaction, stepId, value) {
   }
   // Store numbers as numbers, keep ids like 'mass' or tiers as strings.
   creation.data[stepId] = /^\d+$/.test(value) ? parseInt(value, 10) : value;
-  // ToA: "any size" skips the number picker.
-  if (stepId === 'sizeChoice' && value === 'any') creation.idx += 1;
+  // "Any size" skips the size steps. ToA skips 1 (size), CoX skips 2 (raiders + scalers).
+  if (stepId === 'sizeChoice' && value === 'any') {
+    creation.idx += creation.activity === 'cox' ? 2 : 1;
+  }
   await advanceCreation(interaction, creation);
 }
 
