@@ -62,12 +62,17 @@ test('all 17 activities defined with name, category, and config role', () => {
 });
 
 test('creation steps exist for every activity and end with region/world/note', () => {
-  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano'];
+  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano', 'wag'];
   for (const key of Object.keys(ACTIVITIES)) {
     const pre = ACTIVITIES[key].pre
       ? { tobScale: '4s', coxMode: 'normal', nmMode: 'team', hueyInstance: 'public', wagWorld: 'mass' }[ACTIVITIES[key].pre]
       : null;
     const steps = creationStepsFor(key, pre);
+    // WAG is just a note (no region, no world, open size).
+    if (key === 'wag') {
+      assert.deepStrictEqual(steps.map((s) => s.id), ['note']);
+      continue;
+    }
     assert.ok(steps.length >= 2, `${key} has no steps`);
     const ids = steps.map((s) => s.id);
     if (!noRegion.includes(key)) {
@@ -417,14 +422,14 @@ test('buildTeamFromData builds Nightmare mass as open with mass flag', () => {
   assert.strictEqual(team.fillPing, false);
 });
 
-test('buildTeamFromData builds Nightmare team with picked size', () => {
+test('buildTeamFromData builds Nightmare team with fixed size 5', () => {
   const { team, error } = buildTeamFromData(
     'nm', 'team',
-    { size: 3, region: 'US', world: '388', hub: 'oath1', note: '' },
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
-  assert.strictEqual(team.size, 3);
+  assert.strictEqual(team.size, 5);
   assert.strictEqual(team.mass, false);
   assert.strictEqual(team.fillPing, true);
 });

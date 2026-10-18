@@ -105,7 +105,7 @@ const ACTIVITIES = {
     size: { min: 1, max: 5 }, partyHub: true, pre: 'nmMode',
   },
   wag: {
-    name: 'Wilderness Agility', category: 'bosses',
+    name: 'Wilderness Agility', category: 'skilling',
     size: null, fillPing: false, partyHub: false, pre: 'wagWorld',
   },
 };
@@ -179,7 +179,7 @@ const PRE_CHOICES = {
   nmMode: {
     prompt: 'Nightmare team or mass',
     options: [
-      { id: 'team', label: 'Team (1-5)' },
+      { id: 'team', label: 'Team of 5' },
       { id: 'mass', label: 'Mass' },
     ],
   },
@@ -576,26 +576,26 @@ function creationStepsFor(activityKey, preId) {
       id: 'size', kind: 'buttons', prompt: 'How many players? (Mass is 6+)',
       options: [...numOptions(3, 5), { id: 'mass', label: 'Mass' }],
     });
-  } else if (activityKey === 'nm' && preId === 'team') {
-    steps.push({ id: 'size', kind: 'buttons', prompt: 'How many players?', options: numOptions(1, 5) });
   }
   // BA (5), Yama (2), Royal Titans (2) are fixed. ToB size comes from
   // roles. Skilling, Zalcano, WAG, Venenatis, Callisto, Vet'ion, and
-  // NM mass are open.
+  // NM mass are open. NM team is fixed at 5.
 
-  // Skilling minigames and Zalcano don't need a region.
-  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano'].includes(activityKey);
+  // Skilling minigames and Zalcano don't need a region. WAG skips world too.
+  const noRegion = ['wintertodt', 'gotr', 'tempoross', 'zalcano', 'wag'].includes(activityKey);
   if (!noRegion) {
     steps.push({
       id: 'region', kind: 'buttons', prompt: 'Which region?',
       options: REGIONS.map((r) => ({ id: r.id, label: r.label, emoji: r.emoji })),
     });
   }
-  steps.push({
-    id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
-    typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
-    modalPlaceholder: '420',
-  });
+  if (activityKey !== 'wag') {
+    steps.push({
+      id: 'world', kind: 'optionalText', prompt: 'Got a world picked out?',
+      typeLabel: 'world number', modalTitle: 'World number', modalLabel: 'World',
+      modalPlaceholder: '420',
+    });
+  }
 
   if (act.partyHub) {
     steps.push({
@@ -736,6 +736,8 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     if (preId === 'mass') {
       team.size = null;
       team.mass = true;
+    } else if (preId === 'team') {
+      team.size = 5;
     } else {
       team.size = data.size;
     }
