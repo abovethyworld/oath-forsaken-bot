@@ -407,9 +407,9 @@ function buildTeamEmbed(team) {
 
   const count = memberCount(team);
   const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
-  const sizeStr = team.mass ? 'Mass' : (denom ? `${count}/${denom}` : `${count} in`);
+  const sizeStr = team.mass ? 'Mass' : (denom ? `${count}/${denom}` : null);
   lines.push('');
-  lines.push(`Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}`);
+  lines.push(sizeStr ? `Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}` : `Posted by ${names[team.organizerId] || 'organizer'}`);
   if (team.status === 'closed') lines.push('**Closed.**');
 
   return new EmbedBuilder().setColor(ZAMORAK_RED).setTitle(teamTitle(team)).setDescription(lines.join('\n')).setTimestamp();
