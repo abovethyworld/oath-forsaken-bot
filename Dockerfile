@@ -17,6 +17,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps --chown=node:node /app/data ./data
 COPY package.json config.json ./
 COPY src ./src
+# Only assets/party-board survives .dockerignore (skill icons + font atlas
+# for the team finder party board). Pure-JS renderer, no native deps.
+COPY assets ./assets
 
 USER node
 
