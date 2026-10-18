@@ -170,6 +170,9 @@ function decodePng(buf) {
 
 // ─── Asset loading (lazy, cached) ───────────────────────────────────
 let atlas = null; // { img, glyphs }
+let atlasSmall = null; // 22px variant for labels
+
+const SPEC_LABELS = { bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS', accursed: 'ACCURSED' };
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
 const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed'];
@@ -179,6 +182,13 @@ function loadAssets() {
   const atlasImg = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.png')));
   const glyphs = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.json'), 'utf8')).glyphs;
   atlas = { img: atlasImg, glyphs };
+  try {
+    const smallImg = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas-small.png')));
+    const smallGlyphs = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas-small.json'), 'utf8')).glyphs;
+    atlasSmall = { img: smallImg, glyphs: smallGlyphs };
+  } catch {
+    atlasSmall = null; // labels fall back to the main atlas
+  }
   for (const name of COLUMNS) {
     icons[name] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'icons', `${name}.png`)));
   }
@@ -242,12 +252,13 @@ function drawIcon(dst, icon, cx, cy, size) {
   blit(dst, scaled, Math.round(cx - dw / 2), Math.round(cy - dh / 2));
 }
 
-function drawText(dst, x, y, str, tint) {
+function drawText(dst, x, y, str, tint, a) {
   // y = top of the text line. Returns advance width.
   loadAssets();
+  const at = a || atlas;
   let cx = x;
   for (const ch of str) {
-    const g = atlas.glyphs[ch] || atlas.glyphs['?'];
+    const g = at.glyphs[ch] || at.glyphs['?'];
     if (!g) { cx += 20; continue; }
     if (ch !== ' ') {
       const glyph = {
@@ -256,12 +267,12 @@ function drawText(dst, x, y, str, tint) {
       };
       for (let gy = 0; gy < g.h; gy++) {
         for (let gx = 0; gx < g.w; gx++) {
-          const si = ((g.y + gy) * atlas.img.w + (g.x + gx)) * 4;
+          const si = ((g.y + gy) * at.img.w + (g.x + gx)) * 4;
           const di = (gy * g.w + gx) * 4;
-          glyph.rgba[di] = atlas.img.rgba[si];
-          glyph.rgba[di + 1] = atlas.img.rgba[si + 1];
-          glyph.rgba[di + 2] = atlas.img.rgba[si + 2];
-          glyph.rgba[di + 3] = atlas.img.rgba[si + 3];
+          glyph.rgba[di] = at.img.rgba[si];
+          glyph.rgba[di + 1] = at.img.rgba[si + 1];
+          glyph.rgba[di + 2] = at.img.rgba[si + 2];
+          glyph.rgba[di + 3] = at.img.rgba[si + 3];
         }
       }
       blit(dst, glyph, cx, y + (g.dy || 0), tint);
@@ -271,11 +282,12 @@ function drawText(dst, x, y, str, tint) {
   return cx - x;
 }
 
-function textWidth(str) {
+function textWidth(str, a) {
   loadAssets();
+  const at = a || atlas;
   let w = 0;
   for (const ch of str) {
-    const g = atlas.glyphs[ch] || atlas.glyphs['?'];
+    const g = at.glyphs[ch] || at.glyphs['?'];
     w += g ? g.adv : 20;
   }
   return w;
@@ -329,7 +341,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   loadAssets();
   if (!rows.length) return null;
   const specLayout = opts.specLayout || 'inline';
-  const rowH = specLayout === 'twoline' ? 148 : ROW_H;
+  const rowH = specLayout === 'twoline' ? 178 : ROW_H;
   const shown = rows.slice(0, MAX_ROWS);
   const gridW = NAME_W + COL_W * COLUMNS.length;
   const ox = Math.round((BOARD_W - gridW) / 2);
@@ -351,19 +363,25 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
     const label = shortDisplayName(name);
     const known = (specs || []).filter((id) => specIcons[id]);
     if (specLayout === 'twoline') {
-      // Line 1: name + stats. Line 2: big spec icons.
+      // Line 1: name + stats. Line 2: big spec icons with labels.
       const ry = y + 12;
       drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
       COLUMNS.forEach((_, i) => {
         const cx = ox + NAME_W + COL_W * i + COL_W / 2;
         drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
       });
-      let ix = ox + 20 + 32;
-      const icy = y + 68 + 36;
-      for (const specId of known) {
-        drawIcon(cv, specIcons[specId], ix, icy, 64);
-        ix += 76;
-      }
+      const smallA = atlasSmall || atlas;
+      const labs = known.map((id) => SPEC_LABELS[id] || id.toUpperCase());
+      const lws = labs.map((lab) => textWidth(lab, smallA));
+      let ix = ox + 20 + 40;
+      const icy = y + 72 + 38;
+      known.forEach((specId, idx) => {
+        drawIcon(cv, specIcons[specId], ix, icy, 72);
+        const lw = lws[idx];
+        drawText(cv, Math.round(ix - lw / 2), Math.round(icy + 40), labs[idx], [150, 150, 150], smallA);
+        const nextW = idx + 1 < known.length ? lws[idx + 1] : 0;
+        ix += Math.max(110, (lw + nextW) / 2 + 48);
+      });
     } else {
       const ry = y + rowH / 2 - 26; // text top: centers the 52px em box in the row
       drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
