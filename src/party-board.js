@@ -17,7 +17,8 @@ const COL_W = 106;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
-const SPEC_ICON_SIZE = 40;
+const SPEC_ICON_MAX = 56;
+const SPEC_ICON_MIN = 32;
 const MAX_ROWS = 12;
 const MAX_NAME_CHARS = 14;
 
@@ -298,14 +299,19 @@ function renderPartyBoard(rows, extraCount) {
     const ry = y + ROW_H / 2 - 26; // text top: centers the 52px em box in the row
     const label = shortDisplayName(name);
     drawText(cv, ox + 20, Math.round(ry), label, stats ? undefined : gray);
-    // Owned spec-weapon icons, right after the name.
+    // Owned spec-weapon icons, right after the name. Size to fit: full-size
+    // when there's room, shrink (never below the floor) so every icon shows.
+    const known = (specs || []).filter((id) => specIcons[id]);
+    let specSize = SPEC_ICON_MAX;
+    if (known.length) {
+      const avail = ox + NAME_W - 8 - (ox + 20 + textWidth(label) + 12);
+      specSize = Math.max(SPEC_ICON_MIN, Math.min(SPEC_ICON_MAX, Math.floor(avail / known.length) - 5));
+    }
     let ix = ox + 20 + textWidth(label) + 12;
     const icy = y + ROW_H / 2;
-    for (const specId of specs || []) {
-      if (!specIcons[specId]) continue;
-      if (ix + SPEC_ICON_SIZE > ox + NAME_W - 8) break;
-      drawIcon(cv, specIcons[specId], ix + SPEC_ICON_SIZE / 2, icy, SPEC_ICON_SIZE);
-      ix += SPEC_ICON_SIZE + 5;
+    for (const specId of known) {
+      drawIcon(cv, specIcons[specId], ix + specSize / 2, icy, specSize);
+      ix += specSize + 5;
     }
     COLUMNS.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
