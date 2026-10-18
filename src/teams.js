@@ -447,7 +447,8 @@ function buildListingComponents(team) {
 
   rows.push(
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`team:close:${msgId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`team:delete:${msgId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
     )
   );
   return rows;
@@ -1080,11 +1081,32 @@ async function handleClose(interaction, msgId) {
   await refreshListing(interaction.client, team);
 }
 
+async function handleDelete(interaction, msgId) {
+  const state = loadState();
+  const team = state.teams[msgId];
+  if (!team) {
+    await interaction.reply({ content: 'That team is already gone.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
+    await interaction.reply({ content: 'Only the organizer or staff can delete this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Delete the listing message and drop the state.
+  const channel = await interaction.client.channels.fetch(team.channelId).catch(() => null);
+  if (channel && channel.isTextBased()) {
+    await channel.messages.delete(msgId).catch(() => {});
+  }
+  delete state.teams[msgId];
+  saveState(state);
+  await interaction.reply({ content: 'Team deleted.', ephemeral: true }).catch(() => {});
+}
+
 async function handleTeamButton(interaction) {
   // customId: team:create | team:cat:<id> | team:pre:<act>:<pre> |
   // team:mk:<step>:<value> | team:mktype:<step> | team:mkskip:<step> |
   // team:join:<msg> | team:leave:<msg> | team:role:<msg>:<idx> |
-  // team:close:<msg>
+  // team:close:<msg> | team:delete:<msg>
   const parts = interaction.customId.split(':');
   const action = parts[1];
   if (action === 'create') return handleCreate(interaction);
@@ -1097,6 +1119,7 @@ async function handleTeamButton(interaction) {
   if (action === 'leave') return handleLeave(interaction, parts[2]);
   if (action === 'role') return handleRoleClaim(interaction, parts[2], parseInt(parts[3], 10));
   if (action === 'close') return handleClose(interaction, parts[2]);
+  if (action === 'delete') return handleDelete(interaction, parts[2]);
 }
 
 // ─── Expiry sweep ───────────────────────────────────────────────────

@@ -537,7 +537,7 @@ test('buildListingComponents: role mode gets role buttons plus organizer row', (
   assert.ok(roleRow.components[0].custom_id === 'team:role:m1:0');
   assert.ok(roleRow.components[0].label.includes('Alex'), 'claimed role shows holder');
   const orgRow = rows[1].toJSON();
-  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1']);
+  assert.deepStrictEqual(orgRow.components.map((c) => c.custom_id), ['team:close:m1', 'team:delete:m1']);
 });
 
 test('buildListingComponents: headcount gets Join/Leave plus organizer row', () => {
