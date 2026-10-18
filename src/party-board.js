@@ -17,7 +17,7 @@ const COL_W = 106;
 const HEADER_H = 96;
 const ROW_H = 68;
 const ICON_SIZE = 60;
-const SPEC_ICON_SIZE = 28;
+const SPEC_ICON_SIZE = 40;
 const MAX_ROWS = 12;
 const MAX_NAME_CHARS = 14;
 
