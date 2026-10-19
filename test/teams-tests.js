@@ -688,7 +688,7 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
   assert.ok(boardApplies({ activity: 'nex' }), 'nex');
   assert.ok(boardApplies({ activity: 'cox' }), 'cox');
   assert.ok(boardApplies({ activity: 'tob', roleMode: 'exclusive' }), 'tob roles');
-  assert.ok(!boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba is skilling-category');
+  assert.ok(boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba gets the board');
   assert.ok(boardApplies({ activity: 'yama', roleMode: 'pick' }), 'yama roles');
   assert.ok(!boardApplies({ activity: 'wintertodt' }), 'wintertodt');
   assert.ok(!boardApplies({ activity: 'zalcano' }), 'zalcano');

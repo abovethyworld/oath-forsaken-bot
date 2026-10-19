@@ -457,7 +457,8 @@ function toggleShownSpec(userId, activity, specId) {
 // Skilling minigames keep text.
 function boardApplies(team) {
   const act = ACTIVITIES[team.activity];
-  return !!act && act.category !== 'skilling';
+  // BA gets the board (specs matter there); other skilling minigames don't.
+  return !!act && (act.category !== 'skilling' || team.activity === 'ba');
 }
 
 // WOM boss metric key for a team's KC column. Raids use the mode the
@@ -502,6 +503,8 @@ function kcColumnsForTeam(team) {
     { metric: 'calvarion', label: 'Calvarion' },
     { metric: 'vetion', label: "Vet'tion" },
   ];
+  // BA has no WOM KC metric — board shows stats + specs only.
+  if (a === 'ba') return [];
   const metric = KC_METRIC_OVERRIDE[a] || a;
   return [{ metric, icon: metric }];
 }
