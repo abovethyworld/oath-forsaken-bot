@@ -872,7 +872,7 @@ function teamPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Find a Team ⛧')
         .setDescription(
-          'Need a group? Pick an activity, set it up, post it. Teams show up in #open-teams.\n\n' +
+          'Tap Create Team, pick an activity, set it up, post it. Teams show up in <#1561600601861783562>.\n\n' +
           '⛧ Link RSN ⛧\n' +
           'Link your RSN once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
