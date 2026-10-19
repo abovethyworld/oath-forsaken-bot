@@ -20,7 +20,7 @@ const path = require('path');
 const config = require('./config');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
 const { getStats } = require('./wom');
-const { renderPartyBoard, MAX_ROWS, bossIconKey } = require('./party-board');
+const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
@@ -459,14 +459,42 @@ const KC_METRIC_OVERRIDE = {
   huey: 'the_hueycoatl',
   royals: 'the_royal_titans',
 };
-function kcMetricForTeam(team) {
-  if (team.activity === 'toa') return 'tombs_of_amascut';
-  if (team.activity === 'toa_expert') return 'tombs_of_amascut_expert';
-  if (team.activity === 'cox') return 'chambers_of_xeric';
-  if (team.activity === 'cox_cm') return 'chambers_of_xeric_challenge_mode';
-  if (team.activity === 'tob') return 'theatre_of_blood';
-  if (team.activity === 'tob_hard') return 'theatre_of_blood_hard_mode';
-  return KC_METRIC_OVERRIDE[team.activity] || team.activity;
+// KC columns for the board, left to right. Dual columns show normal + hard
+// (raids), nm + phosani (nightmare), or solo + group (wildy bosses).
+// Each entry: { metric } plus { icon } for a WOM boss icon or { label }
+// for a text header.
+function kcColumnsForTeam(team) {
+  const a = team.activity;
+  if (a === 'toa' || a === 'toa_expert') return [
+    { metric: 'tombs_of_amascut', icon: 'tombs_of_amascut' },
+    { metric: 'tombs_of_amascut_expert', icon: 'tombs_of_amascut_expert' },
+  ];
+  if (a === 'cox' || a === 'cox_cm') return [
+    { metric: 'chambers_of_xeric', icon: 'chambers_of_xeric' },
+    { metric: 'chambers_of_xeric_challenge_mode', icon: 'chambers_of_xeric_challenge_mode' },
+  ];
+  if (a === 'tob' || a === 'tob_hard') return [
+    { metric: 'theatre_of_blood', icon: 'theatre_of_blood' },
+    { metric: 'theatre_of_blood_hard_mode', icon: 'theatre_of_blood_hard_mode' },
+  ];
+  if (a === 'nm') return [
+    { metric: 'nightmare', icon: 'nightmare' },
+    { metric: 'phosanis_nightmare', icon: 'phosanis_nightmare' },
+  ];
+  if (a === 'callisto') return [
+    { metric: 'artio', label: 'Artio' },
+    { metric: 'callisto', label: 'Callisto' },
+  ];
+  if (a === 'venenatis') return [
+    { metric: 'spindel', label: 'Spindel' },
+    { metric: 'venenatis', label: 'Venenatis' },
+  ];
+  if (a === 'vetion') return [
+    { metric: 'calvarion', label: 'Calvarion' },
+    { metric: 'vetion', label: "Vet'tion" },
+  ];
+  const metric = KC_METRIC_OVERRIDE[a] || a;
+  return [{ metric, icon: metric }];
 }
 
 // Builds the party-board image for a team, or null when it shouldn't show
@@ -503,7 +531,7 @@ async function partyBoardFile(team, client) {
       // role fallback unavailable; badges just won't show for these members
     }
   }
-  const kcMetric = kcMetricForTeam(team);
+  const kcCols = kcColumnsForTeam(team);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
     const stats = st && !st.notFound
@@ -512,13 +540,16 @@ async function partyBoardFile(team, client) {
     const rsnEntry = normalizeRsnEntry(links[id]);
     const rsn = rsnEntry ? rsnEntry.active : null;
     const specs = getShownSpecs(id, team.activity);
-    const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
+    const kc = kcCols.map((c) => {
+      const kills = st && !st.notFound && st.kc ? st.kc[c.metric] : null;
+      return typeof kills === 'number' ? kills : null;
+    });
     const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
-    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null, badge };
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc, badge };
   });
   if (!rows.some((r) => r.stats)) return null;
   const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { bossIcon: bossIconKey(kcMetric), compact });
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact });
   return new AttachmentBuilder(buf, { name: 'party-board.png' });
 }
 
@@ -2521,7 +2552,7 @@ module.exports = {
   toggleOwnedSpec,
   getShownSpecs,
   toggleShownSpec,
-  kcMetricForTeam,
+  kcColumnsForTeam,
   getUserDefaults,
   setUserDefault,
   sizeOptionsFor,
