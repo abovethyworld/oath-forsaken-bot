@@ -703,7 +703,7 @@ test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
   assert.deepEqual(specsForActivity('tob_hard'), specsForActivity('tob'), 'tob_hard');
   assert.deepEqual(
     specsForActivity('yama'),
-    ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
+    ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
     'yama'
   );
   assert.deepEqual(specsForActivity('nex'), ['zcb', 'voidwaker', 'burningclaws'], 'nex');
@@ -816,12 +816,12 @@ test('getShownSpecs defaults to owned and relevant; toggleShownSpec narrows it',
     toggleOwnedSpec(u, 'zcb');
     // Default: owned ∩ relevant.
     assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa default');
-    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama default');
+    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama default');
     assert.deepEqual(getShownSpecs(u, 'nex'), ['zcb'], 'nex default');
     // Narrow the ToA pick; other bosses unaffected.
     toggleShownSpec(u, 'toa', 'zcb');
     assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh'].sort(), 'toa narrowed');
-    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh'].sort(), 'yama untouched');
+    assert.deepEqual(getShownSpecs(u, 'yama').sort(), ['accursed', 'bgs', 'dwh', 'zcb'].sort(), 'yama untouched');
     toggleShownSpec(u, 'toa', 'zcb');
     assert.deepEqual(getShownSpecs(u, 'toa').sort(), ['bgs', 'dwh', 'zcb'].sort(), 'toa restored');
     // Irrelevant or unowned ids are ignored.
