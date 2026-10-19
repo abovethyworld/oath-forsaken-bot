@@ -279,8 +279,44 @@ function saveRsnLinks(links) {
 }
 
 function getRsn(userId) {
+  const entry = normalizeRsnEntry(loadRsnLinks()[userId]);
+  return entry ? entry.active : null;
+}
+
+// RSN links support alts: {userId: {rsns: [...], active}}. Old single-RSN
+// shape {rsn} is normalized on read.
+function normalizeRsnEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  if (Array.isArray(entry.rsns)) {
+    const rsns = entry.rsns.filter((r) => typeof r === 'string' && r);
+    if (!rsns.length) return null;
+    return { rsns, active: rsns.includes(entry.active) ? entry.active : rsns[0] };
+  }
+  if (typeof entry.rsn === 'string' && entry.rsn) return { rsns: [entry.rsn], active: entry.rsn };
+  return null;
+}
+
+function getRsnEntry(userId) {
+  return normalizeRsnEntry(loadRsnLinks()[userId]) || { rsns: [], active: null };
+}
+
+function addRsn(userId, rsn) {
   const links = loadRsnLinks();
-  return links[userId] ? links[userId].rsn : null;
+  const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null };
+  if (!entry.rsns.includes(rsn)) entry.rsns.push(rsn);
+  entry.active = rsn;
+  links[userId] = entry;
+  saveRsnLinks(links);
+  return entry;
+}
+
+function setActiveRsn(userId, rsn) {
+  const links = loadRsnLinks();
+  const entry = normalizeRsnEntry(links[userId]);
+  if (!entry || !entry.rsns.includes(rsn)) return false;
+  links[userId] = { rsns: entry.rsns, active: rsn };
+  saveRsnLinks(links);
+  return true;
 }
 
 // ─── Spec weapons (special-attack weapons members own) ──
@@ -442,7 +478,8 @@ async function partyBoardFile(team, client) {
   const links = loadRsnLinks();
   const statsList = await Promise.all(
     ids.map((id) => {
-      const rsn = links[id] && links[id].rsn;
+      const _re = normalizeRsnEntry(links[id]);
+      const rsn = _re ? _re.active : null;
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
@@ -472,7 +509,8 @@ async function partyBoardFile(team, client) {
     const stats = st && !st.notFound
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
-    const rsn = links[id] && links[id].rsn;
+    const _re = normalizeRsnEntry(links[id]);
+    const rsn = _re ? _re.active : null;
     const specs = getShownSpecs(id, team.activity);
     const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
     const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
@@ -775,7 +813,7 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
-        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('⚙️')
+        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>')
       ),
     ],
   };
@@ -786,6 +824,9 @@ function settingsPanelPayload(userId) {
   const d = getUserDefaults(userId);
   const regionLabel = (REGIONS.find((r) => r.id === d.region) || {}).label || 'not set';
   const boardLabel = d.boardMode === 'compact' ? 'Compact' : 'Complex';
+  const rsnEntry = getRsnEntry(userId);
+  const altCount = Math.max(0, rsnEntry.rsns.length - 1);
+  const rsnLabel = rsnEntry.active ? rsnEntry.active + (altCount ? ` (+${altCount} alt${altCount > 1 ? 's' : ''})` : '') : 'not set';
   return {
     embeds: [
       new EmbedBuilder()
@@ -796,7 +837,8 @@ function settingsPanelPayload(userId) {
           `🌍 Region: ${regionLabel}\n` +
           `👥 Party Hub: ${d.partyHub || 'not set'}\n` +
           `🌐 World: ${d.world || 'not set'}\n` +
-          `📊 Board: ${boardLabel}`
+          `📊 Board: ${boardLabel}\n` +
+          `⚔️ RSN: ${rsnLabel}`
         ),
     ],
     components: [
@@ -806,8 +848,102 @@ function settingsPanelPayload(userId) {
         new ButtonBuilder().setCustomId('team:defworld').setLabel('Set World').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('team:boardmode').setLabel(`Board: ${boardLabel}`).setStyle(ButtonStyle.Danger)
       ),
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('team:rsnswitch').setLabel('Switch RSN').setStyle(ButtonStyle.Danger).setEmoji('⚔️')
+      ),
     ],
   };
+}
+
+// ─── RSN switching: link alts, pick the active name for team boards ──
+function rsnSwitchPayload(userId) {
+  const entry = getRsnEntry(userId);
+  const rows = [];
+  let row = new ActionRowBuilder();
+  for (const rsn of entry.rsns) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`team:rsnset:${encodeURIComponent(rsn)}`)
+        .setLabel(rsn === entry.active ? `✓ ${rsn}` : rsn)
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  if (row.components.length >= 5) {
+    rows.push(row);
+    row = new ActionRowBuilder();
+  }
+  row.addComponents(
+    new ButtonBuilder().setCustomId('team:rsnadd').setLabel('Link new').setStyle(ButtonStyle.Danger).setEmoji('➕')
+  );
+  rows.push(row);
+  return {
+    content: entry.rsns.length
+      ? 'Tap a name to show it on team boards.'
+      : 'No names linked yet. Link one to show your stats on team boards.',
+    components: rows,
+    ephemeral: true,
+  };
+}
+
+async function handleRsnSwitchButton(interaction) {
+  await interaction.reply(rsnSwitchPayload(interaction.user.id)).catch((err) => console.warn('RSN switch failed:', err.message));
+}
+
+async function handleRsnSet(interaction, rsn) {
+  const name = decodeURIComponent(rsn || '');
+  if (!setActiveRsn(interaction.user.id, name)) return;
+  await interaction.update(rsnSwitchPayload(interaction.user.id)).catch((err) => console.warn('RSN set failed:', err.message));
+  await refreshUserTeams(interaction.client, interaction.user.id);
+}
+
+async function handleRsnAddButton(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId('team:rsnaddmodal')
+    .setTitle('Link another RuneScape name')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:rsnvalue')
+          .setLabel('RuneScape name')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(12)
+          .setPlaceholder('Zezima')
+      )
+    );
+  await interaction.showModal(modal).catch((err) => console.warn('RSN add modal failed:', err.message));
+}
+
+async function readRsnFromModal(interaction) {
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  let rsn;
+  try {
+    rsn = interaction.fields.getTextInputValue('team:rsnvalue').trim().replace(/\s+/g, ' ');
+  } catch {
+    rsn = '';
+  }
+  if (!/^[A-Za-z0-9 ]{1,12}$/.test(rsn)) return { error: 'That name has characters RuneScape does not allow. Try again.' };
+  const stats = await getStats(rsn).catch(() => null);
+  if (stats && stats.notFound) return { error: 'Could not find that RuneScape name. Check the spelling and try again.' };
+  if (!stats) return { error: 'Could not reach the stats service right now. Your name was not linked, try again in a bit.' };
+  return { rsn, stats };
+}
+
+async function handleRsnAddModal(interaction) {
+  const res = await readRsnFromModal(interaction);
+  if (res.error) {
+    await interaction.editReply(res.error).catch(() => {});
+    return;
+  }
+  addRsn(interaction.user.id, res.rsn);
+  await interaction
+    .editReply({ content: `Linked **${res.rsn}** (combat ${res.stats.combat}). Now showing on team boards.`, components: [] })
+    .catch((err) => console.warn('RSN add confirm failed:', err.message));
+  await refreshUserTeams(interaction.client, interaction.user.id);
 }
 
 async function handleSettingsButton(interaction) {
@@ -1933,29 +2069,13 @@ async function handleTeamHubModal(interaction, messageId) {
 
 async function handleRsnModal(interaction) {
   // customId 'team:rsnmodal'
-  let rsn;
-  try {
-    rsn = interaction.fields.getTextInputValue('team:rsnvalue').trim().replace(/\s+/g, ' ');
-  } catch {
-    rsn = '';
-  }
-  if (!/^[A-Za-z0-9 ]{1,12}$/.test(rsn)) {
-    await interaction.reply({ content: 'That name has characters RuneScape does not allow. Try again.', ephemeral: true }).catch(() => {});
+  const res = await readRsnFromModal(interaction);
+  if (res.error) {
+    await interaction.editReply(res.error).catch(() => {});
     return;
   }
-  await interaction.deferReply({ ephemeral: true }).catch(() => {});
-  const stats = await getStats(rsn).catch(() => null);
-  if (stats && stats.notFound) {
-    await interaction.editReply('Could not find that RuneScape name. Check the spelling and try again.').catch(() => {});
-    return;
-  }
-  if (!stats) {
-    await interaction.editReply('Could not reach the stats service right now. Your name was not linked, try again in a bit.').catch(() => {});
-    return;
-  }
-  const links = loadRsnLinks();
-  links[interaction.user.id] = { rsn, linkedAt: Date.now() };
-  saveRsnLinks(links);
+  const { rsn, stats } = res;
+  addRsn(interaction.user.id, rsn);
   await interaction
     .editReply({
       content: `Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`,
@@ -1975,7 +2095,7 @@ async function maybeNudgeRsn(interaction, userId) {
   if (getRsn(userId)) return;
   await interaction
     .followUp({
-      content: 'Want your combat stats on the team board? Link your RuneScape name (one time).',
+      content: 'Want your combat stats on the team board? Link your RuneScape name.',
       components: rsnLinkRow(),
       ephemeral: true,
     })
@@ -1984,6 +2104,7 @@ async function maybeNudgeRsn(interaction, userId) {
 
 async function handleTeamModal(interaction) {
   if (interaction.customId === 'team:rsnmodal') return handleRsnModal(interaction);
+  if (interaction.customId === 'team:rsnaddmodal') return handleRsnAddModal(interaction);
   if (interaction.customId === 'team:defhubmodal') return handleDefHubModal(interaction);
   if (interaction.customId === 'team:defworldmodal') return handleDefWorldModal(interaction);
   const parts = interaction.customId.split(':');
@@ -2241,6 +2362,9 @@ async function handleTeamButton(interaction) {
   if (action === 'defworld') return handleDefWorldButton(interaction);
   if (action === 'boardmode') return handleBoardModeToggle(interaction);
   if (action === 'settings') return handleSettingsButton(interaction);
+  if (action === 'rsnswitch') return handleRsnSwitchButton(interaction);
+  if (action === 'rsnset') return handleRsnSet(interaction, parts[2]);
+  if (action === 'rsnadd') return handleRsnAddButton(interaction);
   if (action === 'badge') return handleBadgeButton(interaction);
   if (action === 'badgeset') return handleBadgeSet(interaction, parts[2]);
   if (action === 'teamsize') return handleTeamSizeButton(interaction, parts[2]);
@@ -2362,6 +2486,11 @@ module.exports = {
   buildListingComponents,
   teamPanelPayload,
   settingsPanelPayload,
+  rsnSwitchPayload,
+  normalizeRsnEntry,
+  getRsnEntry,
+  addRsn,
+  setActiveRsn,
   handleTeamButton,
   handleTeamSelect,
   handleStepSelect,
