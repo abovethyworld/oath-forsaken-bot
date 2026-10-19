@@ -741,7 +741,7 @@ function buildTeamEmbed(team, opts) {
   else if (team.world) lines.push(`🌍 **World:** ${team.world}`);
   else if (team.region) lines.push(`🌍 **Region:** ${team.region}`);
   if (team.hub) lines.push(`<:partyhub:1561624781533745202> **Party hub:** ${team.hub}`);
-  if (team.fc) lines.push(`<:fcchat:1561625124388474900> **FC:** ${team.fc}`);
+  if (team.fc && (team.activity === 'cox' || team.activity === 'cox_cm')) lines.push(`<:fcchat:1561625124388474900> **FC:** ${team.fc}`);
   if (team.contract) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
