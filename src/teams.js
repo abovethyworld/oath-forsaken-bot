@@ -874,11 +874,13 @@ function teamPanelPayload() {
         .setDescription(
           'Need a group? Pick an activity, set it up, post it. Teams show up in #open-teams.\n\n' +
           '⛧ Link RSN ⛧\n' +
-          'Link your RuneScape name once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
+          'Link your RSN once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
           'Tap the spec weapons you own, so you can show what you have.\n\n' +
           '⛧ Settings ⛧\n' +
-          'Your defaults: region, party hub, world, board style.'
+          'Your defaults: Region, Party Hub, FC, World, Board Style.\n\n' +
+          '⛧ My Teams ⛧\n' +
+          'See your open teams and jump back to them.'
         ),
     ],
     components: [
