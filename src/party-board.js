@@ -173,7 +173,7 @@ let atlasSmall = null; // 22px variant for labels
 
 const SPEC_LABELS = {
   bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS',
-  accursed: 'ACCURSED', bonedagger: 'BONE DAGGER', emberlight: 'EMBERLIGHT',
+  accursed: 'ACCURSED', emberlight: 'EMBERLIGHT', crystalhalberd: 'C HALBERD',
   eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME', zcb: 'ZCB',
   voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'B CLAWS',
   webweaver: 'WEBWEAVER', crimsonkisten: 'KISTEN', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
@@ -184,7 +184,7 @@ const bossIcons = {}; // WOM metric -> { w, h, rgba }
 const badgeIcons = {}; // badge id -> { w, h, rgba }
 // Badge ids: iron, hc, ult, gim, hcgim, main, ironsworn.
 const BADGE_IDS = ['ironman', 'hc', 'ult', 'gim', 'hcgim', 'main', 'ironsworn'];
-const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'crimsonkisten', 'sgs', 'zgs', 'dinhs'];
+const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'crystalhalberd', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'crimsonkisten', 'sgs', 'zgs', 'dinhs'];
 
 function loadAssets() {
   if (atlas) return;
@@ -354,7 +354,7 @@ function shortDisplayName(name) {
 // stacked by category (Defense Lowering, Offensive, Utility), each with
 // a small header. Row height grows with the number of non-empty groups.
 const SPEC_CAT_ORDER = [
-  ['DEFENSE LOWERING', ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak']],
+  ['DEFENSE LOWERING', ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'crystalhalberd', 'emberlight', 'eyeofayak']],
   ['OFFENSIVE', ['soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver']],
   ['UTILITY', ['sgs', 'zgs', 'dinhs']],
 ];

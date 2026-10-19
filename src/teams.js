@@ -334,8 +334,8 @@ const SPECS = [
   { id: 'eldermaul', label: 'Elder maul', name: 'Elder maul', cat: 'def' },
   { id: 'tonalztics', label: 'Tonalztics', name: 'Tonalztics of Ralos', cat: 'def' },
   { id: 'accursed', label: 'Accursed', name: 'Accursed sceptre', cat: 'def' },
-  { id: 'bonedagger', label: 'Bone dagger', name: 'Bone dagger', cat: 'def' },
   { id: 'emberlight', label: 'Emberlight', name: 'Emberlight', cat: 'def' },
+  { id: 'crystalhalberd', label: 'Crystal halberd', name: 'Crystal halberd', cat: 'def' },
   { id: 'eyeofayak', label: 'Eye of Ayak', name: 'Eye of Ayak', cat: 'def' },
   { id: 'soulflame', label: 'Soulflame', name: 'Soulflame horn', cat: 'off' },
   { id: 'zcb', label: 'ZCB', name: 'Zaryte crossbow', cat: 'off' },
@@ -355,12 +355,12 @@ const SPEC_CATS = [
 ];
 // Which spec icons can show per activity (wiki strategy pages, 2026-10-18).
 const SPEC_DISPLAY = {
-  toa: ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
-  toa_expert: ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
-  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
-  cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
-  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
-  tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+  toa: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'eyeofayak'],
+  toa_expert: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'eyeofayak'],
+  cox: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'zgs'],
+  cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'zgs'],
+  tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crystalhalberd'],
+  tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crystalhalberd'],
   yama: ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
   nex: ['zcb', 'voidwaker', 'burningclaws'],
   huey: ['dragonclaws', 'burningclaws', 'crimsonkisten'],
