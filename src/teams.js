@@ -1274,13 +1274,6 @@ function creationStepsFor(activityKey, preId) {
     });
   }
 
-  if (activityKey === 'yama') {
-    steps.push({
-      id: 'contract', kind: 'optionalText', prompt: 'Add a contract?',
-      typeLabel: 'contract', modalTitle: 'Contract', modalLabel: 'Contract',
-      modalPlaceholder: 'None',
-    });
-  }
   // Skilling minigames and Zalcano skip the note.
   if (!['wintertodt', 'gotr', 'tempoross', 'zalcano'].includes(activityKey)) {
     steps.push({
