@@ -835,7 +835,7 @@ function teamPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Find a Team ⛧')
         .setDescription(
-          'Need a group? Pick an activity, set it up, post it.\n\n' +
+          'Need a group? Pick an activity, set it up, post it. Teams show up in #open-teams.\n\n' +
           '⛧ Link RSN ⛧\n' +
           'Link your RuneScape name once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
