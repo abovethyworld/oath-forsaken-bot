@@ -546,7 +546,7 @@ test('buildTeamEmbed shows ToB pre label in the title', () => {
 });
 
 test('buildTeamEmbed titles the split raid modes', () => {
-  for (const [key, short] of [['toa_expert', 'ToA Expert'], ['cox_cm', 'CoX CM'], ['tob_hard', 'ToB Hard Mode']]) {
+  for (const [key, short] of [['toa_expert', 'Tombs of Amascut Expert'], ['cox_cm', 'CoX CM'], ['tob_hard', 'ToB Hard Mode']]) {
     const team = {
       activity: key, status: 'open', roleMode: null,
       members: { org1: true }, memberNames: { org1: 'Alex' },
