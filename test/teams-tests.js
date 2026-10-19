@@ -1009,4 +1009,22 @@ test('settings panel shows Clear All only for staff', () => {
   assert.ok(staffIds.includes('team:clearall'), 'clear-all for staff');
 });
 
+
+test('YAMA_CONTRACTS has four contracts, no emojis', () => {
+  const { YAMA_CONTRACTS, contractLabel } = require('../src/teams');
+  assert.equal(YAMA_CONTRACTS.length, 4);
+  assert.equal(contractLabel('catalyst'), 'Contract of Catalyst Acquisition');
+  assert.equal(contractLabel('bogus'), null);
+});
+
+test('Yama listing has Set Contract button, others do not', () => {
+  const { buildListingComponents } = require('../src/teams');
+  const yama = { activity: 'yama', status: 'open', messageId: '123', roles: ['Mage', 'Melee'], roleMode: 'pick', members: {} };
+  const yamaIds = buildListingComponents(yama).flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
+  assert.ok(yamaIds.some((id) => id.startsWith('team:teamcontract:')), 'yama has contract button');
+  const nex = { activity: 'nex', status: 'open', messageId: '123', members: {} };
+  const nexIds = buildListingComponents(nex).flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
+  assert.ok(!nexIds.some((id) => id.startsWith('team:teamcontract:')), 'nex has no contract button');
+});
+
 console.log(`Results: ${passed} passed, ${failed} failed`);
