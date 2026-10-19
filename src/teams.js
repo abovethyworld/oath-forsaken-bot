@@ -1502,7 +1502,8 @@ async function finalizeCreation(interaction, creation) {
   // Patch the buttons with the real message id now that we have it.
   await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
 
-  await interaction.followUp({ content: 'Team posted.', ephemeral: true }).catch(() => {});
+  const teamUrl = `https://discord.com/channels/${config.guildId}/${team.channelId}/${msg.id}`;
+  await interaction.followUp({ content: `Team posted. [Jump to it](${teamUrl})`, ephemeral: true }).catch(() => {});
   await maybeNudgeRsn(interaction, interaction.user.id);
 }
 
