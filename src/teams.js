@@ -360,7 +360,7 @@ const SPEC_DISPLAY = {
   tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
   yama: ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
   nex: ['zcb', 'voidwaker', 'burningclaws'],
-  huey: ['dragonclaws', 'burningclaws'],
+  huey: ['dragonclaws', 'burningclaws', 'crimsonkisten'],
   royals: ['zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
   venenatis: ['dwh', 'eldermaul', 'webweaver', 'dinhs'],
   callisto: ['dwh', 'accursed', 'zcb', 'webweaver'],
