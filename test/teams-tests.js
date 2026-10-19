@@ -25,6 +25,7 @@ const {
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
+  settingsPanelPayload,
   boardApplies,
   shouldSweepTeam,
   shouldAutoClose,
@@ -842,13 +843,26 @@ test('team panel has a Link RSN button', () => {
   assert.ok(ids.includes('team:rsn'), `expected team:rsn button, got ${ids.join(',')}`);
 });
 
-test('team panel is one row of five (badge picker lives in the RSN flow)', () => {
+test('team panel is one row of four (settings holds the defaults)', () => {
   const payload = teamPanelPayload();
   assert.strictEqual(payload.components.length, 1, 'single button row');
   const ids = payload.components[0].components.map((b) => b.toJSON().custom_id);
-  assert.deepEqual(ids, ['team:create', 'team:rsn', 'team:specs', 'team:defregion', 'team:defhub']);
+  assert.deepEqual(ids, ['team:create', 'team:rsn', 'team:specs', 'team:settings']);
   const desc = payload.embeds[0].toJSON().description;
   assert.ok(!desc.includes('Account Badge'), 'no badge section in panel copy');
+  assert.ok(!desc.includes('⛧ Region ⛧'), 'no region section in panel copy');
+  assert.ok(desc.includes('⛧ Settings ⛧'), 'settings section present');
+});
+
+test('settings panel shows current defaults and four buttons', () => {
+  const payload = settingsPanelPayload('test-user-no-defaults');
+  const ids = payload.components[0].components.map((b) => b.toJSON().custom_id);
+  assert.deepEqual(ids, ['team:defregion', 'team:defhub', 'team:defworld', 'team:boardmode']);
+  const desc = payload.embeds[0].toJSON().description;
+  assert.ok(desc.includes('not set'), 'unset values shown');
+  assert.ok(desc.includes('Board: Complex'), 'complex is the default board mode');
+  const boardBtn = payload.components[0].components[3].toJSON();
+  assert.strictEqual(boardBtn.label, 'Board: Complex');
 });
 
 test('renderPartyBoard compact mode skips spec rows', () => {

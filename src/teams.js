@@ -479,7 +479,8 @@ async function partyBoardFile(team, client) {
     return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc: typeof kills === 'number' ? kills : null, badge };
   });
   if (!rows.some((r) => r.stats)) return null;
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { bossIcon: bossIconKey(kcMetric) });
+  const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { bossIcon: bossIconKey(kcMetric), compact });
   return new AttachmentBuilder(buf, { name: 'party-board.png' });
 }
 
@@ -765,10 +766,8 @@ function teamPanelPayload() {
           'Link your RuneScape name once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
           'Tap the spec weapons you own, so you can show what you have.\n\n' +
-          '⛧ Region ⛧\n' +
-          'Set your default region. New teams post with it.\n\n' +
-          '⛧ Party Hub ⛧\n' +
-          'Set your default party hub. New teams post with it.'
+          '⛧ Settings ⛧\n' +
+          'Your defaults: region, party hub, world, board style.'
         ),
     ],
     components: [
@@ -776,11 +775,91 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
-        new ButtonBuilder().setCustomId('team:defregion').setLabel('Set Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
-        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('👥')
+        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('⚙️')
       ),
     ],
   };
+}
+
+// ─── Settings popup: per-user defaults (region, hub, world, board style) ──
+function settingsPanelPayload(userId) {
+  const d = getUserDefaults(userId);
+  const regionLabel = (REGIONS.find((r) => r.id === d.region) || {}).label || 'not set';
+  const boardLabel = d.boardMode === 'compact' ? 'Compact' : 'Complex';
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(ZAMORAK_RED)
+        .setTitle('⛧ Team Settings ⛧')
+        .setDescription(
+          'Your defaults. New teams you post use these.\n\n' +
+          `🌍 Region: ${regionLabel}\n` +
+          `👥 Party Hub: ${d.partyHub || 'not set'}\n` +
+          `🌐 World: ${d.world || 'not set'}\n` +
+          `📊 Board: ${boardLabel}`
+        ),
+    ],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('team:defregion').setLabel('Set Region').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('team:defworld').setLabel('Set World').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('team:boardmode').setLabel(`Board: ${boardLabel}`).setStyle(ButtonStyle.Danger)
+      ),
+    ],
+  };
+}
+
+async function handleSettingsButton(interaction) {
+  await interaction.reply({ ...settingsPanelPayload(interaction.user.id), ephemeral: true }).catch((err) => console.warn('Settings popup failed:', err.message));
+}
+
+async function handleBoardModeToggle(interaction) {
+  const next = getUserDefaults(interaction.user.id).boardMode === 'compact' ? 'complex' : 'compact';
+  setUserDefault(interaction.user.id, 'boardMode', next);
+  await interaction.update(settingsPanelPayload(interaction.user.id)).catch((err) => console.warn('Board mode toggle failed:', err.message));
+}
+
+async function handleDefWorldButton(interaction) {
+  const current = getUserDefaults(interaction.user.id).world;
+  const modal = new ModalBuilder()
+    .setCustomId('team:defworldmodal')
+    .setTitle('Default world')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:defworldvalue')
+          .setLabel('World number')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(3)
+          .setPlaceholder('302')
+          .setValue(current ? String(current) : '')
+      )
+    );
+  await interaction.showModal(modal).catch((err) => console.warn('Default world modal failed:', err.message));
+}
+
+async function handleDefWorldModal(interaction) {
+  let world;
+  try {
+    world = interaction.fields.getTextInputValue('team:defworldvalue').trim();
+  } catch {
+    world = '';
+  }
+  const worldNum = validateWorld(world) ? parseInt(world, 10) : null;
+  if (world && !worldNum) {
+    await interaction.reply({ content: 'World must be a 3-digit number.', ephemeral: true })
+      .catch((err) => console.warn('Default world reply failed:', err.message));
+    return;
+  }
+  setUserDefault(interaction.user.id, 'world', worldNum);
+  await interaction
+    .reply({
+      content: worldNum ? `Your default world is **${worldNum}**. New teams you post use it.` : 'Default world cleared.',
+      ephemeral: true,
+    })
+    .catch((err) => console.warn('Default world confirm failed:', err.message));
 }
 
 function badgeRows(userId) {
@@ -1048,8 +1127,8 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
   const act = ACTIVITIES[activityKey];
   if (!act) return { error: 'Unknown activity.' };
 
-  // Region and hub come from the organizer's panel defaults. World and
-  // size are set after posting via the listing buttons.
+  // Region, hub, and world come from the organizer's settings.
+  // Size is set after posting via the listing buttons.
   const defaults = getUserDefaults(organizer.id);
   const team = {
     activity: activityKey,
@@ -1059,7 +1138,7 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     roles: rolesFor(activityKey, preId),
     roleMode: roleModeFor(activityKey),
     pre: preId || null,
-    world: null,
+    world: defaults.world || null,
     region: defaults.region || null,
     hub: defaults.partyHub || null,
     note: data.note || null,
@@ -1393,7 +1472,12 @@ function saveDefaults(defaults) {
 function getUserDefaults(userId) {
   const d = loadDefaults()[userId];
   if (!d || typeof d !== 'object') return {};
-  return { region: d.region || null, partyHub: d.partyHub || null };
+  return {
+    region: d.region || null,
+    partyHub: d.partyHub || null,
+    world: d.world || null,
+    boardMode: d.boardMode === 'compact' ? 'compact' : 'complex',
+  };
 }
 
 function setUserDefault(userId, key, value) {
@@ -1901,6 +1985,7 @@ async function maybeNudgeRsn(interaction, userId) {
 async function handleTeamModal(interaction) {
   if (interaction.customId === 'team:rsnmodal') return handleRsnModal(interaction);
   if (interaction.customId === 'team:defhubmodal') return handleDefHubModal(interaction);
+  if (interaction.customId === 'team:defworldmodal') return handleDefWorldModal(interaction);
   const parts = interaction.customId.split(':');
   if (parts[0] === 'team' && parts[1] === 'teamhubmodal') return handleTeamHubModal(interaction, parts[2]);
   if (parts[0] === 'team' && parts[1] === 'teamworldmodal') return handleTeamWorldModal(interaction, parts[2]);
@@ -2153,6 +2238,9 @@ async function handleTeamButton(interaction) {
   if (action === 'defregion') return handleDefRegionButton(interaction);
   if (action === 'defregionset') return handleDefRegionSet(interaction, parts[2]);
   if (action === 'defhub') return handleDefHubButton(interaction);
+  if (action === 'defworld') return handleDefWorldButton(interaction);
+  if (action === 'boardmode') return handleBoardModeToggle(interaction);
+  if (action === 'settings') return handleSettingsButton(interaction);
   if (action === 'badge') return handleBadgeButton(interaction);
   if (action === 'badgeset') return handleBadgeSet(interaction, parts[2]);
   if (action === 'teamsize') return handleTeamSizeButton(interaction, parts[2]);
@@ -2273,6 +2361,7 @@ module.exports = {
   buildTeamEmbed,
   buildListingComponents,
   teamPanelPayload,
+  settingsPanelPayload,
   handleTeamButton,
   handleTeamSelect,
   handleStepSelect,
