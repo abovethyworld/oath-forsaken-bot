@@ -1022,7 +1022,7 @@ function badgeRows(userId) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('team:badgeset:none')
-        .setLabel(current ? 'clear (use auto)' : 'auto')
+        .setLabel(current ? 'clear (use AUTO)' : 'AUTO')
         .setStyle(ButtonStyle.Secondary)
     )
   );
@@ -1032,7 +1032,7 @@ function badgeRows(userId) {
 async function handleBadgeButton(interaction) {
   await interaction
     .reply({
-      content: 'auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
+      content: 'AUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
       ephemeral: true,
     })
@@ -1043,7 +1043,7 @@ async function handleBadgeSet(interaction, badgeId) {
   setManualBadge(interaction.user.id, badgeId === 'none' ? null : badgeId);
   await interaction
     .update({
-      content: 'auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
+      content: 'AUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
     })
     .catch(() => {});
@@ -1543,7 +1543,7 @@ const BADGES = [
   { id: 'ult', label: 'UIM' },
   { id: 'gim', label: 'GIM' },
   { id: 'hcgim', label: 'HCGIM' },
-  { id: 'main', label: 'main' },
+  { id: 'main', label: 'MAIN' },
 ];
 const IRON_SWORN_ROLE = '1558540424048803860';
 const UNBOUND_ROLE = '1558540434652008569';
