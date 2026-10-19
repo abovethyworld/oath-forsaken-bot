@@ -1032,7 +1032,7 @@ function badgeRows(userId) {
 async function handleBadgeButton(interaction) {
   await interaction
     .reply({
-      content: 'Auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (Group Ironman can\'t be detected automatically, pick yours by hand.)',
+      content: 'auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
       ephemeral: true,
     })
@@ -1043,7 +1043,7 @@ async function handleBadgeSet(interaction, badgeId) {
   setManualBadge(interaction.user.id, badgeId === 'none' ? null : badgeId);
   await interaction
     .update({
-      content: 'Auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (Group Ironman can\'t be detected automatically, pick yours by hand.)',
+      content: 'auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
     })
     .catch(() => {});
@@ -1538,7 +1538,7 @@ async function handleRsnButton(interaction) {
 const BADGES_FILE = path.join(__dirname, '..', 'data', 'badges.json');
 // Badge ids match assets/party-board/badge-icons/<id>.png.
 const BADGES = [
-  { id: 'ironman', label: 'Solo IM' },
+  { id: 'ironman', label: 'IM' },
   { id: 'hc', label: 'HCIM' },
   { id: 'ult', label: 'UIM' },
   { id: 'gim', label: 'GIM' },
