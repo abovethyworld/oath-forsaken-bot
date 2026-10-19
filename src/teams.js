@@ -738,6 +738,7 @@ function buildTeamEmbed(team, opts) {
   else if (team.world) lines.push(`🌍 **World:** ${team.world}`);
   else if (team.region) lines.push(`🌍 **Region:** ${team.region}`);
   if (team.hub) lines.push(`👥 **Party hub:** ${team.hub}`);
+  if (team.contract) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
   const count = memberCount(team);
@@ -802,8 +803,24 @@ function buildListingComponents(team) {
     new ButtonBuilder().setCustomId(`team:teamregion:${messageId}`).setLabel('Set Region').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`team:teamhub:${messageId}`).setLabel('Set Hub').setStyle(ButtonStyle.Secondary)
   );
+  if (team.activity === 'yama') {
+    manageRow.addComponents(
+      new ButtonBuilder().setCustomId(`team:teamcontract:${messageId}`).setLabel('Set Contract').setStyle(ButtonStyle.Secondary)
+    );
+  }
   rows.push(manageRow);
   return rows;
+}
+
+// Yama contracts (no emojis — saving server emoji space).
+const YAMA_CONTRACTS = [
+  { id: 'catalyst', label: 'Contract of Catalyst Acquisition' },
+  { id: 'worm', label: 'Contract of Worm Acquisition' },
+  { id: 'shard', label: 'Contract of Shard Acquisition' },
+  { id: 'familiar', label: 'Contract of Familiar Acquisition' },
+];
+function contractLabel(id) {
+  return (YAMA_CONTRACTS.find((c) => c.id === id) || {}).label || null;
 }
 
 // Size-lock options per activity for the post-creation Size button.
@@ -2142,6 +2159,51 @@ async function handleTeamHubButton(interaction, messageId) {
   await interaction.showModal(modal).catch(() => {});
 }
 
+async function handleTeamContractButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const options = YAMA_CONTRACTS.map((c) => ({
+    label: c.label.slice(0, 100),
+    value: c.id,
+    default: team.contract === c.id,
+  }));
+  options.unshift({ label: 'No contract', value: 'none', default: !team.contract });
+  await interaction.reply({
+    content: 'Pick a contract for this Yama team:',
+    components: [
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`team:teamcontractsel:${messageId}`)
+          .setPlaceholder('Choose a contract')
+          .addOptions(options)
+      ),
+    ],
+    ephemeral: true,
+  }).catch(() => {});
+}
+
+async function handleTeamContractSelect(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const choice = interaction.values[0];
+  await mutateTeams((state) => {
+    const t = state.teams[messageId];
+    if (!t) return;
+    t.contract = choice === 'none' ? null : choice;
+  });
+  await interaction.update({ content: `Contract set: ${choice === 'none' ? 'none' : contractLabel(choice)}.`, components: [] }).catch(() => {});
+  const updated = findTeamByMessage(messageId);
+  if (updated) await refreshListing(interaction.client, updated);
+}
+
 async function handleTeamHubModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
@@ -2476,6 +2538,7 @@ async function handleTeamButton(interaction) {
   if (action === 'teamregion') return handleTeamRegionButton(interaction, parts[2]);
   if (action === 'teamregionset') return handleTeamRegionSet(interaction, parts[2], parts[3]);
   if (action === 'teamhub') return handleTeamHubButton(interaction, parts[2]);
+  if (action === 'teamcontract') return handleTeamContractButton(interaction, parts[2]);
   console.warn('Unknown team button action:', interaction.customId);
 }
 
@@ -2647,5 +2710,8 @@ module.exports = {
   shouldAutoClose,
   sweepExpiredTeams,
   sweepPendingButtons,
+  handleTeamContractSelect,
+  YAMA_CONTRACTS,
+  contractLabel,
   commands,
 };
