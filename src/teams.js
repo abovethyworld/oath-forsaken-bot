@@ -1040,10 +1040,12 @@ async function handleBadgeButton(interaction) {
 }
 
 async function handleBadgeSet(interaction, badgeId) {
-  setManualBadge(interaction.user.id, badgeId === 'none' ? null : badgeId);
+  const picked = badgeId === 'none' ? null : badgeId;
+  setManualBadge(interaction.user.id, picked);
+  const label = picked ? (BADGES.find((b) => b.id === picked) || {}).label || picked : 'AUTO';
   await interaction
     .update({
-      content: 'AUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
+      content: `Badge set to **${label}**.\nAUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can't be detected automatically, pick yours by hand.)`,
       components: badgeRows(interaction.user.id),
     })
     .catch(() => {});
