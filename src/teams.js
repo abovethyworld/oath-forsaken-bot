@@ -764,15 +764,17 @@ function buildListingComponents(team) {
   if (team.status === 'closed') return rows;
   const messageId = team.messageId;
 
+  // BA role emojis (default Discord emojis, no server slots used).
+  const BA_ROLE_EMOJI = { Attacker: '⚔️', Collector: '🥚', Defender: '🛡️', Healer: '📯', Flex: '🃏' };
   if (team.roleMode) {
     const names = team.memberNames || {};
     const roleRow = new ActionRowBuilder();
     (team.roles || []).forEach((role, idx) => {
       const holder = Object.entries(team.members || {}).find(([, r]) => r === role);
       const label = holder ? `${role}: ${shortName(names[holder[0]] || 'taken')}` : role;
-      roleRow.addComponents(
-        new ButtonBuilder().setCustomId(`team:role:${messageId}:${idx}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Danger)
-      );
+      const btn = new ButtonBuilder().setCustomId(`team:role:${messageId}:${idx}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Danger);
+      if (team.activity === 'ba' && BA_ROLE_EMOJI[role]) btn.setEmoji(BA_ROLE_EMOJI[role]);
+      roleRow.addComponents(btn);
     });
     // Discord allows max 5 buttons per row; BA/ToB-5s have exactly 5.
     rows.push(roleRow);
