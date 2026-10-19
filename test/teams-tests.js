@@ -707,7 +707,7 @@ test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
     'yama'
   );
   assert.deepEqual(specsForActivity('nex'), ['zcb', 'voidwaker', 'burningclaws'], 'nex');
-  assert.deepEqual(specsForActivity('huey'), ['dragonclaws', 'burningclaws'], 'huey');
+  assert.deepEqual(specsForActivity('huey'), ['dragonclaws', 'burningclaws', 'crimsonkisten'], 'huey');
   assert.deepEqual(specsForActivity('venenatis'), ['dwh', 'eldermaul', 'webweaver', 'dinhs'], 'venenatis');
   assert.deepEqual(specsForActivity('wintertodt'), [], 'skilling');
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
