@@ -1032,7 +1032,7 @@ function badgeRows(userId) {
 async function handleBadgeButton(interaction) {
   await interaction
     .reply({
-      content: 'Pick your account badge. This overrides the automatic badge on the team board.',
+      content: 'Auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (Group Ironman can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
       ephemeral: true,
     })
@@ -1043,7 +1043,7 @@ async function handleBadgeSet(interaction, badgeId) {
   setManualBadge(interaction.user.id, badgeId === 'none' ? null : badgeId);
   await interaction
     .update({
-      content: 'Pick your account badge. This overrides the automatic badge on the team board.',
+      content: 'Auto reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (Group Ironman can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
     })
     .catch(() => {});
@@ -1544,7 +1544,6 @@ const BADGES = [
   { id: 'gim', label: 'Group Ironman' },
   { id: 'hcgim', label: 'HC Group Ironman' },
   { id: 'main', label: 'Main' },
-  { id: 'ironsworn', label: 'Iron Sworn' },
 ];
 const IRON_SWORN_ROLE = '1558540424048803860';
 const UNBOUND_ROLE = '1558540434652008569';
