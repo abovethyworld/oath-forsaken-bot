@@ -176,7 +176,7 @@ const SPEC_LABELS = {
   accursed: 'ACCURSED', bonedagger: 'BONE DAGGER', emberlight: 'EMBERLIGHT',
   eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME', zcb: 'ZCB',
   voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'B CLAWS',
-  webweaver: 'WEBWEAVER', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
+  webweaver: 'WEBWEAVER', crimsonkisten: 'KISTEN', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
 };
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
@@ -184,7 +184,7 @@ const bossIcons = {}; // WOM metric -> { w, h, rgba }
 const badgeIcons = {}; // badge id -> { w, h, rgba }
 // Badge ids: iron, hc, ult, gim, hcgim, main, ironsworn.
 const BADGE_IDS = ['ironman', 'hc', 'ult', 'gim', 'hcgim', 'main', 'ironsworn'];
-const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'sgs', 'zgs', 'dinhs'];
+const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'bonedagger', 'emberlight', 'eyeofayak', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'crimsonkisten', 'sgs', 'zgs', 'dinhs'];
 
 function loadAssets() {
   if (atlas) return;

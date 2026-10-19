@@ -756,14 +756,14 @@ test('renderPartyBoard accepts a kc per row', () => {
   assert.ok(Buffer.isBuffer(buf2), 'renders without kc');
 });
 
-test('SPECS has seventeen weapons in three categories with unique ids', () => {
-  assert.equal(SPECS.length, 17);
-  assert.equal(new Set(SPECS.map((s) => s.id)).size, 17);
+test('SPECS has eighteen weapons in three categories with unique ids', () => {
+  assert.equal(SPECS.length, 18);
+  assert.equal(new Set(SPECS.map((s) => s.id)).size, 18);
   for (const s of SPECS) assert.ok(s.label && s.name && s.cat, s.id);
   const cats = new Set(SPECS.map((s) => s.cat));
   assert.deepEqual([...cats].sort(), ['def', 'off', 'util'], 'three categories');
   assert.equal(SPECS.filter((s) => s.cat === 'def').length, 8, 'defense lowering');
-  assert.equal(SPECS.filter((s) => s.cat === 'off').length, 6, 'offensive');
+  assert.equal(SPECS.filter((s) => s.cat === 'off').length, 7, 'offensive');
   assert.equal(SPECS.filter((s) => s.cat === 'util').length, 3, 'utility');
 });
 
