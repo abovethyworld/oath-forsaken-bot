@@ -340,6 +340,7 @@ const SPECS = [
   { id: 'dragonclaws', label: 'D claws', name: 'Dragon claws', cat: 'off' },
   { id: 'burningclaws', label: 'Burning claws', name: 'Burning claws', cat: 'off' },
   { id: 'webweaver', label: 'Webweaver', name: 'Webweaver bow', cat: 'off' },
+  { id: 'crimsonkisten', label: 'Kisten', name: 'Crimson kisten', cat: 'off' },
   { id: 'sgs', label: 'SGS', name: 'Saradomin godsword', cat: 'util' },
   { id: 'zgs', label: 'ZGS', name: 'Zamorak godsword', cat: 'util' },
   { id: 'dinhs', label: "Dinh's", name: "Dinh's bulwark", cat: 'util' },
@@ -364,7 +365,7 @@ const SPEC_DISPLAY = {
   venenatis: ['dwh', 'eldermaul', 'webweaver', 'dinhs'],
   callisto: ['dwh', 'accursed', 'zcb', 'webweaver'],
   vetion: ['eldermaul'],
-  nm: ['bgs', 'dwh', 'eldermaul', 'voidwaker', 'dragonclaws', 'sgs'],
+  nm: ['bgs', 'dwh', 'eldermaul', 'voidwaker', 'dragonclaws', 'crimsonkisten', 'sgs'],
   ba: ['dinhs', 'dragonclaws'],
 };
 function specsForActivity(activity) {
