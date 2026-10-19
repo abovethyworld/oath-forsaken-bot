@@ -204,10 +204,11 @@ function loadAssets() {
   for (const id of SPEC_IDS) {
     try {
       specIcons[id] = inkCrop(decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`))));
-    } catch {
-      // icon missing: that spec just won't draw
+    } catch (e) {
+      console.warn(`[party-board] spec icon failed to load: ${id}: ${e.message}`);
     }
   }
+  console.log(`[party-board] loaded ${Object.keys(specIcons).length}/${SPEC_IDS.length} spec icons`);
   // Account badge icons (clan emojis) for the name column.
   for (const id of BADGE_IDS) {
     try {
