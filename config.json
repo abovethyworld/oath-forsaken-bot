@@ -923,7 +923,7 @@
     }
   },
   "teams": {
-    "_comment": "Team finder: #find-a-team channel and per-activity ping roles.",
+    "_comment": "Team finder: #find-a-team (panel) and #open-teams (listings).",
     "channelId": "1558428263322357811",
     "activityRoles": {
       "toa": "1558468832736190464",
@@ -943,6 +943,7 @@
       "vetion": "1558469040433799178",
       "nm": "1558469070553358446",
       "wag": "1558468981105365024"
-    }
+    },
+    "listingsChannelId": "1561600601861783562"
   }
 }

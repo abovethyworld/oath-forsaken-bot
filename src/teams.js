@@ -224,6 +224,11 @@ function teamsChannelId() {
   return config.teams && config.teams.channelId;
 }
 
+function teamListingsChannelId() {
+  // Listings post to #open-teams; falls back to the panel channel.
+  return (config.teams && config.teams.listingsChannelId) || teamsChannelId();
+}
+
 // Split raid modes ping the same 3 raid roles.
 const PING_ROLE_ALIAS = { toa_expert: 'toa', cox_cm: 'cox', tob_hard: 'tob' };
 function activityRoleId(activityKey) {
@@ -844,14 +849,15 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
-        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>')
+        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>'),
+        new ButtonBuilder().setCustomId('team:myteams').setLabel('My Teams').setStyle(ButtonStyle.Secondary).setEmoji('📋')
       ),
     ],
   };
 }
 
 // ─── Settings popup: per-user defaults (region, hub, world, board style) ──
-function settingsPanelPayload(userId) {
+function settingsPanelPayload(userId, isStaffUser = false) {
   const d = getUserDefaults(userId);
   const regionLabel = (REGIONS.find((r) => r.id === d.region) || {}).label || 'not set';
   const boardLabel = d.boardMode === 'compact' ? 'Compact' : 'Complex';
@@ -880,7 +886,8 @@ function settingsPanelPayload(userId) {
         new ButtonBuilder().setCustomId('team:boardmode').setLabel(`Board: ${boardLabel}`).setStyle(ButtonStyle.Danger)
       ),
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:rsnswitch').setLabel('Switch RSN').setStyle(ButtonStyle.Danger).setEmoji('⚔️')
+        new ButtonBuilder().setCustomId('team:rsnswitch').setLabel('Switch RSN').setStyle(ButtonStyle.Danger).setEmoji('⚔️'),
+        ...(isStaffUser ? [new ButtonBuilder().setCustomId('team:clearall').setLabel('Clear All Teams').setStyle(ButtonStyle.Danger).setEmoji('🗑️')] : [])
       ),
     ],
   };
@@ -980,13 +987,61 @@ async function handleRsnAddModal(interaction) {
 }
 
 async function handleSettingsButton(interaction) {
-  await interaction.reply({ ...settingsPanelPayload(interaction.user.id), ephemeral: true }).catch((err) => console.warn('Settings popup failed:', err.message));
+  await interaction.reply({ ...settingsPanelPayload(interaction.user.id, isStaff(interaction)), ephemeral: true }).catch((err) => console.warn('Settings popup failed:', err.message));
+}
+
+async function handleClearAllTeams(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const res = await mutateTeams((state) => {
+    const teams = Object.values(state.teams || {}).filter((t) => t.status === 'open');
+    const ids = teams.map((t) => ({ messageId: t.messageId, channelId: t.channelId }));
+    state.teams = {};
+    return { ok: true, ids };
+  }).catch(() => ({ ok: false }));
+  if (!res.ok) {
+    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Delete the listing messages.
+  for (const { messageId, channelId } of res.ids) {
+    try {
+      const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
+      if (channel) await channel.messages.delete(messageId).catch(() => {});
+    } catch {}
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  await interaction.reply({ content: `Cleared ${res.ids.length} team${res.ids.length === 1 ? '' : 's'}.`, ephemeral: true }).catch(() => {});
+}
+
+async function handleMyTeamsButton(interaction) {
+  const userId = interaction.user.id;
+  const state = loadState();
+  const mine = Object.values(state.teams || {}).filter(
+    (t) => t.status === 'open' && (t.organizerId === userId || (t.members || {})[userId])
+  );
+  if (!mine.length) {
+    await interaction.reply({ content: 'You have no open teams. Hit Create Team to start one.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const lines = mine.map((t) => {
+    const act = (ACTIVITIES[t.activity] || {}).name || t.activity;
+    const url = `https://discord.com/channels/${config.guildId}/${t.channelId}/${t.messageId}`;
+    const role = t.organizerId === userId ? 'organizer' : 'member';
+    return `• [${act}](${url}) — ${role}`;
+  });
+  await interaction.reply({
+    content: `⛧ Your Teams ⛧\n${lines.join('\n')}`,
+    ephemeral: true,
+  }).catch((err) => console.warn('My teams popup failed:', err.message));
 }
 
 async function handleBoardModeToggle(interaction) {
   const next = getUserDefaults(interaction.user.id).boardMode === 'compact' ? 'complex' : 'compact';
   setUserDefault(interaction.user.id, 'boardMode', next);
-  await interaction.update(settingsPanelPayload(interaction.user.id)).catch((err) => console.warn('Board mode toggle failed:', err.message));
+  await interaction.update(settingsPanelPayload(interaction.user.id, isStaff(interaction))).catch((err) => console.warn('Board mode toggle failed:', err.message));
 }
 
 async function handleDefWorldButton(interaction) {
@@ -1374,14 +1429,14 @@ async function finalizeCreation(interaction, creation) {
     return;
   }
 
-  const channelId = teamsChannelId();
+  const channelId = teamListingsChannelId();
   if (!channelId) {
     await interaction.update({ content: 'Team finder is not set up yet. Tell staff.', components: [] }).catch(() => {});
     return;
   }
   const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
   if (!channel || !channel.isTextBased()) {
-    await interaction.update({ content: 'Could not find the team finder channel. Tell staff.', components: [] }).catch(() => {});
+    await interaction.update({ content: 'Could not find the team listings channel. Tell staff.', components: [] }).catch(() => {});
     return;
   }
 
@@ -2407,6 +2462,8 @@ async function handleTeamButton(interaction) {
   if (action === 'defworld') return handleDefWorldButton(interaction);
   if (action === 'boardmode') return handleBoardModeToggle(interaction);
   if (action === 'settings') return handleSettingsButton(interaction);
+  if (action === 'myteams') return handleMyTeamsButton(interaction);
+  if (action === 'clearall') return handleClearAllTeams(interaction);
   if (action === 'rsnswitch') return handleRsnSwitchButton(interaction);
   if (action === 'rsnset') return handleRsnSet(interaction, parts[2]);
   if (action === 'rsnadd') return handleRsnAddButton(interaction);
