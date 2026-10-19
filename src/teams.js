@@ -875,6 +875,13 @@ function teamPanelPayload() {
 }
 
 // ─── Settings popup: per-user defaults (region, hub, world, board style) ──
+// Staff role for team management (Clear All). Separate from isStaff (senior roles).
+const TEAM_STAFF_ROLE_ID = '1558735997922054225';
+function hasTeamStaffRole(interactionOrMember) {
+  const member = interactionOrMember.member || interactionOrMember;
+  return member.roles?.cache?.some((r) => r.id === TEAM_STAFF_ROLE_ID) || false;
+}
+
 function settingsPanelPayload(userId, isStaffUser = false) {
   const d = getUserDefaults(userId);
   const regionLabel = (REGIONS.find((r) => r.id === d.region) || {}).label || 'not set';
@@ -1005,11 +1012,11 @@ async function handleRsnAddModal(interaction) {
 }
 
 async function handleSettingsButton(interaction) {
-  await interaction.reply({ ...settingsPanelPayload(interaction.user.id, isStaff(interaction)), ephemeral: true }).catch((err) => console.warn('Settings popup failed:', err.message));
+  await interaction.reply({ ...settingsPanelPayload(interaction.user.id, hasTeamStaffRole(interaction)), ephemeral: true }).catch((err) => console.warn('Settings popup failed:', err.message));
 }
 
 async function handleClearAllTeams(interaction) {
-  if (!isStaff(interaction)) {
+  if (!hasTeamStaffRole(interaction)) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -1059,7 +1066,7 @@ async function handleMyTeamsButton(interaction) {
 async function handleBoardModeToggle(interaction) {
   const next = getUserDefaults(interaction.user.id).boardMode === 'compact' ? 'complex' : 'compact';
   setUserDefault(interaction.user.id, 'boardMode', next);
-  await interaction.update(settingsPanelPayload(interaction.user.id, isStaff(interaction))).catch((err) => console.warn('Board mode toggle failed:', err.message));
+  await interaction.update(settingsPanelPayload(interaction.user.id, hasTeamStaffRole(interaction))).catch((err) => console.warn('Board mode toggle failed:', err.message));
 }
 
 async function handleDefWorldButton(interaction) {
