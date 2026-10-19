@@ -137,7 +137,7 @@ const CATEGORIES = [
 // Custom emojis matching the #roles panel buttons.
 const ACTIVITY_EMOJI = {
   toa: '<:toa:1558470672986939634>',
-  toa_expert: '<:toaexpert:1561584839545725038>',
+  toa_expert: '<:toa:1558470672986939634>',
   cox: '<:cox:1561158969379004510>',
   cox_cm: '<:cox:1561158969379004510>',
   tob: '<:tob:1561159051147223100>',
@@ -161,7 +161,7 @@ const ACTIVITY_EMOJI = {
 // For select menus: { id, name } pairs.
 const ACTIVITY_EMOJI_OBJ = {
   toa: { id: '1558470672986939634', name: 'toa' },
-  toa_expert: { id: '1561584839545725038', name: 'toaexpert' },
+  toa_expert: { id: '1558470672986939634', name: 'toa' },
   cox: { id: '1561158969379004510', name: 'cox' },
   cox_cm: { id: '1561158969379004510', name: 'cox' },
   tob: { id: '1561159051147223100', name: 'tob' },
