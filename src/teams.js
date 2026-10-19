@@ -819,15 +819,21 @@ function buildListingComponents(team) {
   }
   rows.push(manageRow);
 
-  // CoX/CM get their own row: raiders, FC, plus scalers and layout (CoX only).
+  // CoX/CM get their own row: raiders, scalers, FC, plus layout (CoX only).
   if (team.activity === 'cox' || team.activity === 'cox_cm') {
     const coxRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:coxraiders:${messageId}`).setLabel('Set Size').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`team:coxraiders:${messageId}`).setLabel('Set Size').setStyle(ButtonStyle.Secondary)
+    );
+    if (team.activity === 'cox') {
+      coxRow.addComponents(
+        new ButtonBuilder().setCustomId(`team:coxscalers:${messageId}`).setLabel('Set Scalers').setStyle(ButtonStyle.Secondary)
+      );
+    }
+    coxRow.addComponents(
       new ButtonBuilder().setCustomId(`team:teamfc:${messageId}`).setLabel('Set FC').setStyle(ButtonStyle.Secondary).setEmoji('<:fcchat:1561625124388474900>')
     );
     if (team.activity === 'cox') {
       coxRow.addComponents(
-        new ButtonBuilder().setCustomId(`team:coxscalers:${messageId}`).setLabel('Set Scalers').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`team:coxlayout:${messageId}`).setLabel('Set Layout').setStyle(ButtonStyle.Secondary)
       );
     }
