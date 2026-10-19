@@ -1032,7 +1032,7 @@ function badgeRows(userId) {
 async function handleBadgeButton(interaction) {
   await interaction
     .reply({
-      content: 'AUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
+      content: 'AUTO reads your linked RuneScape name and picks your account type for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
       components: badgeRows(interaction.user.id),
       ephemeral: true,
     })
@@ -1045,7 +1045,7 @@ async function handleBadgeSet(interaction, badgeId) {
   const label = picked ? (BADGES.find((b) => b.id === picked) || {}).label || picked : 'AUTO';
   await interaction
     .update({
-      content: `Badge set to **${label}**.\nAUTO reads your linked RuneScape name and picks the badge for you. Tap one below to override it. (GIM can't be detected automatically, pick yours by hand.)`,
+      content: `Account type set to **${label}**.\nAUTO reads your linked RuneScape name and picks your account type for you. Tap one below to override it. (GIM can't be detected automatically, pick yours by hand.)`,
       components: badgeRows(interaction.user.id),
     })
     .catch(() => {});
@@ -2086,7 +2086,7 @@ async function handleRsnModal(interaction) {
       content: `Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`,
       components: [
         new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('team:badge').setLabel('Choose Badge').setStyle(ButtonStyle.Danger).setEmoji('🛡️')
+          new ButtonBuilder().setCustomId('team:badge').setLabel('Account Type').setStyle(ButtonStyle.Danger).setEmoji('<:accounttype:1561578543501025313>')
         ),
       ],
     })
