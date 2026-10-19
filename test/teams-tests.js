@@ -26,6 +26,11 @@ const {
   buildListingComponents,
   teamPanelPayload,
   settingsPanelPayload,
+  rsnSwitchPayload,
+  normalizeRsnEntry,
+  getRsnEntry,
+  addRsn,
+  setActiveRsn,
   boardApplies,
   shouldSweepTeam,
   shouldAutoClose,
@@ -996,3 +1001,34 @@ if (failed > 0) {
 } else {
   console.log('All team finder tests passed!');
 }
+
+test('normalizeRsnEntry handles old single-RSN and new multi-RSN shapes', () => {
+  assert.deepEqual(normalizeRsnEntry({ rsn: 'Zezima' }), { rsns: ['Zezima'], active: 'Zezima' });
+  assert.deepEqual(
+    normalizeRsnEntry({ rsns: ['A', 'B'], active: 'B' }),
+    { rsns: ['A', 'B'], active: 'B' }
+  );
+  // Unknown active falls back to first.
+  assert.deepEqual(
+    normalizeRsnEntry({ rsns: ['A', 'B'], active: 'Z' }),
+    { rsns: ['A', 'B'], active: 'A' }
+  );
+  assert.strictEqual(normalizeRsnEntry(null), null);
+  assert.strictEqual(normalizeRsnEntry({}), null);
+});
+
+test('settings panel shows RSN row and Switch RSN button', () => {
+  const payload = settingsPanelPayload('test-user-no-rsn');
+  const desc = payload.embeds[0].toJSON().description;
+  assert.ok(desc.includes('RSN: not set'), 'rsn row present');
+  assert.strictEqual(payload.components.length, 2, 'two button rows');
+  const row2 = payload.components[1].components.map((b) => b.toJSON().custom_id);
+  assert.deepEqual(row2, ['team:rsnswitch']);
+});
+
+test('rsnSwitchPayload lists names with active checkmarked', () => {
+  const payload = rsnSwitchPayload('test-user-no-rsn');
+  assert.ok(payload.content.includes('No names linked yet'));
+  const labels = payload.components[0].components.map((b) => b.toJSON().label);
+  assert.deepEqual(labels, ['Link new']);
+});
