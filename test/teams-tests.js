@@ -842,6 +842,25 @@ test('team panel has a Link RSN button', () => {
   assert.ok(ids.includes('team:rsn'), `expected team:rsn button, got ${ids.join(',')}`);
 });
 
+test('team panel is one row of five (badge picker lives in the RSN flow)', () => {
+  const payload = teamPanelPayload();
+  assert.strictEqual(payload.components.length, 1, 'single button row');
+  const ids = payload.components[0].components.map((b) => b.toJSON().custom_id);
+  assert.deepEqual(ids, ['team:create', 'team:rsn', 'team:specs', 'team:defregion', 'team:defhub']);
+  const desc = payload.embeds[0].toJSON().description;
+  assert.ok(!desc.includes('Account Badge'), 'no badge section in panel copy');
+});
+
+test('renderPartyBoard compact mode skips spec rows', () => {
+  const rows = [
+    { name: 'PTstud', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker'], kc: 10, badge: 'ironman' },
+  ];
+  const full = renderPartyBoard(rows, 0, {});
+  const compact = renderPartyBoard(rows, 0, { compact: true });
+  assert.ok(Buffer.isBuffer(compact) && compact.length > 1000, 'renders');
+  assert.ok(compact.length < full.length, 'compact is smaller than full');
+});
+
 test('combatLevel matches the OSRS formula', () => {
   const maxed = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99 };
   assert.strictEqual(combatLevel(maxed), 126);
