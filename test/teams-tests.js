@@ -41,7 +41,7 @@ const {
   toggleOwnedSpec,
   getShownSpecs,
   toggleShownSpec,
-  kcMetricForTeam,
+  kcColumnsForTeam,
   sizeOptionsFor,
   getBadge,
   getManualBadge,
@@ -713,25 +713,31 @@ test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
   assert.deepEqual(specsForActivity('nope'), [], 'unknown activity');
 });
 
-test('kcMetricForTeam: split raid modes map directly', () => {
-  assert.equal(kcMetricForTeam({ activity: 'toa' }), 'tombs_of_amascut');
-  assert.equal(kcMetricForTeam({ activity: 'toa_expert' }), 'tombs_of_amascut_expert');
-  assert.equal(kcMetricForTeam({ activity: 'cox' }), 'chambers_of_xeric');
-  assert.equal(kcMetricForTeam({ activity: 'cox_cm' }), 'chambers_of_xeric_challenge_mode');
-  assert.equal(kcMetricForTeam({ activity: 'tob' }), 'theatre_of_blood');
-  assert.equal(kcMetricForTeam({ activity: 'tob_hard' }), 'theatre_of_blood_hard_mode');
-  assert.equal(kcMetricForTeam({ activity: 'yama' }), 'yama');
-  assert.equal(kcMetricForTeam({ activity: 'nex' }), 'nex');
-  assert.equal(kcMetricForTeam({ activity: 'nm' }), 'nightmare');
-  assert.equal(kcMetricForTeam({ activity: 'huey' }), 'the_hueycoatl');
-  assert.equal(kcMetricForTeam({ activity: 'royals' }), 'the_royal_titans');
-  assert.equal(kcMetricForTeam({ activity: 'venenatis' }), 'venenatis');
+test('kcColumnsForTeam: dual columns for raids, nightmare, wildy', () => {
+  assert.deepEqual(kcColumnsForTeam({ activity: 'toa' }).map((c) => c.metric),
+    ['tombs_of_amascut', 'tombs_of_amascut_expert']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'toa_expert' }).map((c) => c.metric),
+    ['tombs_of_amascut', 'tombs_of_amascut_expert']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'cox' }).map((c) => c.metric),
+    ['chambers_of_xeric', 'chambers_of_xeric_challenge_mode']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'tob_hard' }).map((c) => c.metric),
+    ['theatre_of_blood', 'theatre_of_blood_hard_mode']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'nm' }).map((c) => c.metric),
+    ['nightmare', 'phosanis_nightmare']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'callisto' }).map((c) => c.metric),
+    ['artio', 'callisto']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'venenatis' }).map((c) => c.metric),
+    ['spindel', 'venenatis']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'vetion' }).map((c) => c.metric),
+    ['calvarion', 'vetion']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'yama' }).map((c) => c.metric), ['yama']);
+  assert.deepEqual(kcColumnsForTeam({ activity: 'nex' }).map((c) => c.metric), ['nex']);
 });
 
-test('bossIconKey strips raid mode suffixes', () => {
-  assert.equal(bossIconKey('tombs_of_amascut_expert'), 'tombs_of_amascut');
-  assert.equal(bossIconKey('chambers_of_xeric_challenge_mode'), 'chambers_of_xeric');
-  assert.equal(bossIconKey('theatre_of_blood_hard_mode'), 'theatre_of_blood');
+test('bossIconKey maps directly (all icons exist now)', () => {
+  assert.equal(bossIconKey('tombs_of_amascut_expert'), 'tombs_of_amascut_expert');
+  assert.equal(bossIconKey('chambers_of_xeric_challenge_mode'), 'chambers_of_xeric_challenge_mode');
+  assert.equal(bossIconKey('theatre_of_blood_hard_mode'), 'theatre_of_blood_hard_mode');
   assert.equal(bossIconKey('yama'), 'yama');
   assert.equal(bossIconKey('the_hueycoatl'), 'the_hueycoatl');
 });

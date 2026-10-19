@@ -233,10 +233,9 @@ function loadAssets() {
 
 // WOM metric key -> boss icon key (strip raid mode suffixes).
 function bossIconKey(metric) {
-  return String(metric || '')
-    .replace(/_expert$/, '')
-    .replace(/_challenge_mode$/, '')
-    .replace(/_hard_mode$/, '');
+  // All boss icons now exist (including hard-mode variants), so the key
+  // maps directly to the file name.
+  return String(metric || '');
 }
 
 // ─── Drawing ────────────────────────────────────────────────────────
@@ -379,31 +378,42 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   const compact = !!opts.compact;
   const shown = rows.slice(0, MAX_ROWS);
   const statsW = COL_W * COLUMNS.length;
-  const gridW = NAME_W + statsW + KC_COL_W;
-  const ox = Math.round((BOARD_W - gridW) / 2);
-  const kcCx = ox + NAME_W + statsW + KC_COL_W / 2;
+  // KC columns: [{ icon: 'metric_key' }] or [{ label: 'Text' }]. Defaults to
+  // the legacy single bossIcon column.
+  const kcCols = opts.kcColumns || (opts.bossIcon ? [{ icon: opts.bossIcon }] : []);
+  const kcColW = kcCols.length > 1 ? 260 : KC_COL_W;
+  const kcW = kcColW * kcCols.length;
+  const gridW = NAME_W + statsW + kcW;
+  const boardW = BOARD_W - KC_COL_W + kcW;
+  const ox = Math.round((boardW - gridW) / 2);
+  const kcCx = (i) => ox + NAME_W + statsW + kcColW * i + kcColW / 2;
   const footerH = extraCount > 0 ? 56 : 24;
   const H = compact
     ? HEADER_H + COMPACT_ROW_H * shown.length + footerH
     : HEADER_H + shown.reduce((a, r) => a + rowHeightFor(r.specs), 0) + footerH;
-  const cv = newCanvas(BOARD_W, H, 26, 18, 16);
+  const cv = newCanvas(boardW, H, 26, 18, 16);
 
-  // Icon header. The KC column gets the boss icon (WOM's), falling
-  // back to "KC" text when the icon is missing.
+  // Icon header. Each KC column gets its boss icon (WOM's) or a text
+  // label, falling back to "KC" when neither is set.
   const cy = HEADER_H / 2;
   COLUMNS.forEach((name, i) => {
     const cx = ox + NAME_W + COL_W * i + COL_W / 2;
     drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
   });
-  const bossIcon = opts.bossIcon && bossIcons[bossIconKey(opts.bossIcon)];
-  if (bossIcon) drawIcon(cv, bossIcon, kcCx, cy, 64);
-  else drawCentered(cv, kcCx, Math.round(cy - 22), 'KC');
+  kcCols.forEach((col, i) => {
+    const cx = kcCx(i);
+    const icon = col.icon && bossIcons[bossIconKey(col.icon)];
+    if (icon) drawIcon(cv, icon, cx, cy, 64);
+    else if (col.label) drawCentered(cv, cx, Math.round(cy - 11), col.label, [180, 180, 180], atlasSmall || atlas);
+    else drawCentered(cv, cx, Math.round(cy - 22), 'KC');
+  });
 
   let y = HEADER_H;
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   const smallA = atlasSmall || atlas;
   shown.forEach(({ name, stats, specs, kc, badge }) => {
+    const kcs = Array.isArray(kc) ? kc : [kc];
     const label = shortDisplayName(name);
     // Line 1: badge + name + stats + KC.
     const ry = y + 12;
@@ -418,9 +428,12 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
     });
-    drawCentered(cv, kcCx, Math.round(ry),
-      typeof kc === 'number' ? `${kc.toLocaleString('en-US')} KC` : '-',
-      stats ? undefined : gray);
+    kcCols.forEach((_, i) => {
+      const val = kcs[i];
+      drawCentered(cv, kcCx(i), Math.round(ry),
+        typeof val === 'number' ? `${val.toLocaleString('en-US')} KC` : '-',
+        stats ? undefined : gray);
+    });
     if (compact) {
       y += COMPACT_ROW_H;
       hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
@@ -450,9 +463,9 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
     hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
   });
   if (extraCount > 0) {
-    drawCentered(cv, BOARD_W / 2, y + 8, `+${extraCount} more`, [150, 130, 120]);
+    drawCentered(cv, boardW / 2, y + 8, `+${extraCount} more`, [150, 130, 120]);
   }
-  return encodePng(BOARD_W, H, cv.buf);
+  return encodePng(boardW, H, cv.buf);
 }
 
 function boardHeight(rowCount) {
