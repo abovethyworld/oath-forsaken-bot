@@ -146,6 +146,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleTeamSelect(interaction);
       } else if (interaction.customId.startsWith('team:mksel:')) {
         await handleTeamStepSelect(interaction);
+      } else if (interaction.customId.startsWith('team:teamcontractsel:')) {
+        const { handleTeamContractSelect } = require('./teams');
+        await handleTeamContractSelect(interaction, interaction.customId.split(':')[2]);
       } else if (interaction.customId.startsWith('apply:age:')) {
         await handleAgeSelect(interaction);
       } else {
