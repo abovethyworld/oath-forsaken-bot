@@ -33,11 +33,11 @@ const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die af
 // pre: button step shown before the step flow (mode toggles).
 const ACTIVITIES = {
   toa: {
-    name: 'Tombs of Amascut', short: 'ToA', category: 'raids',
+    name: 'Tombs of Amascut Normal', short: 'Tombs of Amascut Normal', category: 'raids',
     size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
   },
   toa_expert: {
-    name: 'Tombs of Amascut Expert', short: 'ToA Expert', category: 'raids',
+    name: 'Tombs of Amascut Expert', short: 'Tombs of Amascut Expert', category: 'raids',
     size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
   },
   cox: {
