@@ -174,8 +174,8 @@ let atlasSmall = null; // 22px variant for labels
 const SPEC_LABELS = {
   bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS',
   accursed: 'ACCURSED', bonedagger: 'BONE DAGGER', emberlight: 'EMBERLIGHT',
-  eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME HORN', zcb: 'ZCB',
-  voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'BURNING CLAWS',
+  eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME', zcb: 'ZCB',
+  voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'B CLAWS',
   webweaver: 'WEBWEAVER', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
 };
 const icons = {}; // name -> { w, h, rgba }
