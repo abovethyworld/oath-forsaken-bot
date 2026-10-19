@@ -25,6 +25,9 @@ const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
 
+// BA role emojis (default Discord emojis, no server slots used).
+const BA_ROLE_EMOJI = { Attacker: '⚔️', Collector: '🥚', Defender: '🛡️', Healer: '➕', Flex: '🃏' };
+
 // ─── Activity templates ─────────────────────────────────────────────
 // size: null = open/mass (no cap, never fills). {min,max} = organizer
 // picks a number via buttons. {fixed:n} = fixed headcount, no input needed.
@@ -725,7 +728,8 @@ function buildTeamEmbed(team, opts) {
   if (team.roleMode === 'exclusive') {
     for (const role of team.roles || []) {
       const holder = Object.entries(team.members || {}).find(([, r]) => r === role);
-      lines.push(`**${role}:** ${holder ? names[holder[0]] || 'claimed' : 'open'}`);
+      const roleEmoji = team.activity === 'ba' && BA_ROLE_EMOJI[role] ? `${BA_ROLE_EMOJI[role]} ` : '';
+      lines.push(`${roleEmoji}**${role}:** ${holder ? names[holder[0]] || 'claimed' : 'open'}`);
     }
   } else if (team.roleMode === 'pick') {
     for (const style of team.roles || []) {
@@ -767,8 +771,6 @@ function buildListingComponents(team) {
   if (team.status === 'closed') return rows;
   const messageId = team.messageId;
 
-  // BA role emojis (default Discord emojis, no server slots used).
-  const BA_ROLE_EMOJI = { Attacker: '⚔️', Collector: '🥚', Defender: '🛡️', Healer: '📯', Flex: '🃏' };
   if (team.roleMode) {
     const names = team.memberNames || {};
     const roleRow = new ActionRowBuilder();
