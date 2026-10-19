@@ -740,7 +740,8 @@ function buildTeamEmbed(team, opts) {
   if (team.world && team.region) lines.push(`🌍 **World:** ${team.world} (${team.region})`);
   else if (team.world) lines.push(`🌍 **World:** ${team.world}`);
   else if (team.region) lines.push(`🌍 **Region:** ${team.region}`);
-  if (team.hub) lines.push(`👥 **Party hub:** ${team.hub}`);
+  if (team.hub) lines.push(`<:partyhub:1561624781533745202> **Party hub:** ${team.hub}`);
+  if (team.fc) lines.push(`<:fcchat:1561625124388474900> **FC:** ${team.fc}`);
   if (team.contract) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
@@ -813,10 +814,11 @@ function buildListingComponents(team) {
   }
   rows.push(manageRow);
 
-  // CoX/CM get their own row: raiders, plus scalers and layout (CoX only).
+  // CoX/CM get their own row: raiders, FC, plus scalers and layout (CoX only).
   if (team.activity === 'cox' || team.activity === 'cox_cm') {
     const coxRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`team:coxraiders:${messageId}`).setLabel('Set Size').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`team:coxraiders:${messageId}`).setLabel('Set Size').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`team:teamfc:${messageId}`).setLabel('Set FC').setStyle(ButtonStyle.Secondary).setEmoji('<:fcchat:1561625124388474900>')
     );
     if (team.activity === 'cox') {
       coxRow.addComponents(
@@ -881,7 +883,7 @@ function teamPanelPayload() {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
+        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561625302415708190>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
         new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>'),
@@ -914,7 +916,8 @@ function settingsPanelPayload(userId, isStaffUser = false) {
         .setDescription(
           'Your defaults. New teams you post use these.\n\n' +
           `🌍 Region: ${regionLabel}\n` +
-          `👥 Party Hub: ${d.partyHub || 'not set'}\n` +
+          `<:partyhub:1561624781533745202> Party Hub: ${d.partyHub || 'not set'}\n` +
+          `<:fcchat:1561625124388474900> FC: ${d.fc || 'not set'}\n` +
           `🌐 World: ${d.world || 'not set'}\n` +
           `📊 Board: ${boardLabel}\n` +
           `⚔️ RSN: ${rsnLabel}`
@@ -923,7 +926,8 @@ function settingsPanelPayload(userId, isStaffUser = false) {
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:defregion').setLabel('Set Region').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('<:partyhub:1561624781533745202>'),
+        new ButtonBuilder().setCustomId('team:deffc').setLabel('Set FC').setStyle(ButtonStyle.Danger).setEmoji('<:fcchat:1561625124388474900>'),
         new ButtonBuilder().setCustomId('team:defworld').setLabel('Set World').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('team:boardmode').setLabel(`Board: ${boardLabel}`).setStyle(ButtonStyle.Danger)
       ),
@@ -1394,6 +1398,7 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     world: takesWorld ? defaults.world || null : null,
     region: defaults.region || null,
     hub: defaults.partyHub || null,
+    fc: defaults.fc || null,
     note: data.note || null,
     contract: null,
     scale: null,
@@ -1957,6 +1962,42 @@ async function handleDefHubModal(interaction) {
     .catch(() => {});
 }
 
+async function handleDeffcButton(interaction) {
+  const current = getUserDefaults(interaction.user.id).fc;
+  const modal = new ModalBuilder()
+    .setCustomId('team:deffcmodal')
+    .setTitle('Default friends chat')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:deffcvalue')
+          .setLabel('Friends chat name')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(32)
+          .setPlaceholder('Oath Forsaken')
+          .setValue(current || '')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleDeffcModal(interaction) {
+  let fc;
+  try {
+    fc = interaction.fields.getTextInputValue('team:deffcvalue').trim();
+  } catch {
+    fc = '';
+  }
+  setUserDefault(interaction.user.id, 'fc', fc || null);
+  await interaction
+    .reply({
+      content: fc ? `Your default friends chat is **${fc}**. New teams you post use it.` : 'Default friends chat cleared.',
+      ephemeral: true,
+    })
+    .catch(() => {});
+}
+
 // ─── Per-listing management: size lock, world, region, hub (organizer/staff) ──
 function canManageTeam(interaction, team) {
   return interaction.user.id === team.organizerId || isStaff(interaction);
@@ -2460,6 +2501,57 @@ async function handleTeamHubModal(interaction, messageId) {
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team hub refresh failed:', err.message));
 }
 
+async function handleTeamFcButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const modal = new ModalBuilder()
+    .setCustomId(`team:teamfcmodal:${messageId}`)
+    .setTitle('Friends chat')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:fcvalue')
+          .setLabel('Friends chat name')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+          .setMaxLength(32)
+          .setPlaceholder('Oath Forsaken')
+          .setValue(team.fc || '')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleTeamFcModal(interaction, messageId) {
+  let team = findTeamByMessage(messageId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  let fc;
+  try {
+    fc = interaction.fields.getTextInputValue('team:fcvalue').trim();
+  } catch {
+    fc = '';
+  }
+  const fcVal = fc || null;
+  const res = await mutateTeams((state) => {
+    const t = state.teams[messageId];
+    if (!t || t.status !== 'open') return { error: 'That team is gone.' };
+    t.fc = fcVal;
+    return { ok: true };
+  }).catch((err) => {
+    console.warn('Team fc mutation failed:', err.message);
+    return { error: true };
+  });
+  if (res.error) return;
+  await interaction.reply({ content: fcVal ? `Friends chat set to ${fcVal}.` : 'Friends chat cleared.', ephemeral: true })
+    .catch((err) => console.warn('Team fc reply failed:', err.message));
+  team = loadState().teams[messageId];
+  if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team fc refresh failed:', err.message));
+}
+
 async function handleRsnModal(interaction) {
   // customId 'team:rsnmodal'
   const res = await readRsnFromModal(interaction);
@@ -2499,9 +2591,11 @@ async function handleTeamModal(interaction) {
   if (interaction.customId === 'team:rsnmodal') return handleRsnModal(interaction);
   if (interaction.customId === 'team:rsnaddmodal') return handleRsnAddModal(interaction);
   if (interaction.customId === 'team:defhubmodal') return handleDefHubModal(interaction);
+  if (interaction.customId === 'team:deffcmodal') return handleDeffcModal(interaction);
   if (interaction.customId === 'team:defworldmodal') return handleDefWorldModal(interaction);
   const parts = interaction.customId.split(':');
   if (parts[0] === 'team' && parts[1] === 'teamhubmodal') return handleTeamHubModal(interaction, parts[2]);
+  if (parts[0] === 'team' && parts[1] === 'teamfcmodal') return handleTeamFcModal(interaction, parts[2]);
   if (parts[0] === 'team' && parts[1] === 'teamworldmodal') return handleTeamWorldModal(interaction, parts[2]);
   if (parts[0] === 'team' && parts[1] === 'coxraiderscustommodal') return handleCoxRaidersCustomModal(interaction, parts[2]);
   if (parts[0] === 'team' && parts[1] === 'coxscalerscustommodal') return handleCoxScalersCustomModal(interaction, parts[2]);
@@ -2754,6 +2848,7 @@ async function handleTeamButton(interaction) {
   if (action === 'defregion') return handleDefRegionButton(interaction);
   if (action === 'defregionset') return handleDefRegionSet(interaction, parts[2]);
   if (action === 'defhub') return handleDefHubButton(interaction);
+  if (action === 'deffc') return handleDeffcButton(interaction);
   if (action === 'defworld') return handleDefWorldButton(interaction);
   if (action === 'boardmode') return handleBoardModeToggle(interaction);
   if (action === 'settings') return handleSettingsButton(interaction);
@@ -2770,6 +2865,7 @@ async function handleTeamButton(interaction) {
   if (action === 'teamregion') return handleTeamRegionButton(interaction, parts[2]);
   if (action === 'teamregionset') return handleTeamRegionSet(interaction, parts[2], parts[3]);
   if (action === 'teamhub') return handleTeamHubButton(interaction, parts[2]);
+  if (action === 'teamfc') return handleTeamFcButton(interaction, parts[2]);
   if (action === 'teamcontract') return handleTeamContractButton(interaction, parts[2]);
   if (action === 'coxraiders') return handleCoxRaidersButton(interaction, parts[2]);
   if (action === 'coxraidersset') return handleCoxRaidersSet(interaction, parts[2], parts[3]);

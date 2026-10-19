@@ -879,14 +879,14 @@ test('team panel is one row of five (settings holds the defaults)', () => {
   assert.ok(desc.includes('⛧ Settings ⛧'), 'settings section present');
 });
 
-test('settings panel shows current defaults and four buttons', () => {
+test('settings panel shows current defaults and five buttons', () => {
   const payload = settingsPanelPayload('test-user-no-defaults');
   const ids = payload.components[0].components.map((b) => b.toJSON().custom_id);
-  assert.deepEqual(ids, ['team:defregion', 'team:defhub', 'team:defworld', 'team:boardmode']);
+  assert.deepEqual(ids, ['team:defregion', 'team:defhub', 'team:deffc', 'team:defworld', 'team:boardmode']);
   const desc = payload.embeds[0].toJSON().description;
   assert.ok(desc.includes('not set'), 'unset values shown');
   assert.ok(desc.includes('Board: Complex'), 'complex is the default board mode');
-  const boardBtn = payload.components[0].components[3].toJSON();
+  const boardBtn = payload.components[0].components[4].toJSON();
   assert.strictEqual(boardBtn.label, 'Board: Complex');
 });
 
