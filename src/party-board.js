@@ -360,6 +360,9 @@ const SPEC_CAT_ORDER = [
   ['UTILITY', ['sgs', 'zgs', 'dinhs']],
 ];
 const GROUP_H = 160;
+// Compact mode (hidden for now): one short row per member, no spec
+// icons. For dense teams where the full board gets too tall.
+const COMPACT_ROW_H = 68;
 function specGroupsFor(specs) {
   const known = (specs || []).filter((id) => specIcons[id]);
   return SPEC_CAT_ORDER
@@ -373,13 +376,16 @@ const BADGE_H = 48;
 function renderPartyBoard(rows, extraCount, opts = {}) {
   loadAssets();
   if (!rows.length) return null;
+  const compact = !!opts.compact;
   const shown = rows.slice(0, MAX_ROWS);
   const statsW = COL_W * COLUMNS.length;
   const gridW = NAME_W + statsW + KC_COL_W;
   const ox = Math.round((BOARD_W - gridW) / 2);
   const kcCx = ox + NAME_W + statsW + KC_COL_W / 2;
   const footerH = extraCount > 0 ? 56 : 24;
-  const H = HEADER_H + shown.reduce((a, r) => a + rowHeightFor(r.specs), 0) + footerH;
+  const H = compact
+    ? HEADER_H + COMPACT_ROW_H * shown.length + footerH
+    : HEADER_H + shown.reduce((a, r) => a + rowHeightFor(r.specs), 0) + footerH;
   const cv = newCanvas(BOARD_W, H, 26, 18, 16);
 
   // Icon header. The KC column gets the boss icon (WOM's), falling
@@ -415,6 +421,11 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
     drawCentered(cv, kcCx, Math.round(ry),
       typeof kc === 'number' ? `${kc.toLocaleString('en-US')} KC` : '-',
       stats ? undefined : gray);
+    if (compact) {
+      y += COMPACT_ROW_H;
+      hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
+      return;
+    }
     // Spec groups, stacked: header + icons + labels each.
     let sy = y + 62;
     for (const [catName, ids] of specGroupsFor(specs)) {

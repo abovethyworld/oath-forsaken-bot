@@ -769,8 +769,6 @@ function teamPanelPayload() {
           'Set your default region. New teams post with it.\n\n' +
           '⛧ Party Hub ⛧\n' +
           'Set your default party hub. New teams post with it.\n\n' +
-          '⛧ Account Badge ⛧\n' +
-          'Pick the badge shown by your name on the team board.\n\n' +
           'Tap below to get started.'
         ),
     ],
@@ -781,9 +779,6 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
         new ButtonBuilder().setCustomId('team:defregion').setLabel('Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
         new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('👥')
-      ),
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:badge').setLabel('Account Badge').setStyle(ButtonStyle.Danger).setEmoji('🛡️')
       ),
     ],
   };
@@ -1878,7 +1873,16 @@ async function handleRsnModal(interaction) {
   const links = loadRsnLinks();
   links[interaction.user.id] = { rsn, linkedAt: Date.now() };
   saveRsnLinks(links);
-  await interaction.editReply(`Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`).catch(() => {});
+  await interaction
+    .editReply({
+      content: `Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('team:badge').setLabel('Choose Badge').setStyle(ButtonStyle.Danger).setEmoji('🛡️')
+        ),
+      ],
+    })
+    .catch((err) => console.warn('RSN link confirmation failed:', err.message));
   // Refresh any open teams they're in so the board picks them up now.
   await refreshUserTeams(interaction.client, interaction.user.id);
 }
