@@ -2016,6 +2016,23 @@ function coxButtonRows(prefix, messageId, options, current) {
   return rows;
 }
 
+const COX_RAIDER_PRESETS = ['2', '3', '4', '5', '6', '7', '8', '9', '10'];
+const COX_SCALER_PRESETS = ['0', '1', '2', '3', '4', '5', '12', '16', '21'];
+
+function coxPresetRows(prefix, messageId, presets, current, customId) {
+  const options = presets.map((p) => ({ id: p, label: p === '0' ? 'None' : p }));
+  const rows = coxButtonRows(prefix, messageId, options, current);
+  // Add a Custom button on its own row.
+  const lastRow = rows[rows.length - 1];
+  const customBtn = new ButtonBuilder()
+    .setCustomId(`team:${customId}:${messageId}`)
+    .setLabel('Custom number')
+    .setStyle(ButtonStyle.Secondary);
+  if (lastRow.components.length < 5) lastRow.addComponents(customBtn);
+  else rows.push(new ActionRowBuilder().addComponents(customBtn));
+  return rows;
+}
+
 async function handleCoxRaidersButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
   if (!team) return;
@@ -2023,12 +2040,51 @@ async function handleCoxRaidersButton(interaction, messageId) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
   }
-  const current = team.scale ? String(team.scale.raiders) : (team.size != null ? String(team.size) : null);
+  const current = team.scale && team.scale.raiders ? String(team.scale.raiders) : (team.size != null ? String(team.size) : null);
   await interaction.reply({
     content: 'How many raiders? (This caps how many can join.)',
-    components: coxButtonRows('coxraidersset', messageId, numOptions(1, 10), current),
+    components: coxPresetRows('coxraidersset', messageId, COX_RAIDER_PRESETS, current, 'coxraiderscustom'),
     ephemeral: true,
   }).catch(() => {});
+}
+
+async function handleCoxRaidersCustomButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const modal = new ModalBuilder()
+    .setCustomId(`team:coxraiderscustommodal:${messageId}`)
+    .setTitle('Raiders')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:raidersvalue')
+          .setLabel('Number of raiders (1-100)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(3)
+          .setPlaceholder('15')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleCoxRaidersCustomModal(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const n = parseInt(interaction.fields.getTextInputValue('team:raidersvalue'), 10);
+  if (!n || n < 1 || n > 100) {
+    await interaction.reply({ content: 'Enter a number from 1 to 100.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await mutateTeams((state) => {
+    const t = state.teams[messageId];
+    if (!t || t.status !== 'open') return;
+    t.scale = { raiders: n, scalers: (t.scale && t.scale.scalers) || 0 };
+    t.size = n;
+  });
+  await interaction.reply({ content: `Raiders set to ${n}.`, ephemeral: true }).catch(() => {});
+  const updated = findTeamByMessage(messageId);
+  if (updated) await refreshListing(interaction.client, updated);
 }
 
 async function handleCoxRaidersSet(interaction, messageId, value) {
@@ -2060,16 +2116,54 @@ async function handleCoxScalersButton(interaction, messageId) {
   const current = team.scale ? String(team.scale.scalers) : '0';
   await interaction.reply({
     content: 'How many scaler alts?',
-    components: coxButtonRows('coxscalersset', messageId, [{ id: '0', label: 'None' }, ...numOptions(1, 5)], current),
+    components: coxPresetRows('coxscalersset', messageId, COX_SCALER_PRESETS, current, 'coxscalerscustom'),
     ephemeral: true,
   }).catch(() => {});
+}
+
+async function handleCoxScalersCustomButton(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const modal = new ModalBuilder()
+    .setCustomId(`team:coxscalerscustommodal:${messageId}`)
+    .setTitle('Scaler alts')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('team:scalersvalue')
+          .setLabel('Number of scaler alts (0-99)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMaxLength(2)
+          .setPlaceholder('8')
+      )
+    );
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleCoxScalersCustomModal(interaction, messageId) {
+  const team = findTeamByMessage(messageId);
+  if (!team || !canManageTeam(interaction, team)) return;
+  const n = parseInt(interaction.fields.getTextInputValue('team:scalersvalue'), 10);
+  if (isNaN(n) || n < 0 || n > 99) {
+    await interaction.reply({ content: 'Enter a number from 0 to 99.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await mutateTeams((state) => {
+    const t = state.teams[messageId];
+    if (!t || t.status !== 'open') return;
+    t.scale = { raiders: (t.scale && t.scale.raiders) || t.size || 1, scalers: n };
+  });
+  await interaction.reply({ content: `Scaler alts set to ${n === 0 ? 'none' : n}.`, ephemeral: true }).catch(() => {});
+  const updated = findTeamByMessage(messageId);
+  if (updated) await refreshListing(interaction.client, updated);
 }
 
 async function handleCoxScalersSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
   if (!team || !canManageTeam(interaction, team)) return;
   const n = parseInt(value, 10);
-  if (isNaN(n) || n < 0 || n > 5) return;
+  if (isNaN(n) || n < 0 || n > 99) return;
   await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
@@ -2406,6 +2500,8 @@ async function handleTeamModal(interaction) {
   const parts = interaction.customId.split(':');
   if (parts[0] === 'team' && parts[1] === 'teamhubmodal') return handleTeamHubModal(interaction, parts[2]);
   if (parts[0] === 'team' && parts[1] === 'teamworldmodal') return handleTeamWorldModal(interaction, parts[2]);
+  if (parts[0] === 'team' && parts[1] === 'coxraiderscustommodal') return handleCoxRaidersCustomModal(interaction, parts[2]);
+  if (parts[0] === 'team' && parts[1] === 'coxscalerscustommodal') return handleCoxScalersCustomModal(interaction, parts[2]);
   return handleStepModal(interaction);
 }
 
@@ -2674,8 +2770,10 @@ async function handleTeamButton(interaction) {
   if (action === 'teamcontract') return handleTeamContractButton(interaction, parts[2]);
   if (action === 'coxraiders') return handleCoxRaidersButton(interaction, parts[2]);
   if (action === 'coxraidersset') return handleCoxRaidersSet(interaction, parts[2], parts[3]);
+  if (action === 'coxraiderscustom') return handleCoxRaidersCustomButton(interaction, parts[2]);
   if (action === 'coxscalers') return handleCoxScalersButton(interaction, parts[2]);
   if (action === 'coxscalersset') return handleCoxScalersSet(interaction, parts[2], parts[3]);
+  if (action === 'coxscalerscustom') return handleCoxScalersCustomButton(interaction, parts[2]);
   if (action === 'coxlayout') return handleCoxLayoutButton(interaction, parts[2]);
   if (action === 'coxlayoutset') return handleCoxLayoutSet(interaction, parts[2], parts[3]);
   console.warn('Unknown team button action:', interaction.customId);
