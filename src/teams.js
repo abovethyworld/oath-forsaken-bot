@@ -880,7 +880,7 @@ function teamPanelPayload() {
           '⛧ Settings ⛧\n' +
           'Your defaults: Region, Party Hub, FC, World, Board Style.\n\n' +
           '⛧ My Teams ⛧\n' +
-          'See your open teams and jump back to them.'
+          'See your open teams and jump back to them. They post in <#1561600601861783562>.'
         ),
     ],
     components: [
