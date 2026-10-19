@@ -31,7 +31,7 @@ const { getPingRole } = require('./utils');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
-const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams } = require('./teams');
+const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -94,6 +94,7 @@ client.once(Events.ClientReady, async (c) => {
       await syncCalendar(client);
       await sweepExpiredBounties(client);
       await sweepExpiredTeams(client);
+      await sweepPendingButtons(client);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }

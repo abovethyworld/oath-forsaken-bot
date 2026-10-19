@@ -2495,6 +2495,31 @@ function shouldAutoClose(team, now) {
   return team.status === 'open' && isTeamFull(team) && now - (team.createdAt || 0) > EXPIRE_MS;
 }
 
+// Re-patch any listings whose buttons still have the "pending" placeholder.
+// This happens if the bot restarted between posting and the button patch.
+async function sweepPendingButtons(client) {
+  const state = loadState();
+  let fixed = 0;
+  for (const [id, team] of Object.entries(state.teams || {})) {
+    if (team.status !== 'open' || !team.messageId || !team.channelId) continue;
+    try {
+      const channel = await client.channels.fetch(team.channelId).catch(() => null);
+      if (!channel || !channel.isTextBased()) continue;
+      const msg = await channel.messages.fetch(team.messageId).catch(() => null);
+      if (!msg) continue;
+      const hasPending = msg.components.some((row) =>
+        row.components.some((b) => (b.customId || '').includes(':pending:'))
+      );
+      if (hasPending) {
+        await msg.edit({ components: buildListingComponents(team) }).catch(() => {});
+        fixed++;
+      }
+    } catch {}
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  if (fixed) console.log(`Fixed ${fixed} listing(s) with pending buttons.`);
+}
+
 async function sweepExpiredTeams(client) {
   const now = Date.now();
   // Decide what to sweep first (read-only), then mutate through the queue
@@ -2621,5 +2646,6 @@ module.exports = {
   shouldSweepTeam,
   shouldAutoClose,
   sweepExpiredTeams,
+  sweepPendingButtons,
   commands,
 };
