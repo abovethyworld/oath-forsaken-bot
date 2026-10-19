@@ -164,7 +164,7 @@ test('CoX listings have raiders/scalers/layout buttons; CM skips layout', () => 
   const cm = { activity: 'cox_cm', status: 'open', messageId: '123', members: {} };
   const cmIds = buildListingComponents(cm).flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
   assert.ok(cmIds.some((id) => id.startsWith('team:coxraiders:')), 'cm has raiders button');
-  assert.ok(cmIds.some((id) => id.startsWith('team:coxscalers:')), 'cm has scalers button');
+  assert.ok(!cmIds.some((id) => id.startsWith('team:coxscalers:')), 'cm has no scalers button');
   assert.ok(!cmIds.some((id) => id.startsWith('team:coxlayout:')), 'cm has no layout button');
 });
 
