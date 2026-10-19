@@ -53,6 +53,7 @@ const ACTIVITIES = {
     fillPing: true, partyHub: true, pre: 'tobScale',
     roleMode: 'exclusive',
     rolesByPre: {
+      '3s': ['Mage', 'RDPS', 'MDPS'],
       '4s': ['Mage', 'North FZ', 'RDPS', 'MDPS'],
       '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     },
@@ -62,6 +63,7 @@ const ACTIVITIES = {
     fillPing: true, partyHub: true, pre: 'tobScale',
     roleMode: 'exclusive',
     rolesByPre: {
+      '3s': ['Mage', 'RDPS', 'MDPS'],
       '4s': ['Mage', 'North FZ', 'RDPS', 'MDPS'],
       '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     },
@@ -187,6 +189,7 @@ const PRE_CHOICES = {
   tobScale: {
     prompt: 'ToB scale',
     options: [
+      { id: '3s', label: '3s' },
       { id: '4s', label: '4s' },
       { id: '5s', label: '5s' },
     ],
