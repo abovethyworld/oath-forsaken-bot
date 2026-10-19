@@ -699,19 +699,19 @@ test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
 test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
   assert.deepEqual(
     specsForActivity('toa'),
-    ['bgs', 'dwh', 'eldermaul', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'bonedagger', 'eyeofayak'],
+    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'eyeofayak'],
     'toa'
   );
   assert.deepEqual(specsForActivity('toa_expert'), specsForActivity('toa'), 'toa_expert');
   assert.deepEqual(
     specsForActivity('cox'),
-    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'bonedagger', 'zgs'],
+    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'zgs'],
     'cox'
   );
   assert.deepEqual(specsForActivity('cox_cm'), specsForActivity('cox'), 'cox_cm');
   assert.deepEqual(
     specsForActivity('tob'),
-    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws'],
+    ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crystalhalberd'],
     'tob'
   );
   assert.deepEqual(specsForActivity('tob_hard'), specsForActivity('tob'), 'tob_hard');
