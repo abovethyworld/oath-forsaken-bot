@@ -1740,6 +1740,7 @@ function getUserDefaults(userId) {
   return {
     region: d.region || null,
     partyHub: d.partyHub || null,
+    fc: d.fc || null,
     world: d.world || null,
     boardMode: d.boardMode === 'compact' ? 'compact' : 'complex',
   };
