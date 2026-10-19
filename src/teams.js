@@ -1022,7 +1022,7 @@ function badgeRows(userId) {
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('team:badgeset:none')
-        .setLabel(current ? 'Clear (use auto)' : 'Auto')
+        .setLabel(current ? 'clear (use auto)' : 'auto')
         .setStyle(ButtonStyle.Secondary)
     )
   );
@@ -1538,12 +1538,12 @@ async function handleRsnButton(interaction) {
 const BADGES_FILE = path.join(__dirname, '..', 'data', 'badges.json');
 // Badge ids match assets/party-board/badge-icons/<id>.png.
 const BADGES = [
-  { id: 'ironman', label: 'Ironman' },
-  { id: 'hc', label: 'Hardcore' },
-  { id: 'ult', label: 'Ultimate' },
-  { id: 'gim', label: 'Group Ironman' },
-  { id: 'hcgim', label: 'HC Group Ironman' },
-  { id: 'main', label: 'Main' },
+  { id: 'ironman', label: 'Solo IM' },
+  { id: 'hc', label: 'HCIM' },
+  { id: 'ult', label: 'UIM' },
+  { id: 'gim', label: 'GIM' },
+  { id: 'hcgim', label: 'HCGIM' },
+  { id: 'main', label: 'main' },
 ];
 const IRON_SWORN_ROLE = '1558540424048803860';
 const UNBOUND_ROLE = '1558540434652008569';
