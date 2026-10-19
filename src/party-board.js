@@ -204,11 +204,10 @@ function loadAssets() {
   for (const id of SPEC_IDS) {
     try {
       specIcons[id] = inkCrop(decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`))));
-    } catch (e) {
-      console.warn(`[party-board] spec icon failed to load: ${id}: ${e.message}`);
+    } catch {
+      // icon missing: that spec just won't draw
     }
   }
-  console.log(`[party-board] loaded ${Object.keys(specIcons).length}/${SPEC_IDS.length} spec icons`);
   // Account badge icons (clan emojis) for the name column.
   for (const id of BADGE_IDS) {
     try {
@@ -356,7 +355,7 @@ function shortDisplayName(name) {
 // a small header. Row height grows with the number of non-empty groups.
 const SPEC_CAT_ORDER = [
   ['DEFENSE LOWERING', ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'crystalhalberd', 'emberlight', 'eyeofayak']],
-  ['OFFENSIVE', ['soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver']],
+  ['OFFENSIVE', ['soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'crimsonkisten']],
   ['UTILITY', ['sgs', 'zgs', 'dinhs']],
 ];
 const GROUP_H = 160;
