@@ -1,6 +1,6 @@
 // Team finder: button panel -> activity picker -> per-activity form ->
 // listing embed with Join/Leave or role-claim buttons. Organizer gets
-// Close Party (organizer or staff).
+// Close Team (organizer or staff).
 // State lives in data/teams.json, same pattern as bounties.
 const {
   SlashCommandBuilder,
@@ -705,12 +705,12 @@ function buildListingComponents(team) {
   }
 
   const closeRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`team:close:${messageId}`).setLabel('Close Party').setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(`team:close:${messageId}`).setLabel('Close Team').setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId(`team:delete:${messageId}`).setLabel('Delete').setStyle(ButtonStyle.Danger)
   );
   if (specsForActivity(team.activity).length) {
     closeRow.addComponents(
-      new ButtonBuilder().setCustomId(`team:specshow:${messageId}`).setLabel('Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+      new ButtonBuilder().setCustomId(`team:specshow:${messageId}`).setLabel('Show Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
     );
   }
   rows.push(closeRow);
@@ -718,13 +718,13 @@ function buildListingComponents(team) {
   const manageRow = new ActionRowBuilder();
   if (sizeOptionsFor(team.activity)) {
     manageRow.addComponents(
-      new ButtonBuilder().setCustomId(`team:teamsize:${messageId}`).setLabel('Size').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`team:teamsize:${messageId}`).setLabel('Set Size').setStyle(ButtonStyle.Secondary)
     );
   }
   manageRow.addComponents(
-    new ButtonBuilder().setCustomId(`team:teamworld:${messageId}`).setLabel('World').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`team:teamregion:${messageId}`).setLabel('Region').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`team:teamhub:${messageId}`).setLabel('Hub').setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(`team:teamworld:${messageId}`).setLabel('Set World').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamregion:${messageId}`).setLabel('Set Region').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`team:teamhub:${messageId}`).setLabel('Set Hub').setStyle(ButtonStyle.Secondary)
   );
   rows.push(manageRow);
   return rows;
@@ -768,8 +768,7 @@ function teamPanelPayload() {
           '⛧ Region ⛧\n' +
           'Set your default region. New teams post with it.\n\n' +
           '⛧ Party Hub ⛧\n' +
-          'Set your default party hub. New teams post with it.\n\n' +
-          'Tap below to get started.'
+          'Set your default party hub. New teams post with it.'
         ),
     ],
     components: [
@@ -777,7 +776,7 @@ function teamPanelPayload() {
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561409571220750398>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
-        new ButtonBuilder().setCustomId('team:defregion').setLabel('Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
+        new ButtonBuilder().setCustomId('team:defregion').setLabel('Set Region').setStyle(ButtonStyle.Danger).setEmoji('🌍'),
         new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('👥')
       ),
     ],
@@ -1431,7 +1430,7 @@ function mySpecsText(userId) {
   const owned = getOwnedSpecs(userId);
   const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
   const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
-  return `${line}\nTop row lowers defense, middle row is offensive, bottom row is utility.\nTap to add or remove. They show on party boards where they're useful.`;
+  return `${line}\nTop row lowers defense, middle row is offensive, bottom row is utility.\nTap to add or remove. They show on team boards where they're useful.`;
 }
 
 async function handleMySpecsButton(interaction) {
@@ -1892,7 +1891,7 @@ async function maybeNudgeRsn(interaction, userId) {
   if (getRsn(userId)) return;
   await interaction
     .followUp({
-      content: 'Want your combat stats on the party board? Link your RuneScape name (one time).',
+      content: 'Want your combat stats on the team board? Link your RuneScape name (one time).',
       components: rsnLinkRow(),
       ephemeral: true,
     })
@@ -1916,7 +1915,7 @@ async function handleCreate(interaction) {
     );
   }
   await interaction
-    .reply({ content: 'What are you putting a team together for?', components: [row], ephemeral: true })
+    .reply({ content: 'Pick a category.', components: [row], ephemeral: true })
     .catch(() => {});
 }
 
