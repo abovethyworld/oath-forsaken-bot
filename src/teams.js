@@ -2146,7 +2146,7 @@ async function handleCoxRaidersSet(interaction, messageId, value) {
   });
   await interaction.update({
     content: `Raiders set to ${n}.`,
-    components: coxButtonRows('coxraidersset', messageId, numOptions(1, 10), String(n)),
+    components: [],
   }).catch(() => {});
   const updated = findTeamByMessage(messageId);
   if (updated) await refreshListing(interaction.client, updated);
@@ -2217,7 +2217,7 @@ async function handleCoxScalersSet(interaction, messageId, value) {
   });
   await interaction.update({
     content: `Scaler alts set to ${n === 0 ? 'none' : n}.`,
-    components: coxButtonRows('coxscalersset', messageId, [{ id: '0', label: 'None' }, ...numOptions(1, 5)], String(n)),
+    components: [],
   }).catch(() => {});
   const updated = findTeamByMessage(messageId);
   if (updated) await refreshListing(interaction.client, updated);
@@ -2258,7 +2258,7 @@ async function handleCoxLayoutSet(interaction, messageId, value) {
   ];
   await interaction.update({
     content: `Layout set to ${value}.`,
-    components: coxButtonRows('coxlayoutset', messageId, options, value),
+    components: [],
   }).catch(() => {});
   const updated = findTeamByMessage(messageId);
   if (updated) await refreshListing(interaction.client, updated);
