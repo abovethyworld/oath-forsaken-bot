@@ -1636,8 +1636,12 @@ function mySpecsRows(userId) {
   const owned = getOwnedSpecs(userId);
   const rows = [];
   for (const cat of SPEC_CATS) {
-    const row = new ActionRowBuilder();
+    let row = new ActionRowBuilder();
     for (const spec of SPECS.filter((s) => s.cat === cat.id)) {
+      if (row.components.length >= 5) {
+        rows.push(row);
+        row = new ActionRowBuilder();
+      }
       const has = owned.includes(spec.id);
       row.addComponents(
         new ButtonBuilder()
@@ -1646,7 +1650,7 @@ function mySpecsRows(userId) {
           .setStyle(has ? ButtonStyle.Danger : ButtonStyle.Secondary)
       );
     }
-    rows.push(row);
+    if (row.components.length) rows.push(row);
   }
   return rows;
 }
@@ -1655,7 +1659,7 @@ function mySpecsText(userId) {
   const owned = getOwnedSpecs(userId);
   const names = owned.map((id) => SPECS.find((s) => s.id === id).label);
   const line = names.length ? `Your spec weapons: **${names.join(', ')}**.` : 'You have no spec weapons set.';
-  return `${line}\nTop row lowers defense, middle row is offensive, bottom row is utility.\nTap to add or remove. They show on team boards where they're useful.`;
+  return `${line}\nDefense lowering first, then offensive, then utility.\nTap to add or remove. They show on team boards where they're useful.`;
 }
 
 async function handleMySpecsButton(interaction) {
@@ -1684,8 +1688,13 @@ async function handleMySpecsToggle(interaction, specId) {
 function teamSpecsRows(userId, team, messageId) {
   const showing = getShownSpecs(userId, team.activity);
   const owned = getOwnedSpecs(userId).filter((id) => specsForActivity(team.activity).includes(id));
-  const row = new ActionRowBuilder();
+  const rows = [];
+  let row = new ActionRowBuilder();
   for (const spec of SPECS.filter((s) => owned.includes(s.id))) {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
     const on = showing.includes(spec.id);
     row.addComponents(
       new ButtonBuilder()
@@ -1694,7 +1703,8 @@ function teamSpecsRows(userId, team, messageId) {
         .setStyle(on ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
   }
-  return [row];
+  if (row.components.length) rows.push(row);
+  return rows;
 }
 
 function teamSpecsText(userId, team) {
@@ -1972,13 +1982,12 @@ function teamRegionRows(team, messageId) {
       row = new ActionRowBuilder();
     }
     const active = (o.id === 'none' && !team.region) || team.region === o.id;
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`team:teamregionset:${messageId}:${o.id}`)
-        .setLabel(active ? `✓ ${o.label}` : o.label)
-        .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
-        .setEmoji(o.emoji)
-    );
+    const btn = new ButtonBuilder()
+      .setCustomId(`team:teamregionset:${messageId}:${o.id}`)
+      .setLabel(active ? `✓ ${o.label}` : o.label)
+      .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary);
+    if (o.emoji) btn.setEmoji(o.emoji);
+    row.addComponents(btn);
   }
   if (row.components.length) rows.push(row);
   return rows;
@@ -2035,7 +2044,7 @@ async function handleTeamHubButton(interaction, messageId) {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('team:hubvalue')
-          .setLabel('Hub name, RuneLite Party plugin (blank to clear)')
+          .setLabel('Hub name (RuneLite Party plugin)')
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
           .setMaxLength(32)
