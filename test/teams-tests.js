@@ -1032,3 +1032,13 @@ test('rsnSwitchPayload lists names with active checkmarked', () => {
   const labels = payload.components[0].components.map((b) => b.toJSON().label);
   assert.deepEqual(labels, ['Link new']);
 });
+
+test('default world skips skilling activities with world types', () => {
+  const org = { id: 'org-1', displayName: 'Org' };
+  // Mock defaults by writing directly (buildTeamFromData reads user-defaults).
+  const { team: raidTeam } = buildTeamFromData('toa', null, {}, org);
+  assert.ok(raidTeam, 'raid team builds');
+  const { team: wagTeam } = buildTeamFromData('wag', 'mass', {}, org);
+  assert.ok(wagTeam, 'wag team builds');
+  assert.strictEqual(wagTeam.world, null, 'wag never takes a numeric world');
+});

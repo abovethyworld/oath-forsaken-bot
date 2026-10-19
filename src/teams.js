@@ -478,8 +478,8 @@ async function partyBoardFile(team, client) {
   const links = loadRsnLinks();
   const statsList = await Promise.all(
     ids.map((id) => {
-      const _re = normalizeRsnEntry(links[id]);
-      const rsn = _re ? _re.active : null;
+      const rsnEntry = normalizeRsnEntry(links[id]);
+      const rsn = rsnEntry ? rsnEntry.active : null;
       return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
     })
   );
@@ -509,8 +509,8 @@ async function partyBoardFile(team, client) {
     const stats = st && !st.notFound
       ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
       : null;
-    const _re = normalizeRsnEntry(links[id]);
-    const rsn = _re ? _re.active : null;
+    const rsnEntry = normalizeRsnEntry(links[id]);
+    const rsn = rsnEntry ? rsnEntry.active : null;
     const specs = getShownSpecs(id, team.activity);
     const kills = st && !st.notFound && st.kc ? st.kc[kcMetric] : null;
     const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
@@ -896,7 +896,9 @@ async function handleRsnSwitchButton(interaction) {
 async function handleRsnSet(interaction, rsn) {
   const name = decodeURIComponent(rsn || '');
   if (!setActiveRsn(interaction.user.id, name)) return;
-  await interaction.update(rsnSwitchPayload(interaction.user.id)).catch((err) => console.warn('RSN set failed:', err.message));
+  const payload = rsnSwitchPayload(interaction.user.id);
+  delete payload.ephemeral;
+  await interaction.update(payload).catch((err) => console.warn('RSN set failed:', err.message));
   await refreshUserTeams(interaction.client, interaction.user.id);
 }
 
@@ -1265,7 +1267,9 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
 
   // Region, hub, and world come from the organizer's settings.
   // Size is set after posting via the listing buttons.
+  // Skilling activities with world-type choices (mass/quiet) don't take a numeric world.
   const defaults = getUserDefaults(organizer.id);
+  const takesWorld = !['wintertodt', 'gotr', 'tempoross', 'wag'].includes(activityKey);
   const team = {
     activity: activityKey,
     organizerId: organizer.id,
@@ -1274,7 +1278,7 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
     roles: rolesFor(activityKey, preId),
     roleMode: roleModeFor(activityKey),
     pre: preId || null,
-    world: defaults.world || null,
+    world: takesWorld ? defaults.world || null : null,
     region: defaults.region || null,
     hub: defaults.partyHub || null,
     note: data.note || null,
