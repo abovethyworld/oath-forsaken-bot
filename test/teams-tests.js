@@ -106,8 +106,8 @@ test('creation steps are slim: activity-specific questions plus note only', () =
   // Raid-specific flows.
   assert.deepStrictEqual(creationStepsFor('toa').map((s) => s.id), ['note'], 'toa is just a note');
   assert.deepStrictEqual(creationStepsFor('toa_expert').map((s) => s.id), ['invo', 'note'], 'toa_expert asks invo');
-  assert.deepStrictEqual(creationStepsFor('cox').map((s) => s.id), ['raiders', 'scalers', 'layout', 'note'], 'cox');
-  assert.deepStrictEqual(creationStepsFor('cox_cm').map((s) => s.id), ['raiders', 'scalers', 'note'], 'cox_cm skips layout');
+  assert.deepStrictEqual(creationStepsFor('cox').map((s) => s.id), ['layout', 'note'], 'cox');
+  assert.deepStrictEqual(creationStepsFor('cox_cm').map((s) => s.id), ['note'], 'cox_cm skips layout');
 });
 
 test('ToA Expert asks invo split, plain ToA asks nothing', () => {
@@ -141,18 +141,31 @@ test('Venenatis, Callisto, and Vetion start open', () => {
   assert.strictEqual(team.mass, false);
 });
 
-test('CoX steps are raiders, scalers, layout; CM skips layout', () => {
+test('CoX creation asks layout only; CM asks nothing (raiders/scalers are listing buttons)', () => {
   const steps = creationStepsFor('cox', null);
-  const raiders = steps.find((s) => s.id === 'raiders');
-  const scalers = steps.find((s) => s.id === 'scalers');
+  const ids = steps.map((s) => s.id);
+  assert.ok(!ids.includes('raiders'), 'no raiders step');
+  assert.ok(!ids.includes('scalers'), 'no scalers step');
   const layout = steps.find((s) => s.id === 'layout');
-  assert.ok(raiders && scalers && layout);
-  assert.deepStrictEqual(raiders.options.map((o) => o.id).slice(0, 3), ['1', '2', '3']);
-  assert.strictEqual(scalers.options[0].id, '0');
-  assert.strictEqual(scalers.options[0].label, 'None');
+  assert.ok(layout);
   assert.deepStrictEqual(layout.options.map((o) => o.id), ['Normal', 'Large', 'Full']);
   const cmSteps = creationStepsFor('cox_cm', null).map((s) => s.id);
   assert.ok(!cmSteps.includes('layout'), 'CM has no layout step');
+  assert.ok(!cmSteps.includes('raiders'), 'CM has no raiders step');
+});
+
+test('CoX listings have raiders/scalers/layout buttons; CM skips layout', () => {
+  const { buildListingComponents } = require('../src/teams');
+  const cox = { activity: 'cox', status: 'open', messageId: '123', members: {} };
+  const coxIds = buildListingComponents(cox).flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
+  assert.ok(coxIds.some((id) => id.startsWith('team:coxraiders:')), 'cox has raiders button');
+  assert.ok(coxIds.some((id) => id.startsWith('team:coxscalers:')), 'cox has scalers button');
+  assert.ok(coxIds.some((id) => id.startsWith('team:coxlayout:')), 'cox has layout button');
+  const cm = { activity: 'cox_cm', status: 'open', messageId: '123', members: {} };
+  const cmIds = buildListingComponents(cm).flatMap((r) => r.components.map((b) => b.toJSON().custom_id));
+  assert.ok(cmIds.some((id) => id.startsWith('team:coxraiders:')), 'cm has raiders button');
+  assert.ok(cmIds.some((id) => id.startsWith('team:coxscalers:')), 'cm has scalers button');
+  assert.ok(!cmIds.some((id) => id.startsWith('team:coxlayout:')), 'cm has no layout button');
 });
 
 test('four regions are offered', () => {
@@ -357,33 +370,34 @@ test('buildTeamFromData requires invo for ToA Expert', () => {
   assert.ok(error);
 });
 
-test('buildTeamFromData builds CoX scale from raiders and scalers', () => {
+test('buildTeamFromData builds CoX with layout, scale unset until organizer picks', () => {
   const { team, error } = buildTeamFromData(
     'cox', null,
-    { raiders: 3, scalers: 2, layout: 'Full', note: '' },
+    { layout: 'Full', note: '' },
     org
   );
   assert.ok(!error, error);
-  assert.strictEqual(team.size, 3);
-  assert.deepStrictEqual(team.scale, { raiders: 3, scalers: 2 });
+  assert.strictEqual(team.size, null);
+  assert.deepStrictEqual(team.scale, { raiders: null, scalers: 0 });
   assert.strictEqual(team.layout, 'Full');
 });
 
 test('buildTeamFromData builds CoX CM with no layout', () => {
   const { team, error } = buildTeamFromData(
     'cox_cm', null,
-    { raiders: 5, scalers: 0 },
+    {},
     org
   );
   assert.ok(!error, error);
-  assert.deepStrictEqual(team.scale, { raiders: 5, scalers: 0 });
+  assert.deepStrictEqual(team.scale, { raiders: null, scalers: 0 });
   assert.strictEqual(team.layout, null);
   assert.strictEqual(team.world, null);
 });
 
-test('buildTeamFromData requires raiders for CoX', () => {
-  const { error } = buildTeamFromData('cox', null, { note: '' }, org);
-  assert.ok(error);
+test('buildTeamFromData does not require raiders for CoX (post-creation now)', () => {
+  const { team, error } = buildTeamFromData('cox', null, { note: '' }, org);
+  assert.ok(!error, error);
+  assert.strictEqual(team.size, null);
 });
 
 test('buildTeamFromData builds ToB with 5s roles', () => {
