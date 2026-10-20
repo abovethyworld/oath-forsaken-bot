@@ -32,8 +32,21 @@ function resolveName(args, authorId) {
   return { rsn: linked };
 }
 
+// Activities can be typed as two words ("toa expert", "cox cm") — fold
+// them into the underscored key when the pair matches.
+function takeActivity(args, table) {
+  if (args.length >= 2) {
+    const two = `${args[0]}_${args[1]}`.toLowerCase();
+    if (table[two]) {
+      args.splice(0, 2);
+      return two;
+    }
+  }
+  return (args.shift() || '').toLowerCase();
+}
+
 async function handleKcCommand(message, args) {
-  const activity = (args.shift() || '').toLowerCase();
+  const activity = takeActivity(args, ACTIVITIES);
   if (!activity || !ACTIVITIES[activity]) {
     const list = Object.keys(ACTIVITIES).join(', ');
     await message.reply(`Pick an activity: \`!kc <activity> [name]\`\nActivities: ${list}`).catch(() => {});
@@ -113,7 +126,7 @@ function clogPageForCommand(key) {
 
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
 async function handleClogCommand(message, args) {
-  const key = (args.shift() || '').toLowerCase();
+  const key = takeActivity(args, CLOG_PAGES);
   if (!key) {
     await message.reply('Usage: `!clog <activity|total> [name]`').catch(() => {});
     return;
@@ -236,4 +249,4 @@ async function handleLeaderboardCommand(message) {
   await message.reply({ files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] }).catch(() => {});
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
