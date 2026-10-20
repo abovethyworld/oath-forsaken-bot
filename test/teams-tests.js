@@ -1296,6 +1296,33 @@ test('item icon fetcher tries RuneLite static cache by id first', async () => {
   }
 });
 
+test('/kc slash payload renders a card; slash commands register', async () => {
+  const fs = require('node:fs');
+  const so = require('../src/showoff');
+  assert.deepStrictEqual(so.commands.map((c) => c.data.name), ['kc', 'clog', 'profile', 'leaderboard']);
+  const { commands } = require('../src/commands');
+  assert.strictEqual(commands.length, 31, '27 existing + 4 showoff commands');
+  const skills = { attack: { level: 50 }, defence: { level: 45 }, strength: { level: 55 }, ranged: { level: 40 }, prayer: { level: 44 }, magic: { level: 52 }, hitpoints: { level: 48 } };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => ({ username: 'kcpay', type: 'regular', latestSnapshot: { data: { skills, bosses: { yama: { kills: 438 } }, activities: {} } } }) });
+  try {
+    const payload = await so.kcPayload('yama', 'Kc Pay');
+    assert.ok(payload.files && payload.files.length === 1, 'kc payload carries one card file');
+    const wag = await so.kcPayload('wag', 'Kc Pay');
+    assert.ok(/No kill count/.test(wag.content), 'wag explains itself');
+  } finally {
+    globalThis.fetch = realFetch;
+    try {
+      const f = 'data/wom-cache-v3.json';
+      const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+      for (const k of Object.keys(c)) if (k.includes('kc pay')) delete c[k];
+      fs.writeFileSync(f, JSON.stringify(c));
+    } catch { /* ignore */ }
+  }
+});
+
+console.log(`Results: ${passed} passed, ${failed} failed`);
+
 testChain.then(() => {
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
