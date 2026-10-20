@@ -12,8 +12,7 @@ const {
   EmbedBuilder,
 } = require('discord.js');
 const config = require('./config');
-
-const ZAMORAK_RED = 0x6b0e0e;
+const { ZAMORAK_RED } = require('./utils');
 const COOLDOWN_MS = 5 * 60 * 1000;
 const cooldowns = new Map();
 
@@ -22,6 +21,12 @@ function suggestionsChannelId() {
 }
 
 function isOnCooldown(userId) {
+  if (cooldowns.size >= 1000) {
+    const nowMs = Date.now();
+    for (const [k, at] of cooldowns) {
+      if (nowMs - at > COOLDOWN_MS) cooldowns.delete(k);
+    }
+  }
   return Date.now() - (cooldowns.get(`suggest:${userId}`) || 0) < COOLDOWN_MS;
 }
 

@@ -20,6 +20,8 @@ async function atest(name, fn) {
   }
 }
 
+const PANEL_ROLE_ID = require('../src/config').rolePanels[0].buttons[0].roleId;
+
 // ─── Rich mocks ─────────────────────────────────────────────
 
 function mockRole(id, name, position = 1) {
@@ -104,23 +106,23 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
   const buttons = require('../src/buttons');
 
   await atest('role button: adds role when member does not have it', async () => {
-    const role = mockRole('role1', 'Test Role', 5);
+    const role = mockRole(PANEL_ROLE_ID, 'Test Role', 5);
     const guild = mockGuild({ roles: [role] });
     const member = mockMember({ guild, roleIds: [] });
-    const interaction = mockInteraction({ customId: 'role:role1', member, guild });
+    const interaction = mockInteraction({ customId: `role:${PANEL_ROLE_ID}`, member, guild });
     await buttons.routeButton(interaction);
-    assert.ok(member._added.includes('role1'), 'role should be added');
+    assert.ok(member._added.includes(PANEL_ROLE_ID), 'role should be added');
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('Added'), `expected "Added", got: ${reply.content}`);
   });
 
   await atest('role button: removes role when member has it', async () => {
-    const role = mockRole('role1', 'Test Role', 5);
+    const role = mockRole(PANEL_ROLE_ID, 'Test Role', 5);
     const guild = mockGuild({ roles: [role] });
-    const member = mockMember({ guild, roleIds: ['role1'] });
-    const interaction = mockInteraction({ customId: 'role:role1', member, guild });
+    const member = mockMember({ guild, roleIds: [PANEL_ROLE_ID] });
+    const interaction = mockInteraction({ customId: `role:${PANEL_ROLE_ID}`, member, guild });
     await buttons.routeButton(interaction);
-    assert.ok(member._removed.includes('role1'), 'role should be removed');
+    assert.ok(member._removed.includes(PANEL_ROLE_ID), 'role should be removed');
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('Removed'), `expected "Removed", got: ${reply.content}`);
   });
@@ -128,21 +130,32 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
   await atest('role button: rejects when role no longer exists', async () => {
     const guild = mockGuild({ roles: [] });
     const member = mockMember({ guild });
-    const interaction = mockInteraction({ customId: 'role:dead-role', member, guild });
+    const interaction = mockInteraction({ customId: `role:${PANEL_ROLE_ID}`, member, guild });
     await buttons.routeButton(interaction);
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes('no longer exists'), `expected missing-role message, got: ${reply.content}`);
   });
 
   await atest('role button: rejects when bot role is below target', async () => {
-    const role = mockRole('role1', 'High Role', 200);
+    const role = mockRole(PANEL_ROLE_ID, 'High Role', 200);
     const guild = mockGuild({ roles: [role], botHighestPosition: 5 });
     const member = mockMember({ guild });
-    const interaction = mockInteraction({ customId: 'role:role1', member, guild });
+    const interaction = mockInteraction({ customId: `role:${PANEL_ROLE_ID}`, member, guild });
     await buttons.routeButton(interaction);
     const reply = interaction._replies.find((r) => r.type === 'reply');
     assert.ok(reply.content.includes("can't assign"), `expected hierarchy error, got: ${reply.content}`);
-    assert.ok(!member._added.includes('role1'), 'role should NOT be added');
+    assert.ok(!member._added.includes(PANEL_ROLE_ID), 'role should NOT be added');
+  });
+
+  await atest('role button: rejects a role that is not on any panel', async () => {
+    const role = mockRole('not-a-panel-role', 'Injected Role', 1);
+    const guild = mockGuild({ roles: [role], botHighestPosition: 500 });
+    const member = mockMember({ guild });
+    const interaction = mockInteraction({ customId: 'role:not-a-panel-role', member, guild });
+    await buttons.routeButton(interaction);
+    const reply = interaction._replies.find((r) => r.type === 'reply');
+    assert.ok(reply.content.includes('not part of the role panels'), `expected allowlist message, got: ${reply.content}`);
+    assert.ok(!member._added.includes('not-a-panel-role'), 'role should NOT be added');
   });
 
   await atest('donate button: replies with Ko-fi link', async () => {

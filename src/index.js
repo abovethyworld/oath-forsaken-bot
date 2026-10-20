@@ -28,6 +28,7 @@ const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
+const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
@@ -115,6 +116,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
+  setInterval(() => { try { store.prunePolls(); store.pruneStrikes(); } catch (e) { console.error('Housekeeping prune failed:', e.message); } }, 24 * 3600 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -176,7 +178,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   } catch (err) {
     console.error('Interaction error:', err);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[index.js] Silent failure:", e.message));
+      await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[index.js] Non-fatal error:", e.message));
     }
   }
 });

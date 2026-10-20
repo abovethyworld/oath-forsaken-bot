@@ -161,7 +161,7 @@ async function refreshChecklist(guild) {
     if (data.messageId) {
       const msg = await safeFetch(channel.messages.fetch(data.messageId), 'cc-checklist refresh');
       if (msg) {
-        await msg.edit({ embeds: [embed], components }).catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
+        await msg.edit({ embeds: [embed], components }).catch((e) => console.error("[cc-checklist.js] Non-fatal error:", e.message));
         return;
       }
     }
@@ -264,7 +264,7 @@ async function handleCcButton(interaction) {
       if (thread) {
         for (const pid of pingIds) {
           const pingMsg = await safeFetch(thread.messages.fetch(pid), 'cc-checklist ping cleanup');
-          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
+          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Non-fatal error:", e.message));
         }
       }
     } catch {}
@@ -283,7 +283,7 @@ async function handleCcButton(interaction) {
     if (action === 'next' && data.page < totalPages - 1) data.page++;
     save(data);
     await refreshChecklist(interaction.guild);
-    await interaction.deferUpdate().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
+    await interaction.deferUpdate().catch((e) => console.error("[cc-checklist.js] Non-fatal error:", e.message));
     return true;
   }
 
@@ -307,7 +307,7 @@ async function handleCcButton(interaction) {
         const thread = interaction.guild.channels.cache.get(CC_THREAD_ID);
         if (thread) {
           const pingMsg = await safeFetch(thread.messages.fetch(removed.pingMsgId), 'cc-checklist ping cleanup');
-          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Silent failure:", e.message));
+          if (pingMsg) await pingMsg.delete().catch((e) => console.error("[cc-checklist.js] Non-fatal error:", e.message));
         }
       } catch {}
     }

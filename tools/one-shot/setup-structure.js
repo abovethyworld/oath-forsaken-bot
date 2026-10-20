@@ -1,3 +1,6 @@
+// WARNING: historical one-shot setup script (Oct 2026 restructure, already run).
+// It rewrites config.json wholesale and creates roles/channels via REST.
+// Do NOT run against the live server without reviewing every line first.
 // One-off: create the clan's starter roles + channels via REST, then write config.json.
 // Safe to re-run: skips anything that already exists by name.
 require('dotenv').config();

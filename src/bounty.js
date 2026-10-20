@@ -14,11 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
-const { isStaff, ZAMORAK_RED, getRoleById, clampDesc } = require('./utils');
+const { isStaff, ZAMORAK_RED, getRoleById, clampDesc, DAY_MS } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bounties.json');
 const CLAIM_ARCHIVE_MIN = 4320; // 3 days
-const DAY_MS = 24 * 3600 * 1000;
 // Time limit is set by threat level, not by hand.
 const DAYS_BY_THREAT = { Easy: 7, Medium: 14, Hard: 21, Extreme: 21 };
 // Clan member roles allowed to claim: Iron Sworn, Unbound, Friend of the Clan.

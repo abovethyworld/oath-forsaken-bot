@@ -9,6 +9,17 @@ const { handleEventButton } = require('./calendar');
 const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
+const config = require('./config');
+
+function panelRoleIds() {
+  const ids = new Set();
+  for (const panel of config.rolePanels || []) {
+    for (const b of panel.buttons || []) {
+      if (b.roleId) ids.add(b.roleId);
+    }
+  }
+  return ids;
+}
 
 async function routeButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
@@ -29,6 +40,11 @@ async function routeButton(interaction) {
     return;
   }
   if (kind !== 'role') return;
+
+  if (!panelRoleIds().has(roleId)) {
+    await interaction.reply({ content: 'That button is not part of the role panels.', ephemeral: true });
+    return;
+  }
 
   const role = interaction.guild.roles.cache.get(roleId);
   if (!role) {

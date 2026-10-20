@@ -13,18 +13,13 @@ const store = require('./store');
 const { getOriginalJoinDate, backfill } = require('./join-dates');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getMembers } = require('./guild-cache');
+const { MONTH_MS, buildInitiateWelcome } = require('./utils');
 
-const MONTH_MS = 30.44 * 24 * 3600 * 1000;
 // All IDs from config.json
 const SEN = config.seniority || {};
 const GENERAL_CHANNEL_ID = SEN.generalChannelId;
 const IRON_ROLE_ID = SEN.ironRoleId;
 const MAIN_ROLE_ID = SEN.mainRoleId;
-
-// Channel IDs for Initiate welcome
-const INTRODUCE_CHANNEL_ID = SEN.introduceChannelId;
-const ROLES_CHANNEL_ID = SEN.rolesChannelId;
-const STAFF_ROLE_ID = SEN.staffRoleId;
 
 const RANK_IDS = SEN.rankIds || {};
 
@@ -32,13 +27,6 @@ const RANK_IDS = SEN.rankIds || {};
 // Each has: header (with role mention), divider (matched to header length),
 // tagline, and story. Plain text format for working @mentions.
 const RANK_ANNOUNCEMENTS = {
-  initiate: {
-    get roleId() { return RANK_IDS.initiate; },
-    get header() { return `⛧ <@&${RANK_IDS.initiate}> ⛧`; },
-    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧',
-    tagline: (uid) => `<@${uid}> has joined Oath Forsaken.`,
-    story: `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n• Drop an intro in <#${INTRODUCE_CHANNEL_ID}> so we can meet you\n• Grab your roles in <#${ROLES_CHANNEL_ID}>\n• Ping <@&${STAFF_ROLE_ID}> when you're ready for a clan chat invite`,
-  },
   acolyte: {
     get roleId() { return RANK_IDS.acolyte; },
     get header() { return `⛧ <@&${RANK_IDS.acolyte}> ⛧`; },
@@ -90,6 +78,15 @@ function storyKey(name) {
 async function postRankUpStory(guild, member, rankName) {
   try {
     const key = storyKey(rankName);
+    if (key === 'initiate') {
+      const channel0 = guild.channels.cache.get(GENERAL_CHANNEL_ID);
+      if (!channel0) return;
+      const isIron0 = member.roles.cache.has(IRON_ROLE_ID);
+      const isMain0 = member.roles.cache.has(MAIN_ROLE_ID);
+      if (!isIron0 && !isMain0) return; // guests don't get rank-up stories
+      await channel0.send({ content: buildInitiateWelcome(member.id), allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+      return;
+    }
     const ann = RANK_ANNOUNCEMENTS[key];
     if (!ann) return;
     const isIron = member.roles.cache.has(IRON_ROLE_ID);
@@ -98,7 +95,7 @@ async function postRankUpStory(guild, member, rankName) {
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
     const message = `${ann.header}\n${ann.divider}\n${ann.tagline(member.id)}\n\n${ann.story}`;
-    await channel.send({ content: message, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+    await channel.send({ content: message, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
   } catch (err) {
     console.error('Rank-up story failed:', err.message);
   }
@@ -144,7 +141,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
           if (dryRun) {
             changes.push(`${m.user.tag}: strip seniority (guest/friend)`);
           } else {
-            await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+            await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
           }
         }
         continue;
@@ -176,8 +173,8 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       }
 
       const remove = rankIds.filter((id) => id !== want.roleId);
-      if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
-      if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+      if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+      if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       // Queue the story — sent after all role changes to avoid interleaved rate limits
       if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
     }
@@ -185,7 +182,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     // Second pass: stories + CC checklist entries, paced
     for (const { member, rankName, oldRankName, newRankName } of rankUps) {
       await postRankUpStory(guild, member, rankName);
-      await addCcEntry(guild, member.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Silent failure:", e.message));
+      await addCcEntry(guild, member.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       await new Promise((r) => setTimeout(r, 2000));
     }
 

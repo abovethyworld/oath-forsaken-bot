@@ -1374,6 +1374,29 @@ test('utils clampDesc caps at the Discord embed limit', () => {
   assert.strictEqual(clampDesc(null), null);
 });
 
+test('party-board decodePng rejects oversized dimensions', () => {
+  const { decodePng } = require('../src/party-board');
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(99999, 0);
+  ihdr.writeUInt32BE(10, 4);
+  ihdr[8] = 8; ihdr[9] = 6;
+  const lenBuf = Buffer.alloc(4);
+  lenBuf.writeUInt32BE(13, 0);
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    lenBuf, Buffer.from('IHDR', 'ascii'), ihdr, Buffer.alloc(4),
+  ]);
+  assert.throws(() => decodePng(png), /dimensions out of range/);
+});
+
+test('seniority rank headers interpolate the role id (no literal placeholders)', () => {
+  const sen = require('../src/seniority');
+  for (const [key, ann] of Object.entries(sen.RANK_ANNOUNCEMENTS)) {
+    assert.ok(!ann.header.includes('${'), key + ' header must not contain a literal placeholder');
+    assert.ok(/<@&\d+>/.test(ann.header), key + ' header carries a role mention');
+  }
+});
+
 testChain.then(() => {
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

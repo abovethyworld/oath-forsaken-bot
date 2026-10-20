@@ -157,7 +157,7 @@ async function handleEventButton(interaction) {
       .setTitle(`📅 ${name}`)
       .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)`)
       .setColor(0x5865f2);
-    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
+    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
   }
 
   await interaction.followUp({ content: `Event created: **${name}** — <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
@@ -270,7 +270,7 @@ async function handleCancelConfirm(interaction, pendingId) {
     await interaction.update({ content: 'Event no longer exists.', components: [] }).catch(() => {});
     return;
   }
-  await match.delete().catch((e) => console.error("[calendar.js] Silent failure:", e.message));
+  await match.delete().catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
   store.clearReminders(match.id);
   eventsCache = { data: null, at: 0 }; // invalidate — event deleted
   await interaction.update({ content: `Cancelled **${cancelEventName}**.`, components: [] }).catch(() => {});
@@ -312,7 +312,7 @@ async function syncReminders(client) {
       for (const r of config.calendar.reminders || [60, 15]) {
         if (minsLeft <= r && !store.wasReminded(e.id, r)) {
           store.markReminded(e.id, r);
-          await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Silent failure:", e.message));
+          await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
         }
       }
     }
