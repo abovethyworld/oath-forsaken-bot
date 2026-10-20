@@ -33,6 +33,7 @@ const {
   setActiveRsn,
   boardApplies,
   boardSkillForTeam,
+  clogPageForActivity,
   shouldSweepTeam,
   shouldAutoClose,
   SPECS,
@@ -50,6 +51,8 @@ const {
   mutateTeams,
 } = require('../src/teams');
 const { combatLevel, parseStats, cacheLookup, CACHE_MS } = require('../src/wom');
+const { parseClogPage, parseClogTotal, clogCacheKey } = require('../src/runeprofile');
+const { progressBar, prettyMetric } = require('../src/showoff');
 const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
@@ -706,6 +709,42 @@ test('boardSkillForTeam maps minigames to their skill, BA/PvM to none', () => {
   assert.strictEqual(boardSkillForTeam({ activity: 'wag' }), 'agility');
   assert.strictEqual(boardSkillForTeam({ activity: 'ba' }), null, 'BA keeps the combat board');
   assert.strictEqual(boardSkillForTeam({ activity: 'toa' }), null);
+});
+
+test('clogPageForActivity maps minigames to RuneProfile tab+page', () => {
+  assert.deepStrictEqual(clogPageForActivity('wintertodt'), ['Bosses', 'Wintertodt']);
+  assert.deepStrictEqual(clogPageForActivity('gotr'), ['Minigames', 'Guardians of the Rift']);
+  assert.deepStrictEqual(clogPageForActivity('tempoross'), ['Bosses', 'Tempoross']);
+  assert.deepStrictEqual(clogPageForActivity('zalcano'), ['Bosses', 'Zalcano']);
+  assert.strictEqual(clogPageForActivity('wag'), null, 'WAG has no clog page');
+  assert.strictEqual(clogPageForActivity('toa'), null);
+});
+
+test('runeprofile parses clog payloads defensively', () => {
+  assert.deepStrictEqual(parseClogPage({ name: 'GOTR', obtained: 15, total: 17, items: [] }), { obtained: 15, total: 17 });
+  assert.strictEqual(parseClogPage({ obtained: '15', total: 17 }), null, 'string counts rejected');
+  assert.strictEqual(parseClogPage({}), null, 'empty rejected');
+  const acct = { collectionLog: { obtained: 1000, total: 1717 } };
+  assert.deepStrictEqual(parseClogTotal(acct), { obtained: 1000, total: 1717 });
+  assert.strictEqual(parseClogTotal({}), null, 'no clog -> null');
+  assert.strictEqual(clogCacheKey('PTstud', 'Minigames', 'Guardians of the Rift'), clogCacheKey('ptstud', 'Minigames', 'Guardians of the Rift'), 'keys case-fold the username');
+});
+
+test('progressBar and prettyMetric format show-off output', () => {
+  assert.strictEqual(prettyMetric('tombs_of_amascut_expert'), 'Tombs Of Amascut Expert');
+  assert.strictEqual(progressBar(15, 17), '█████████░ 15/17 (88%)');
+  assert.strictEqual(progressBar(0, 0), '░░░░░░░░░░ 0/0 (0%)');
+});
+
+test('renderPartyBoard draws a clog column in skill mode', () => {
+  const rows = [
+    { name: 'PTstud', stats: [99], specs: [], kc: [1240], badge: 'main', clog: { obtained: 15, total: 17 } },
+    { name: 'other', stats: [87], specs: [], kc: [412], badge: null, clog: null },
+  ];
+  const buf = renderPartyBoard(rows, 0, { kcColumns: [{ metric: 'wintertodt', icon: 'wintertodt' }], skill: 'firemaking', clogColumn: true });
+  assert.ok(buf && buf.length > 1000, 'board with clog column renders');
+  const buf2 = renderPartyBoard([{ name: 'PTstud', stats: [91], specs: [], kc: [], badge: null }], 0, { kcColumns: [], skill: 'agility', clogColumn: false });
+  assert.ok(buf2 && buf2.length > 1000, 'WAG board renders without clog');
 });
 
 test('kcColumnsForTeam: minigames use WOM activity metrics, WAG none', () => {
