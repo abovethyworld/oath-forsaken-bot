@@ -12,6 +12,32 @@ const { ZAMORAK_RED } = require('./utils');
 
 const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
 
+// Per-user cooldown across every show-off command (! and slash share one
+// bucket). The window exists to protect the WOM/RuneProfile paced queues;
+// members get told once per window instead of silent nothing.
+const COOLDOWN_MS = 10_000;
+const lastUseAt = new Map();
+const lastNotifyAt = new Map();
+
+function checkCooldown(userId, now = Date.now()) {
+  const last = lastUseAt.get(userId) || 0;
+  const waitMs = COOLDOWN_MS - (now - last);
+  if (waitMs <= 0) return { wait: 0, notify: false };
+  const notified = lastNotifyAt.get(userId) || 0;
+  const notify = now - notified >= COOLDOWN_MS;
+  if (notify) lastNotifyAt.set(userId, now);
+  return { wait: Math.ceil(waitMs / 1000), notify };
+}
+
+function noteUse(userId, now = Date.now()) {
+  lastUseAt.set(userId, now);
+}
+
+function cooldownText(wait) {
+  return `Cooldown: too many lookups at once. Try again in ${wait}s.`;
+}
+
+
 function prettyMetric(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -71,6 +97,9 @@ async function kcPayload(activity, rsn) {
 }
 
 async function handleKcCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  noteUse(message.author.id);
   const activity = takeActivity(args, ACTIVITIES);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
@@ -158,6 +187,9 @@ async function clogPayload(key, rsn) {
 }
 
 async function handleClogCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  noteUse(message.author.id);
   const key = takeActivity(args, CLOG_PAGES);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
@@ -185,6 +217,9 @@ async function profilePayload(rsn) {
 }
 
 async function handleProfileCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  noteUse(message.author.id);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   await message.reply(await profilePayload(rsn)).catch(() => {});
@@ -219,6 +254,9 @@ async function leaderboardPayload() {
 }
 
 async function handleLeaderboardCommand(message) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  noteUse(message.author.id);
   await message.reply(await leaderboardPayload()).catch(() => {});
 }
 
@@ -240,6 +278,17 @@ async function slashReply(interaction, payloadPromise) {
   await interaction.editReply(payload).catch(() => {});
 }
 
+// Returns true when the interaction was answered with a cooldown notice.
+async function slashCooldown(interaction) {
+  const cd = checkCooldown(interaction.user.id);
+  if (!cd.wait) {
+    noteUse(interaction.user.id);
+    return false;
+  }
+  await interaction.reply({ content: cooldownText(cd.wait), ephemeral: true }).catch(() => {});
+  return true;
+}
+
 const activityChoices = Object.entries(ACTIVITIES).map(([value, a]) => ({ name: a.name, value }));
 const clogChoices = [
   { name: 'Total (whole log)', value: 'total' },
@@ -256,6 +305,7 @@ const commands = [
     run: async (interaction) => {
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
       await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn));
     },
   },
@@ -268,6 +318,7 @@ const commands = [
     run: async (interaction) => {
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
       await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn));
     },
   },
@@ -279,6 +330,7 @@ const commands = [
     run: async (interaction) => {
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
       await slashReply(interaction, profilePayload(rsn));
     },
   },
@@ -287,9 +339,10 @@ const commands = [
       .setName('leaderboard')
       .setDescription('Collection log leaderboard for linked clan members'),
     run: async (interaction) => {
+      if (await slashCooldown(interaction)) return;
       await slashReply(interaction, leaderboardPayload());
     },
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
