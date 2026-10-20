@@ -585,7 +585,7 @@ function renderProfileCard(data) {
   const rows = Math.ceil(tiles.length / 2);
   const H = 150 + rows * (TILE_H + GAP) + 8;
   const cv = stoneCanvas(W, H);
-  drawCentered(cv, W / 2, 28, data.name, TINT_WHITE);
+  drawCentered(cv, W / 2, 28, fitTitle(data.name, W - 48), TINT_WHITE);
   if (data.accountLabel) {
     // small-font centered label under the name
     const w = textWidth(data.accountLabel, atlasSmall || atlas);
@@ -646,7 +646,7 @@ function renderClogCard(data) {
   const rows = Math.max(1, Math.ceil(items.length / PER_ROW));
   const H = 150 + rows * CELL + 24;
   const cv = stoneCanvas(W, H);
-  drawCentered(cv, W / 2, 26, data.title, TINT_WHITE);
+  drawCentered(cv, W / 2, 26, fitTitle(data.title, W - 48), TINT_WHITE);
   const sub = `${fmtNum(data.obtained)}/${fmtNum(data.total)} logged`;
   const sw = textWidth(sub, atlasSmall || atlas);
   drawText(cv, Math.round(W / 2 - sw / 2), 84, sub, TINT_DIM, atlasSmall || atlas);
@@ -676,6 +676,16 @@ function getBossIcon(key) {
   return (key && bossIcons[bossIconKey(key)]) || null;
 }
 
+// Trim a title so it fits maxW in the main font (centered titles used to
+// spill off the canvas on long names).
+function fitTitle(str, maxW) {
+  loadAssets();
+  if (textWidth(str) <= maxW) return str;
+  let s = String(str);
+  while (s.length > 1 && textWidth(s + '...') > maxW) s = s.slice(0, -1);
+  return s + '...';
+}
+
 // !kc card: title + one row per KC column (WOM icon, label, value).
 // data = { title, entries: [{ icon, label, value }] }
 function renderKcCard(data) {
@@ -685,7 +695,7 @@ function renderKcCard(data) {
   const entries = data.entries || [];
   const H = 110 + entries.length * ROW_H + 20;
   const cv = stoneCanvas(W, H);
-  drawCentered(cv, W / 2, 26, data.title, TINT_WHITE);
+  drawCentered(cv, W / 2, 26, fitTitle(data.title, W - 48), TINT_WHITE);
   let y = 110;
   for (const e of entries) {
     if (e.icon) drawIcon(cv, e.icon, 110, y + ROW_H / 2 - 10, 84);
@@ -697,4 +707,4 @@ function renderKcCard(data) {
   return encodePng(W, H, cv.buf);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, stoneCanvas, fmtNum };
+module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, fitTitle, stoneCanvas, fmtNum };

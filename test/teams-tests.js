@@ -1202,4 +1202,24 @@ test('KC card renders with WOM boss icon', () => {
   assert.strictEqual(noIcon.toString('ascii', 1, 4), 'PNG');
 });
 
+test('takeActivity folds two-word activities, !kc title clamps', () => {
+  const { takeActivity } = require('../src/showoff');
+  const args = ['TOA', 'expert', 'PTstud'];
+  assert.strictEqual(takeActivity(args, { toa_expert: 1 }), 'toa_expert');
+  assert.deepStrictEqual(args, ['PTstud'], 'consumes both words');
+  const { fitTitle } = require('../src/party-board');
+  const long = 'A very long name here: Tombs of Amascut Normal';
+  const out = fitTitle(long, 700);
+  assert.ok(out.endsWith('...') && out.length < long.length, 'long title trims');
+  assert.strictEqual(fitTitle('PTstud: Yama', 700), 'PTstud: Yama', 'short title untouched');
+});
+
+test('wom parseStats leaves missing minigame skills null (not 1)', () => {
+  const { parseStats } = require('../src/wom');
+  const playerJson = { username: 'x', latestSnapshot: { data: { skills: { attack: { level: 70 }, defence: { level: 65 }, strength: { level: 80 }, ranged: { level: 75 }, prayer: { level: 60 }, magic: { level: 78 }, hitpoints: { level: 70 }, firemaking: { level: 90 } } } } };
+  const st = parseStats(playerJson);
+  assert.strictEqual(st.firemaking, 90);
+  assert.strictEqual(st.runecraft, null, 'missing skill renders as dash, not 1');
+});
+
 console.log(`Results: ${passed} passed, ${failed} failed`);
