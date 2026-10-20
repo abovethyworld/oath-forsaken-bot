@@ -428,15 +428,15 @@ test('buildTeamFromData builds BA with fixed size and roles', () => {
   assert.ok(team.roles.includes('Flex'));
 });
 
-test('buildTeamFromData builds Yama duo with optional contract', () => {
+test('buildTeamFromData builds Yama duo with no contract (set via button later)', () => {
   const { team, error } = buildTeamFromData(
     'yama', null,
-    { region: 'US', world: '388', hub: 'oath1', contract: 'Oathplate', note: '' },
+    { region: 'US', world: '388', hub: 'oath1', note: '' },
     org
   );
   assert.ok(!error, error);
   assert.strictEqual(team.size, 2);
-  assert.strictEqual(team.contract, 'Oathplate');
+  assert.strictEqual(team.contract, null);
   assert.strictEqual(team.fillPing, false);
 });
 

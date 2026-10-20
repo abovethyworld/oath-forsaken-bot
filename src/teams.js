@@ -23,6 +23,16 @@ const { getStats } = require('./wom');
 const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
+
+// Server emoji IDs used across the panel and listings. Centralized so an
+// emoji rotation only needs one edit.
+const EMOJI = {
+  myspecs: '1561409712426328297',
+  fcchat: '1561625124388474900',
+  partyhub: '1561624781533745202',
+  accounttype: '1561578543501025313',
+};
+const emojiTag = (name) => `<:${name}:${EMOJI[name]}>`;
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
 
 // BA role emojis (default Discord emojis, no server slots used).
@@ -641,7 +651,8 @@ function isTeamFull(team) {
   if (team.status !== 'open') return false;
   const mode = team.roleMode;
   if (mode === 'exclusive') {
-    return (team.roles || []).every((r) => Object.values(team.members || {}).includes(r));
+    const roles = team.roles || [];
+    return roles.length > 0 && roles.every((r) => Object.values(team.members || {}).includes(r));
   }
   if (team.size == null) return false;
   return memberCount(team) >= team.size;
@@ -721,7 +732,6 @@ function buildTeamEmbed(team, opts) {
   if (team.activity === 'cox' && team.layout) {
     lines.push(`Layout: ${team.layout}`);
   }
-  if (team.contract) lines.push(`Contract: ${team.contract}`);
 
   // Roles / members block
   const names = team.memberNames || {};
@@ -747,9 +757,9 @@ function buildTeamEmbed(team, opts) {
   if (team.world && team.region) lines.push(`🌍 **World:** ${team.world} (${team.region})`);
   else if (team.world) lines.push(`🌍 **World:** ${team.world}`);
   else if (team.region) lines.push(`🌍 **Region:** ${team.region}`);
-  if (team.hub) lines.push(`<:partyhub:1561624781533745202> **Party hub:** ${team.hub}`);
-  if (team.fc && (team.activity === 'cox' || team.activity === 'cox_cm')) lines.push(`<:fcchat:1561625124388474900> **FC:** ${team.fc}`);
-  if (team.contract) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
+  if (team.hub) lines.push(`${emojiTag('partyhub')} **Party hub:** ${team.hub}`);
+  if (team.fc && (team.activity === 'cox' || team.activity === 'cox_cm')) lines.push(`${emojiTag('fcchat')} **FC:** ${team.fc}`);
+  if (team.contract && contractLabel(team.contract)) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
   const count = memberCount(team);
@@ -773,16 +783,20 @@ function buildListingComponents(team) {
 
   if (team.roleMode) {
     const names = team.memberNames || {};
-    const roleRow = new ActionRowBuilder();
+    // Discord allows max 5 buttons per row; chunk the roles across rows.
+    let roleRow = new ActionRowBuilder();
     (team.roles || []).forEach((role, idx) => {
       const holder = Object.entries(team.members || {}).find(([, r]) => r === role);
       const label = holder ? `${role}: ${shortName(names[holder[0]] || 'taken')}` : role;
       const btn = new ButtonBuilder().setCustomId(`team:role:${messageId}:${idx}`).setLabel(label.slice(0, 80)).setStyle(ButtonStyle.Danger);
       if (team.activity === 'ba' && BA_ROLE_EMOJI[role]) btn.setEmoji(BA_ROLE_EMOJI[role]);
+      if (roleRow.components.length >= 5) {
+        rows.push(roleRow);
+        roleRow = new ActionRowBuilder();
+      }
       roleRow.addComponents(btn);
     });
-    // Discord allows max 5 buttons per row; BA/ToB-5s have exactly 5.
-    rows.push(roleRow);
+    if (roleRow.components.length) rows.push(roleRow);
   } else {
     rows.push(
       new ActionRowBuilder().addComponents(
@@ -798,7 +812,7 @@ function buildListingComponents(team) {
   );
   if (specsForActivity(team.activity).length) {
     closeRow.addComponents(
-      new ButtonBuilder().setCustomId(`team:specshow:${messageId}`).setLabel('Show Specs').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>')
+      new ButtonBuilder().setCustomId(`team:specshow:${messageId}`).setLabel('Show Specs').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('myspecs'))
     );
   }
   rows.push(closeRow);
@@ -835,7 +849,7 @@ function buildListingComponents(team) {
     rows.push(coxRow);
     rows.push(
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`team:teamfc:${messageId}`).setLabel('Set FC').setStyle(ButtonStyle.Secondary).setEmoji('<:fcchat:1561625124388474900>')
+        new ButtonBuilder().setCustomId(`team:teamfc:${messageId}`).setLabel('Set FC').setStyle(ButtonStyle.Secondary).setEmoji(emojiTag('fcchat'))
       )
     );
   }
@@ -898,7 +912,7 @@ function teamPanelPayload() {
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561625302415708190>'),
         new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
-        new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji('<:myspecs:1561409712426328297>'),
+        new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('myspecs')),
         new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>'),
         new ButtonBuilder().setCustomId('team:myteams').setLabel('My Teams').setStyle(ButtonStyle.Secondary).setEmoji('📋')
       ),
@@ -929,8 +943,8 @@ function settingsPanelPayload(userId, isStaffUser = false) {
         .setDescription(
           'Your defaults. New teams you post use these.\n\n' +
           `🌍 Region: ${regionLabel}\n` +
-          `<:partyhub:1561624781533745202> Party Hub: ${d.partyHub || 'not set'}\n` +
-          `<:fcchat:1561625124388474900> FC: ${d.fc || 'not set'}\n` +
+          `${emojiTag('partyhub')} Party Hub: ${d.partyHub || 'not set'}\n` +
+          `${emojiTag('fcchat')} FC: ${d.fc || 'not set'}\n` +
           `🌐 World: ${d.world || 'not set'}\n` +
           `📊 Board: ${boardLabel}\n` +
           `⚔️ RSN: ${rsnLabel}`
@@ -939,8 +953,8 @@ function settingsPanelPayload(userId, isStaffUser = false) {
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('team:defregion').setLabel('Set Region').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji('<:partyhub:1561624781533745202>'),
-        new ButtonBuilder().setCustomId('team:deffc').setLabel('Set FC').setStyle(ButtonStyle.Danger).setEmoji('<:fcchat:1561625124388474900>'),
+        new ButtonBuilder().setCustomId('team:defhub').setLabel('Party Hub').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('partyhub')),
+        new ButtonBuilder().setCustomId('team:deffc').setLabel('Set FC').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('fcchat')),
         new ButtonBuilder().setCustomId('team:defworld').setLabel('Set World').setStyle(ButtonStyle.Danger),
         new ButtonBuilder().setCustomId('team:boardmode').setLabel(`Board: ${boardLabel}`).setStyle(ButtonStyle.Danger)
       ),
@@ -1054,25 +1068,32 @@ async function handleClearAllTeams(interaction) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
   const res = await mutateTeams((state) => {
-    const teams = Object.values(state.teams || {}).filter((t) => t.status === 'open');
-    const ids = teams.map((t) => ({ messageId: t.messageId, channelId: t.channelId }));
+    const ids = Object.values(state.teams || {}).map((t) => ({
+      messageId: t.messageId,
+      channelId: t.channelId,
+      fillPingMsgId: t.fillPingMsgId,
+    }));
     state.teams = {};
     return { ok: true, ids };
   }).catch(() => ({ ok: false }));
   if (!res.ok) {
-    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch(() => {});
+    await interaction.editReply({ content: 'Something went wrong.' }).catch(() => {});
     return;
   }
-  // Delete the listing messages.
-  for (const { messageId, channelId } of res.ids) {
+  // Delete the listing messages and their fill pings.
+  for (const { messageId, channelId, fillPingMsgId } of res.ids) {
     try {
       const channel = await interaction.client.channels.fetch(channelId).catch(() => null);
-      if (channel) await channel.messages.delete(messageId).catch(() => {});
+      if (channel && channel.isTextBased()) {
+        await channel.messages.delete(messageId).catch(() => {});
+        if (fillPingMsgId) await channel.messages.delete(fillPingMsgId).catch(() => {});
+      }
     } catch {}
     await new Promise((r) => setTimeout(r, 500));
   }
-  await interaction.reply({ content: `Cleared ${res.ids.length} team${res.ids.length === 1 ? '' : 's'}.`, ephemeral: true }).catch(() => {});
+  await interaction.editReply({ content: `Cleared ${res.ids.length} team${res.ids.length === 1 ? '' : 's'}.` }).catch(() => {});
 }
 
 async function handleMyTeamsButton(interaction) {
@@ -1251,6 +1272,14 @@ const REGIONS = [
 // Step-by-step creation state. userId -> { activity, pre, steps, idx, data, expiresAt }.
 const CREATION_EXPIRE_MS = 5 * 60 * 1000;
 const pendingCreations = new Map();
+
+// Periodic sweep for abandoned creations (expiry is also enforced lazily on access).
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, c] of pendingCreations) {
+    if (now > c.expiresAt) pendingCreations.delete(userId);
+  }
+}, CREATION_EXPIRE_MS).unref();
 
 function getCreation(userId) {
   const c = pendingCreations.get(userId);
@@ -1459,7 +1488,6 @@ function buildTeamFromData(activityKey, preId, data, organizer) {
   if ((activityKey === 'tob' || activityKey === 'tob_hard') && !team.roles) {
     return { error: 'Pick 4s or 5s first.' };
   }
-  if (activityKey === 'yama') team.contract = data.contract || null;
 
   return { team };
 }
@@ -1506,9 +1534,9 @@ async function finalizeCreation(interaction, creation) {
   }
 
   team.messageId = msg.id;
-  const state = loadState();
-  state.teams[msg.id] = team;
-  saveState(state);
+  await mutateTeams((state) => {
+    state.teams[msg.id] = team;
+  }).catch((err) => console.warn('Team creation save failed:', err.message));
 
   // Patch the buttons with the real message id now that we have it.
   await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
@@ -2018,6 +2046,10 @@ function canManageTeam(interaction, team) {
   return interaction.user.id === team.organizerId || isStaff(interaction);
 }
 
+async function denyManage(interaction) {
+  await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
+}
+
 function teamSizeRows(team, messageId) {
   const rows = [];
   let row = new ActionRowBuilder();
@@ -2082,12 +2114,12 @@ function coxPresetRows(prefix, messageId, presets, current, customId) {
   const options = presets.map((p) => ({ id: p, label: p === '0' ? 'None' : p }));
   const rows = coxButtonRows(prefix, messageId, options, current);
   // Add a Custom button on its own row.
-  const lastRow = rows[rows.length - 1];
   const customBtn = new ButtonBuilder()
     .setCustomId(`team:${customId}:${messageId}`)
     .setLabel('Custom number')
     .setStyle(ButtonStyle.Secondary);
-  if (lastRow.components.length < 5) lastRow.addComponents(customBtn);
+  const lastRow = rows[rows.length - 1];
+  if (lastRow && lastRow.components.length < 5) lastRow.addComponents(customBtn);
   else rows.push(new ActionRowBuilder().addComponents(customBtn));
   return rows;
 }
@@ -2109,7 +2141,11 @@ async function handleCoxRaidersButton(interaction, messageId) {
 
 async function handleCoxRaidersCustomButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const modal = new ModalBuilder()
     .setCustomId(`team:coxraiderscustommodal:${messageId}`)
     .setTitle('Raiders')
@@ -2129,40 +2165,48 @@ async function handleCoxRaidersCustomButton(interaction, messageId) {
 
 async function handleCoxRaidersCustomModal(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const n = parseInt(interaction.fields.getTextInputValue('team:raidersvalue'), 10);
   if (!n || n < 1 || n > 100) {
     await interaction.reply({ content: 'Enter a number from 1 to 100.', ephemeral: true }).catch(() => {});
     return;
   }
-  await mutateTeams((state) => {
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
     t.scale = { raiders: n, scalers: (t.scale && t.scale.scalers) || 0 };
     t.size = n;
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   await interaction.reply({ content: `Raiders set to ${n}.`, ephemeral: true }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleCoxRaidersSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const n = parseInt(value, 10);
   if (!n || n < 1 || n > 10) return;
-  await mutateTeams((state) => {
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
     t.scale = { raiders: n, scalers: (t.scale && t.scale.scalers) || 0 };
     t.size = n;
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   await interaction.update({
     content: `Raiders set to ${n}.`,
     components: [],
   }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleCoxScalersButton(interaction, messageId) {
@@ -2182,7 +2226,11 @@ async function handleCoxScalersButton(interaction, messageId) {
 
 async function handleCoxScalersCustomButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const modal = new ModalBuilder()
     .setCustomId(`team:coxscalerscustommodal:${messageId}`)
     .setTitle('Scaler alts')
@@ -2202,38 +2250,46 @@ async function handleCoxScalersCustomButton(interaction, messageId) {
 
 async function handleCoxScalersCustomModal(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const n = parseInt(interaction.fields.getTextInputValue('team:scalersvalue'), 10);
   if (isNaN(n) || n < 0 || n > 99) {
     await interaction.reply({ content: 'Enter a number from 0 to 99.', ephemeral: true }).catch(() => {});
     return;
   }
-  await mutateTeams((state) => {
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
     t.scale = { raiders: (t.scale && t.scale.raiders) || t.size || 1, scalers: n };
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   await interaction.reply({ content: `Scaler alts set to ${n === 0 ? 'none' : n}.`, ephemeral: true }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleCoxScalersSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const n = parseInt(value, 10);
   if (isNaN(n) || n < 0 || n > 99) return;
-  await mutateTeams((state) => {
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
     t.scale = { raiders: (t.scale && t.scale.raiders) || t.size || 1, scalers: n };
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   await interaction.update({
     content: `Scaler alts set to ${n === 0 ? 'none' : n}.`,
     components: [],
   }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleCoxLayoutButton(interaction, messageId) {
@@ -2257,12 +2313,17 @@ async function handleCoxLayoutButton(interaction, messageId) {
 
 async function handleCoxLayoutSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   if (!['Normal', 'Large', 'Full'].includes(value)) return;
-  await mutateTeams((state) => {
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return;
     t.layout = value;
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   const options = [
     { id: 'Normal', label: 'Normal' },
@@ -2273,13 +2334,16 @@ async function handleCoxLayoutSet(interaction, messageId, value) {
     content: `Layout set to ${value}.`,
     components: [],
   }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleTeamSizeSet(interaction, messageId, value) {
   let team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   if (!['any', 'mass'].includes(value) && !/^\d+$/.test(value || '')) return;
   const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
@@ -2291,18 +2355,26 @@ async function handleTeamSizeSet(interaction, messageId, value) {
       t.size = null;
       t.mass = true;
     } else {
-      t.size = parseInt(value, 10);
+      const n = Math.min(parseInt(value, 10), 100);
+      const members = Object.keys(t.members || {}).length;
+      if (n < members) return { error: `Can't shrink below ${members} — ${members} already signed up.` };
+      t.size = n;
       t.mass = false;
     }
-    return { ok: true };
+    return { ok: true, team: JSON.parse(JSON.stringify(t)) };
   }).catch((err) => {
     console.warn('Team size mutation failed:', err.message);
     return { error: true };
   });
-  if (res.error) return;
+  if (res.error) {
+    if (typeof res.error === 'string') {
+      await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
   await interaction.update({ content: 'Size updated.', components: [] })
     .catch((err) => console.warn('Team size update failed:', err.message));
-  team = loadState().teams[messageId];
+  team = res.team || null;
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team size refresh failed:', err.message));
 }
 
@@ -2333,7 +2405,11 @@ async function handleTeamWorldButton(interaction, messageId) {
 
 async function handleTeamWorldModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   let world;
   try {
     world = interaction.fields.getTextInputValue('team:worldvalue').trim();
@@ -2350,15 +2426,20 @@ async function handleTeamWorldModal(interaction, messageId) {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.world = worldNum;
-    return { ok: true, world: worldNum };
+    return { ok: true, world: worldNum, team: JSON.parse(JSON.stringify(t)) };
   }).catch((err) => {
     console.warn('Team world mutation failed:', err.message);
     return { error: true };
   });
-  if (res.error) return;
+  if (res.error) {
+    if (typeof res.error === 'string') {
+      await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
   await interaction.reply({ content: res.world ? `World set to ${res.world}.` : 'World cleared.', ephemeral: true })
     .catch((err) => console.warn('Team world reply failed:', err.message));
-  team = loadState().teams[messageId];
+  team = res.team || null;
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team world refresh failed:', err.message));
 }
 
@@ -2401,22 +2482,31 @@ async function handleTeamRegionButton(interaction, messageId) {
 
 async function handleTeamRegionSet(interaction, messageId, regionId) {
   let team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   const validRegion = regionId === 'none' || REGIONS.some((r) => r.id === regionId);
   if (!validRegion) return;
   const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.region = regionId === 'none' ? null : regionId;
-    return { ok: true };
+    return { ok: true, team: JSON.parse(JSON.stringify(t)) };
   }).catch((err) => {
     console.warn('Team region mutation failed:', err.message);
     return { error: true };
   });
-  if (res.error) return;
+  if (res.error) {
+    if (typeof res.error === 'string') {
+      await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
   await interaction.update({ content: 'Region updated.', components: [] })
     .catch((err) => console.warn('Team region update failed:', err.message));
-  team = loadState().teams[messageId];
+  team = res.team || null;
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team region refresh failed:', err.message));
 }
 
@@ -2447,7 +2537,7 @@ async function handleTeamHubButton(interaction, messageId) {
 
 async function handleTeamContractButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team || team.activity !== 'yama') return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2474,25 +2564,33 @@ async function handleTeamContractButton(interaction, messageId) {
 
 async function handleTeamContractSelect(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team || team.activity !== 'yama') return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
   }
   const choice = interaction.values[0];
-  await mutateTeams((state) => {
+  if (choice !== 'none' && !YAMA_CONTRACTS.some((c) => c.id === choice)) {
+    await interaction.update({ content: 'Unknown contract.', components: [] }).catch(() => {});
+    return;
+  }
+  const res = await mutateTeams((state) => {
     const t = state.teams[messageId];
     if (!t) return;
     t.contract = choice === 'none' ? null : choice;
+    return { team: JSON.parse(JSON.stringify(t)) };
   });
   await interaction.update({ content: `Contract set: ${choice === 'none' ? 'none' : contractLabel(choice)}.`, components: [] }).catch(() => {});
-  const updated = findTeamByMessage(messageId);
-  if (updated) await refreshListing(interaction.client, updated);
+  if (res && res.team) await refreshListing(interaction.client, res.team);
 }
 
 async function handleTeamHubModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   let hub;
   try {
     hub = interaction.fields.getTextInputValue('team:hubvalue').trim();
@@ -2504,15 +2602,20 @@ async function handleTeamHubModal(interaction, messageId) {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.hub = hubVal;
-    return { ok: true };
+    return { ok: true, team: JSON.parse(JSON.stringify(t)) };
   }).catch((err) => {
     console.warn('Team hub mutation failed:', err.message);
     return { error: true };
   });
-  if (res.error) return;
+  if (res.error) {
+    if (typeof res.error === 'string') {
+      await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
   await interaction.reply({ content: hubVal ? `Party hub set to ${hubVal}.` : 'Party hub cleared.', ephemeral: true })
     .catch((err) => console.warn('Team hub reply failed:', err.message));
-  team = loadState().teams[messageId];
+  team = res.team || null;
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team hub refresh failed:', err.message));
 }
 
@@ -2543,7 +2646,11 @@ async function handleTeamFcButton(interaction, messageId) {
 
 async function handleTeamFcModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team || !canManageTeam(interaction, team)) return;
+  if (!team) return;
+  if (!canManageTeam(interaction, team)) {
+    await denyManage(interaction);
+    return;
+  }
   let fc;
   try {
     fc = interaction.fields.getTextInputValue('team:fcvalue').trim();
@@ -2555,15 +2662,20 @@ async function handleTeamFcModal(interaction, messageId) {
     const t = state.teams[messageId];
     if (!t || t.status !== 'open') return { error: 'That team is gone.' };
     t.fc = fcVal;
-    return { ok: true };
+    return { ok: true, team: JSON.parse(JSON.stringify(t)) };
   }).catch((err) => {
     console.warn('Team fc mutation failed:', err.message);
     return { error: true };
   });
-  if (res.error) return;
+  if (res.error) {
+    if (typeof res.error === 'string') {
+      await interaction.reply({ content: res.error, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
   await interaction.reply({ content: fcVal ? `Friends chat set to ${fcVal}.` : 'Friends chat cleared.', ephemeral: true })
     .catch((err) => console.warn('Team fc reply failed:', err.message));
-  team = loadState().teams[messageId];
+  team = res.team || null;
   if (team) await refreshListing(interaction.client, team).catch((err) => console.warn('Team fc refresh failed:', err.message));
 }
 
@@ -2581,7 +2693,7 @@ async function handleRsnModal(interaction) {
       content: `Linked **${rsn}** (combat ${stats.combat}). Your stats will show on team boards.`,
       components: [
         new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('team:badge').setLabel('Account Type').setStyle(ButtonStyle.Danger).setEmoji('<:accounttype:1561578543501025313>')
+          new ButtonBuilder().setCustomId('team:badge').setLabel('Account Type').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('accounttype'))
         ),
       ],
     })
@@ -2654,6 +2766,11 @@ async function handlePreChoice(interaction, activityKey, preId) {
     await interaction.reply({ content: 'Unknown activity.', ephemeral: true }).catch(() => {});
     return;
   }
+  const pre = PRE_CHOICES[ACTIVITIES[activityKey].pre];
+  if (!pre.options.some((o) => o.id === preId)) {
+    await interaction.reply({ content: 'Unknown option.', ephemeral: true }).catch(() => {});
+    return;
+  }
   await startCreation(interaction, activityKey, preId);
 }
 
@@ -2664,9 +2781,9 @@ async function refreshListing(client, team) {
   const msg = channel && channel.isTextBased() ? await channel.messages.fetch(team.messageId).catch(() => null) : null;
   if (!msg) {
     // Listing was deleted out from under us. Drop the state.
-    const state = loadState();
-    delete state.teams[team.messageId];
-    saveState(state);
+    await mutateTeams((state) => {
+      delete state.teams[team.messageId];
+    }).catch((err) => console.warn('Team state cleanup failed:', err.message));
     return null;
   }
   const file = await partyBoardFile(team, client).catch((err) => {
@@ -2682,13 +2799,20 @@ async function refreshListing(client, team) {
 
 async function sendFillPing(client, team) {
   try {
+    // Re-check fullness against fresh state: a leave may have landed
+    // between the join mutation and this ping.
+    const fresh = loadState().teams[team.messageId];
+    if (!fresh || fresh.status !== 'open' || !isTeamFull(fresh)) return;
     const channel = await client.channels.fetch(team.channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) return;
     const mentions = Object.keys(team.members)
       .map((id) => `<@${id}>`)
       .join(' ');
-    const where = team.hub ? `World ${team.world}, hub ${team.hub}.` : `World ${team.world}.`;
-    const msg = await channel.send(`${mentions} Team's full. ${where}`).catch((err) => {
+    const whereParts = [];
+    if (team.world) whereParts.push(`World ${team.world}`);
+    if (team.hub) whereParts.push(`hub ${team.hub}`);
+    const where = whereParts.length ? `${whereParts.join(', ')}. ` : '';
+    const msg = await channel.send(`${mentions} Team's full. ${where}`.trimEnd()).catch((err) => {
       console.warn('Fill ping send failed:', err.message);
       return null;
     });
@@ -2713,7 +2837,7 @@ async function handleJoin(interaction, messageId) {
     const r = applyJoin(team, userId);
     if (!r.ok) return { error: r.error };
     team.memberNames[userId] = interaction.user.displayName;
-    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId };
+    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId, team: JSON.parse(JSON.stringify(team)) };
   }).catch((err) => {
     console.warn('Team join mutation failed:', err.message);
     return { error: 'Something went wrong. Try again.' };
@@ -2724,7 +2848,7 @@ async function handleJoin(interaction, messageId) {
     return;
   }
   await interaction.deferUpdate().catch((err) => console.warn('Team join defer failed:', err.message));
-  const team = loadState().teams[res.messageId];
+  const team = res.team || null;
   if (team) {
     await refreshListing(interaction.client, team);
     if (res.filled && res.fillPing) await sendFillPing(interaction.client, team);
@@ -2739,7 +2863,7 @@ async function handleLeave(interaction, messageId) {
     if (!team) return { error: 'That team is gone.' };
     const r = applyLeave(team, userId);
     if (!r.ok) return { error: r.error };
-    return { ok: true, messageId: team.messageId };
+    return { ok: true, messageId: team.messageId, team: JSON.parse(JSON.stringify(team)) };
   }).catch((err) => {
     console.warn('Team leave mutation failed:', err.message);
     return { error: 'Something went wrong. Try again.' };
@@ -2750,7 +2874,7 @@ async function handleLeave(interaction, messageId) {
     return;
   }
   await interaction.deferUpdate().catch((err) => console.warn('Team leave defer failed:', err.message));
-  const team = loadState().teams[res.messageId];
+  const team = res.team || null;
   if (team) await refreshListing(interaction.client, team);
 }
 
@@ -2762,7 +2886,7 @@ async function handleRoleClaim(interaction, messageId, roleIdx) {
     const r = applyRoleClaim(team, userId, roleIdx);
     if (!r.ok) return { error: r.error };
     team.memberNames[userId] = interaction.user.displayName;
-    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId };
+    return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId, team: JSON.parse(JSON.stringify(team)) };
   }).catch((err) => {
     console.warn('Team role claim mutation failed:', err.message);
     return { error: 'Something went wrong. Try again.' };
@@ -2773,7 +2897,7 @@ async function handleRoleClaim(interaction, messageId, roleIdx) {
     return;
   }
   await interaction.deferUpdate().catch((err) => console.warn('Team role claim defer failed:', err.message));
-  const team = loadState().teams[res.messageId];
+  const team = res.team || null;
   if (team) {
     await refreshListing(interaction.client, team);
     if (res.filled && res.fillPing) await sendFillPing(interaction.client, team);
@@ -2785,12 +2909,12 @@ async function handleClose(interaction, messageId) {
   const res = await mutateTeams((state) => {
     const team = state.teams[messageId];
     if (!team || team.status !== 'open') return { error: 'That team is already closed.' };
-    if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
+    if (!canManageTeam(interaction, team)) {
       return { error: 'Only the organizer or staff can close this.' };
     }
     team.status = 'closed';
     team.closedAt = Date.now();
-    return { ok: true, messageId: team.messageId };
+    return { ok: true, messageId: team.messageId, team: JSON.parse(JSON.stringify(team)) };
   }).catch((err) => {
     console.warn('Team close mutation failed:', err.message);
     return { error: 'Something went wrong. Try again.' };
@@ -2801,7 +2925,7 @@ async function handleClose(interaction, messageId) {
     return;
   }
   await interaction.deferUpdate().catch((err) => console.warn('Team close defer failed:', err.message));
-  const team = loadState().teams[res.messageId];
+  const team = res.team || null;
   if (team) await refreshListing(interaction.client, team);
 }
 
@@ -2809,7 +2933,7 @@ async function handleDelete(interaction, messageId) {
   const res = await mutateTeams((state) => {
     const team = state.teams[messageId];
     if (!team) return { error: 'That team is already gone.' };
-    if (interaction.user.id !== team.organizerId && !isStaff(interaction)) {
+    if (!canManageTeam(interaction, team)) {
       return { error: 'Only the organizer or staff can delete this.' };
     }
     delete state.teams[messageId];
