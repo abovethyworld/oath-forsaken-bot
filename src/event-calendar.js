@@ -30,8 +30,10 @@ const BANNER_URL = process.env.GCAL_BANNER_URL || '';
 let imageUrlCache = { thumbnail: null, banner: null, at: 0 };
 const IMAGE_CACHE_TTL = 12 * 3600 * 1000;
 
-// Fetch a fresh signed attachment URL from a #bot-commands source message.
+// Resolve the embed image URL. A configured static URL (Drive) wins;
+// otherwise fetch a fresh signed attachment URL from a #bot-commands source message.
 async function resolveImageUrl(client, channelId, messageId, fallbackUrl, cacheKey) {
+  if (fallbackUrl) return fallbackUrl;
   if (!messageId) return fallbackUrl;
   const now = Date.now();
   if (cacheKey && imageUrlCache[cacheKey] && now - imageUrlCache.at < IMAGE_CACHE_TTL) {
