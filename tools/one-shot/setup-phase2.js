@@ -1,3 +1,6 @@
+// WARNING: historical one-shot setup script (Oct 2026 restructure, already run).
+// It rewrites config.json wholesale and creates roles/channels via REST.
+// Do NOT run against the live server without reviewing every line first.
 // Phase 2: create community channels + game-mode/region/member roles, update config.
 require('dotenv').config();
 const fs = require('fs');

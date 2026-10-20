@@ -115,7 +115,7 @@ async function createTicket(interaction, ticketType) {
       reason: `${theme.label} ticket opened by ${interaction.user.tag}`,
     });
     // Add the ticket creator to the thread (staff see it via the role ping)
-    await thread.members.add(interaction.user.id).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await thread.members.add(interaction.user.id).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   } catch (err) {
     await interaction.editReply('Could not create the ticket thread. Make sure I have the **Create Private Threads** permission.');
     return;
@@ -167,12 +167,12 @@ async function closeTicket(interaction) {
   store.removeTicket(interaction.guildId, ownerId);
   // Archive and lock the thread instead of deleting
   try {
-    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     await thread.setLocked(true);
     await thread.setArchived(true);
-    await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   } catch (err) {
-    await interaction.followUp({ content: 'Could not archive the thread: ' + (err.message || err), ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.followUp({ content: 'Could not archive the thread: ' + (err.message || err), ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   }
 }
 
@@ -194,11 +194,11 @@ async function showMemberSelect(interaction) {
   const member = interaction.member;
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
   if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
-    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
-    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const menu = new StringSelectMenuBuilder()
@@ -212,7 +212,7 @@ async function showMemberSelect(interaction) {
     content: 'Pick your account type.',
     components: [new ActionRowBuilder().addComponents(menu)],
     ephemeral: true,
-  }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+  }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
 }
 
 async function handleMemberSelect(interaction) {
@@ -221,7 +221,7 @@ async function handleMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const t = types[choice];
   if (!t || !t.roleId) {
-    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const member = interaction.member;
@@ -229,17 +229,17 @@ async function handleMemberSelect(interaction) {
   // between opening the menu and picking. Prevents double promotion.
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
   if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
-    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
-    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'This is for guests looking to join. Apply first if you have not.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   // Verify the role still exists (config could have changed since the menu was shown)
   const role = interaction.guild.roles.cache.get(t.roleId);
   if (!role) {
-    await interaction.reply({ content: 'That member role no longer exists. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'That member role no longer exists. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const guild = interaction.guild;
@@ -247,20 +247,20 @@ async function handleMemberSelect(interaction) {
 
   // Swap Guest for the member role + Initiate
   if (types.guest?.roleId && member.roles.cache.has(types.guest.roleId)) {
-    await member.roles.remove(types.guest.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await member.roles.remove(types.guest.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   }
-  await member.roles.add(t.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+  await member.roles.add(t.roleId, 'Guest to member promotion').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
-  if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+  if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
 
   // Initiate welcome in #general, same as an approval
   const generalChan = guild.channels.cache.get(config.recruit?.generalChannelId || config.channels?.general);
   if (generalChan) {
     const welcomeMsg = buildInitiateWelcome(member.id);
-    await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+    await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   }
 
-  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch((e) => console.error("[tickets.js] Silent failure:", e.message));
+  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
 }
 
 const commands = [

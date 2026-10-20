@@ -19,7 +19,18 @@ const COOLDOWN_MS = 10_000;
 const lastUseAt = new Map();
 const lastNotifyAt = new Map();
 
+function pruneCooldownMaps(now) {
+  if (lastUseAt.size < 1000) return;
+  for (const [uid, at] of lastUseAt) {
+    if (now - at > COOLDOWN_MS) lastUseAt.delete(uid);
+  }
+  for (const [uid, at] of lastNotifyAt) {
+    if (now - at > COOLDOWN_MS) lastNotifyAt.delete(uid);
+  }
+}
+
 function checkCooldown(userId, now = Date.now()) {
+  pruneCooldownMaps(now);
   const last = lastUseAt.get(userId) || 0;
   const waitMs = COOLDOWN_MS - (now - last);
   if (waitMs <= 0) return { wait: 0, notify: false };
