@@ -4,6 +4,7 @@
 // set WOM_API_KEY in .env later to raise it to 100/min.
 const fs = require('fs');
 const path = require('path');
+const { atomicWrite } = require('./store');
 
 const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
@@ -30,7 +31,7 @@ function saveCache(cache) {
     if (!entry || typeof entry.fetchedAt !== 'number' || entry.fetchedAt < cutoff) delete cache[key];
   }
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-  fs.writeFileSync(CACHE_FILE, JSON.stringify(cache));
+  atomicWrite(CACHE_FILE, cache);
 }
 
 // Serialized, paced request queue. All WOM traffic goes through here.

@@ -18,6 +18,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
 const { getStats, getCachedStats } = require('./wom');
 const { getClogPage, getCachedClogPage } = require('./runeprofile');
@@ -264,7 +265,7 @@ function loadState() {
 
 function saveState(state) {
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  atomicWrite(STATE_FILE, state);
 }
 
 // ─── Serialized state mutations ─────────────────────────────────────
@@ -297,7 +298,7 @@ function loadRsnLinks() {
 
 function saveRsnLinks(links) {
   fs.mkdirSync(path.dirname(RSN_FILE), { recursive: true });
-  fs.writeFileSync(RSN_FILE, JSON.stringify(links, null, 2));
+  atomicWrite(RSN_FILE, links);
 }
 
 function getRsn(userId) {
@@ -402,7 +403,7 @@ function loadSpecs() {
 
 function saveSpecs(specs) {
   fs.mkdirSync(path.dirname(SPECS_FILE), { recursive: true });
-  fs.writeFileSync(SPECS_FILE, JSON.stringify(specs, null, 2));
+  atomicWrite(SPECS_FILE, specs);
 }
 
 function validSpecId(id) {
@@ -1848,7 +1849,7 @@ function loadBadges() {
 
 function saveBadges(badges) {
   fs.mkdirSync(path.dirname(BADGES_FILE), { recursive: true });
-  fs.writeFileSync(BADGES_FILE, JSON.stringify(badges, null, 2));
+  atomicWrite(BADGES_FILE, badges);
 }
 
 function getManualBadge(userId) {
@@ -1894,7 +1895,7 @@ function loadDefaults() {
 
 function saveDefaults(defaults) {
   fs.mkdirSync(path.dirname(DEFAULTS_FILE), { recursive: true });
-  fs.writeFileSync(DEFAULTS_FILE, JSON.stringify(defaults, null, 2));
+  atomicWrite(DEFAULTS_FILE, defaults);
 }
 
 function getUserDefaults(userId) {

@@ -13,6 +13,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, getRoleById } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bounties.json');
@@ -33,7 +34,7 @@ function loadState() {
 
 function saveState(state) {
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  atomicWrite(STATE_FILE, state);
 }
 
 function bountyConfig() {
