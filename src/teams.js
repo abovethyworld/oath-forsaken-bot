@@ -466,12 +466,24 @@ function toggleShownSpec(userId, activity, specId) {
   return sel;
 }
 
-// The board renders on every PvM team (headcount and role-claim).
-// Skilling minigames keep text.
+// The board renders on every team: full combat board for PvM, and a slim
+// level + score board for skilling minigames (see SKILL_FOR_ACTIVITY).
 function boardApplies(team) {
-  const act = ACTIVITIES[team.activity];
-  // BA gets the board (specs matter there); other skilling minigames don't.
-  return !!act && (act.category !== 'skilling' || team.activity === 'ba');
+  return !!ACTIVITIES[team.activity];
+}
+
+// Skilling minigames show only their one relevant skill level on the board
+// instead of the combat stats. BA is excluded: it keeps the combat board.
+const SKILL_FOR_ACTIVITY = {
+  wintertodt: 'firemaking',
+  gotr: 'runecraft',
+  tempoross: 'fishing',
+  zalcano: 'mining',
+  wag: 'agility',
+};
+
+function boardSkillForTeam(team) {
+  return SKILL_FOR_ACTIVITY[team.activity] || null;
 }
 
 // WOM boss metric key for a team's KC column. Raids use the mode the
@@ -518,6 +530,13 @@ function kcColumnsForTeam(team) {
   ];
   // BA has no WOM KC metric — board shows stats + specs only.
   if (a === 'ba') return [];
+  // Minigames show their WOM activity score under the metric icon.
+  // WAG has no WOM tracker: level only, no score column.
+  if (a === 'wintertodt') return [{ metric: 'wintertodt', icon: 'wintertodt' }];
+  if (a === 'gotr') return [{ metric: 'guardians_of_the_rift', icon: 'guardians_of_the_rift' }];
+  if (a === 'tempoross') return [{ metric: 'tempoross', icon: 'tempoross' }];
+  if (a === 'zalcano') return [{ metric: 'zalcano', icon: 'zalcano' }];
+  if (a === 'wag') return [];
   const metric = KC_METRIC_OVERRIDE[a] || a;
   return [{ metric, icon: metric }];
 }
@@ -567,14 +586,16 @@ async function partyBoardFile(team, client) {
     }
   }
   const kcCols = kcColumnsForTeam(team);
+  const skill = boardSkillForTeam(team);
   const rows = ids.map((id, i) => {
     const st = statsList[i];
+    // Minigames: single skill level column; no combat stats, no spec rows.
     const stats = st && !st.notFound
-      ? [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer]
+      ? (skill ? [st[skill]] : [st.combat, st.attack, st.strength, st.ranged, st.magic, st.defence, st.hitpoints, st.prayer])
       : null;
     const rsnEntry = normalizeRsnEntry(links[id]);
     const rsn = rsnEntry ? rsnEntry.active : null;
-    const specs = getShownSpecs(id, team.activity);
+    const specs = skill ? [] : getShownSpecs(id, team.activity);
     const kc = kcCols.map((c) => {
       const kills = st && !st.notFound && st.kc ? st.kc[c.metric] : null;
       return typeof kills === 'number' ? kills : null;
@@ -584,7 +605,7 @@ async function partyBoardFile(team, client) {
   });
   if (!rows.some((r) => r.stats)) return null;
   const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact });
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact, skill });
   return { file: new AttachmentBuilder(buf, { name: 'party-board.png' }), staleRsns };
 }
 
@@ -3217,6 +3238,7 @@ module.exports = {
   handleTeamStepSelect: handleStepSelect,
   handleTeamModal,
   boardApplies,
+  boardSkillForTeam,
   loadRsnLinks,
   getRsn,
   SPECS,
