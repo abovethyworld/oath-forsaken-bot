@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
-const { getStats } = require('./wom');
+const { getStats, getCachedStats } = require('./wom');
 const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
@@ -529,11 +529,21 @@ async function partyBoardFile(team, client) {
   const ids = Object.keys(team.members || {});
   if (!ids.length) return null;
   const links = loadRsnLinks();
+  // Cache-first: fresh entries draw instantly, stale entries draw with the
+  // saved numbers and are reported back so the caller can revalidate in the
+  // background. Only never-cached names wait on a live lookup.
+  const staleRsns = [];
   const statsList = await Promise.all(
     ids.map((id) => {
       const rsnEntry = normalizeRsnEntry(links[id]);
       const rsn = rsnEntry ? rsnEntry.active : null;
-      return rsn ? getStats(rsn).catch(() => null) : Promise.resolve(null);
+      if (!rsn) return Promise.resolve(null);
+      const cached = getCachedStats(rsn);
+      if (cached) {
+        if (!cached.fresh) staleRsns.push(rsn);
+        return Promise.resolve(cached.stats);
+      }
+      return getStats(rsn).catch(() => null);
     })
   );
   // Guild members for role-based badge fallback. Only fetched when needed.
@@ -575,7 +585,39 @@ async function partyBoardFile(team, client) {
   if (!rows.some((r) => r.stats)) return null;
   const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
   const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact });
-  return new AttachmentBuilder(buf, { name: 'party-board.png' });
+  return { file: new AttachmentBuilder(buf, { name: 'party-board.png' }), staleRsns };
+}
+
+// Stale-while-revalidate: a board drawn with expired cache kicks off a
+// background stat refresh. If any numbers moved, the listing re-renders once
+// with the fresh stats. A failed refresh backs off for 10 minutes so we don't
+// hammer WOM when it's already struggling.
+const staleRefreshBackoff = new Map(); // lowercased rsn -> timestamp
+const STALE_BACKOFF_MS = 10 * 60 * 1000;
+
+async function refreshStaleStats(client, team, staleRsns) {
+  try {
+    const now = Date.now();
+    const todo = staleRsns.filter((rsn) => (staleRefreshBackoff.get(rsn.toLowerCase()) || 0) <= now);
+    if (!todo.length) return;
+    const snap = (rsn) => {
+      const c = getCachedStats(rsn);
+      return JSON.stringify((c && c.stats) || null);
+    };
+    const before = todo.map(snap);
+    await Promise.all(todo.map((rsn) => getStats(rsn).catch(() => null)));
+    todo.forEach((rsn) => {
+      const c = getCachedStats(rsn);
+      if (!c || !c.fresh) staleRefreshBackoff.set(rsn.toLowerCase(), Date.now() + STALE_BACKOFF_MS);
+      else staleRefreshBackoff.delete(rsn.toLowerCase());
+    });
+    const after = todo.map(snap);
+    if (!after.some((a, i) => a !== before[i])) return;
+    const fresh = loadState().teams[team.messageId];
+    if (fresh && fresh.status === 'open') await refreshListing(client, fresh);
+  } catch (err) {
+    console.warn('Stale stats refresh failed:', err.message);
+  }
 }
 
 // ─── Pure helpers (unit-tested) ─────────────────────────────────────
@@ -1516,9 +1558,11 @@ async function finalizeCreation(interaction, creation) {
   const roleId = activityRoleId(creation.activity);
   const content = roleId ? `<@&${roleId}>` : null;
   let msg;
+  let board = null;
   try {
     team.channelId = channel.id;
-    const file = await partyBoardFile(team, interaction.client).catch(() => null);
+    board = await partyBoardFile(team, interaction.client).catch(() => null);
+    const file = board ? board.file : null;
     const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
     if (file) embed.setImage('attachment://party-board.png');
     msg = await channel.send({
@@ -1540,6 +1584,11 @@ async function finalizeCreation(interaction, creation) {
 
   // Patch the buttons with the real message id now that we have it.
   await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
+
+  if (board && board.staleRsns.length) {
+    // Board drew with expired stats; refresh behind it without blocking.
+    refreshStaleStats(interaction.client, team, board.staleRsns).catch(() => {});
+  }
 
   const teamUrl = `https://discord.com/channels/${config.guildId}/${team.channelId}/${msg.id}`;
   await interaction.followUp({ content: `Team posted. [Jump to it](${teamUrl})`, ephemeral: true }).catch(() => {});
@@ -2786,14 +2835,19 @@ async function refreshListing(client, team) {
     }).catch((err) => console.warn('Team state cleanup failed:', err.message));
     return null;
   }
-  const file = await partyBoardFile(team, client).catch((err) => {
+  const board = await partyBoardFile(team, client).catch((err) => {
     console.warn('Party board failed:', err.message);
     return null;
   });
+  const file = board ? board.file : null;
   const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
   const payload = { embeds: [embed], components: buildListingComponents(team), files: file ? [file] : [] };
   if (file) embed.setImage('attachment://party-board.png');
   await msg.edit(payload).catch((err) => console.warn('Team refresh failed:', err.message));
+  if (board && board.staleRsns.length) {
+    // Board drew with expired stats; refresh behind it without blocking.
+    refreshStaleStats(client, team, board.staleRsns).catch(() => {});
+  }
   return msg;
 }
 

@@ -118,6 +118,22 @@ async function fetchPlayerDetails(username) {
   return { player: await res.json() };
 }
 
+// Synchronous cache read for stale-while-revalidate rendering.
+// Returns { stats, fresh } for a cached name, or null when never cached.
+// fresh = fetched within CACHE_MS; stale entries are still returned so a
+// board can draw immediately while a background refresh runs.
+function cacheLookup(cache, rsn) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key) return null;
+  const hit = cache[key];
+  if (!hit || typeof hit.fetchedAt !== 'number') return null;
+  return { stats: hit.stats, fresh: Date.now() - hit.fetchedAt < CACHE_MS };
+}
+
+function getCachedStats(rsn) {
+  return cacheLookup(loadCache(), rsn);
+}
+
 // Returns { combat, attack, strength, defence, ranged, prayer, magic, hitpoints }
 // or { notFound: true } when WOM has never seen the name, or null on error.
 async function getStats(rsn) {
@@ -150,4 +166,4 @@ async function getStats(rsn) {
   });
 }
 
-module.exports = { getStats, combatLevel, parseStats, CACHE_MS };
+module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, CACHE_MS };

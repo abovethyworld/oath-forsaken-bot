@@ -48,7 +48,7 @@ const {
   setManualBadge,
   mutateTeams,
 } = require('../src/teams');
-const { combatLevel, parseStats } = require('../src/wom');
+const { combatLevel, parseStats, cacheLookup, CACHE_MS } = require('../src/wom');
 const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
@@ -919,6 +919,25 @@ test('parseStats reads a WOM snapshot defensively', () => {
   assert.strictEqual(st.attack, 99);
   assert.strictEqual(parseStats({}), null, 'garbage -> null');
   assert.strictEqual(parseStats({ latestSnapshot: {} }), null, 'empty snapshot -> null');
+});
+
+test('cacheLookup reports fresh/stale and misses cleanly', () => {
+  const stats = { combat: 100 };
+  const now = Date.now();
+  const cache = {
+    'freshname': { fetchedAt: now - 1000, stats },
+    'stalename': { fetchedAt: now - CACHE_MS - 1000, stats },
+    'broken': { fetchedAt: 'not-a-number', stats },
+  };
+  assert.strictEqual(cacheLookup({}, 'nobody'), null, 'no entry -> null');
+  assert.strictEqual(cacheLookup(cache, ''), null, 'empty rsn -> null');
+  assert.strictEqual(cacheLookup(cache, 'broken'), null, 'bad fetchedAt -> null');
+  const fresh = cacheLookup(cache, 'FreshName');
+  assert.ok(fresh && fresh.fresh === true, 'recent entry is fresh (case-insensitive key)');
+  assert.strictEqual(fresh.stats, stats);
+  const stale = cacheLookup(cache, 'stalename');
+  assert.ok(stale && stale.fresh === false, 'expired entry is stale but still returned');
+  assert.strictEqual(stale.stats, stats);
 });
 
 test('renderPartyBoard produces a valid PNG', () => {
