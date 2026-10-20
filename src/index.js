@@ -28,6 +28,7 @@ const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
+const { handleKcCommand, handleClogCommand } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -47,6 +48,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds, // slash commands, buttons
     GatewayIntentBits.GuildMembers, // welcome messages (enable "Server Members Intent" in portal)
+    GatewayIntentBits.GuildMessages, // reading messages for the !kc / !clog commands
+    GatewayIntentBits.MessageContent, // message text (enable "Message Content Intent" in portal)
   ],
 });
 
@@ -170,6 +173,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[index.js] Silent failure:", e.message));
     }
+  }
+});
+
+// !-prefixed show-off commands (!kc / !clog). Everything else ignores
+// messages; interactions are the bot's main input.
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot || !message.content.startsWith('!')) return;
+  const parts = message.content.slice(1).trim().split(/\s+/);
+  const cmd = (parts[0] || '').toLowerCase();
+  try {
+    if (cmd === 'kc') await handleKcCommand(message, parts.slice(1));
+    else if (cmd === 'clog') await handleClogCommand(message, parts.slice(1));
+  } catch (err) {
+    console.error(`Show-off command ${cmd} failed:`, err.message);
   }
 });
 

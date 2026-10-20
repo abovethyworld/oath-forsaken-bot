@@ -398,11 +398,14 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   const kcCols = opts.kcColumns || (opts.bossIcon ? [{ icon: opts.bossIcon }] : []);
   const kcColW = kcCols.length > 1 ? 260 : KC_COL_W;
   const kcW = kcColW * kcCols.length;
-  const gridW = NAME_W + statsW + kcW;
+  // Optional clog column (minigame boards): RuneProfile page counts.
+  const clogW = opts.clogColumn ? KC_COL_W : 0;
+  const gridW = NAME_W + statsW + kcW + clogW;
   // A slim board for skill mode: no wide margins, grid fills the canvas.
-  const boardW = opts.skill ? gridW + 48 : BOARD_W - KC_COL_W + kcW;
+  const boardW = opts.skill ? gridW + 48 : BOARD_W - KC_COL_W + kcW + clogW;
   const ox = Math.round((boardW - gridW) / 2);
   const kcCx = (i) => ox + NAME_W + statsW + kcColW * i + kcColW / 2;
+  const clogCx = ox + NAME_W + statsW + kcW + KC_COL_W / 2;
   const footerH = extraCount > 0 ? 56 : 24;
   const H = compact
     ? HEADER_H + COMPACT_ROW_H * shown.length + footerH
@@ -423,12 +426,15 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
     else if (col.label) drawCentered(cv, cx, Math.round(cy - 11), col.label, [180, 180, 180], atlasSmall || atlas);
     else drawCentered(cv, cx, Math.round(cy - 22), 'KC');
   });
+  if (opts.clogColumn) {
+    drawCentered(cv, clogCx, Math.round(cy - 22), 'CLOG', [180, 180, 180]);
+  }
 
   let y = HEADER_H;
   hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
   const gray = [120, 120, 120];
   const smallA = atlasSmall || atlas;
-  shown.forEach(({ name, stats, specs, kc, badge }) => {
+  shown.forEach(({ name, stats, specs, kc, badge, clog }) => {
     const kcs = Array.isArray(kc) ? kc : [kc];
     const label = shortDisplayName(name);
     // Line 1: badge + name + stats + KC.
@@ -450,6 +456,11 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
         typeof val === 'number' ? `${val.toLocaleString('en-US')} KC` : '-',
         stats ? undefined : gray);
     });
+    if (opts.clogColumn) {
+      drawCentered(cv, clogCx, Math.round(ry),
+        clog ? `${clog.obtained}/${clog.total}` : '-',
+        stats ? undefined : gray);
+    }
     if (compact) {
       y += COMPACT_ROW_H;
       hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
