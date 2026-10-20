@@ -32,6 +32,7 @@ const {
   addRsn,
   setActiveRsn,
   boardApplies,
+  boardSkillForTeam,
   shouldSweepTeam,
   shouldAutoClose,
   SPECS,
@@ -683,17 +684,36 @@ test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
 
 // ─── Party board ──────────────────────────────────────────────────
 
-test('boardApplies: all PvM yes (incl. role teams), skilling no', () => {
+test('boardApplies: every activity gets the board (PvM + minigames)', () => {
   assert.ok(boardApplies({ activity: 'toa' }), 'toa');
   assert.ok(boardApplies({ activity: 'nex' }), 'nex');
   assert.ok(boardApplies({ activity: 'cox' }), 'cox');
   assert.ok(boardApplies({ activity: 'tob', roleMode: 'exclusive' }), 'tob roles');
   assert.ok(boardApplies({ activity: 'ba', roleMode: 'exclusive' }), 'ba gets the board');
   assert.ok(boardApplies({ activity: 'yama', roleMode: 'pick' }), 'yama roles');
-  assert.ok(!boardApplies({ activity: 'wintertodt' }), 'wintertodt');
-  assert.ok(!boardApplies({ activity: 'zalcano' }), 'zalcano');
-  assert.ok(!boardApplies({ activity: 'wag' }), 'wag');
+  assert.ok(boardApplies({ activity: 'wintertodt' }), 'wintertodt gets a level board');
+  assert.ok(boardApplies({ activity: 'gotr' }), 'gotr gets a level board');
+  assert.ok(boardApplies({ activity: 'zalcano' }), 'zalcano gets a level board');
+  assert.ok(boardApplies({ activity: 'wag' }), 'wag gets a level board');
   assert.ok(!boardApplies({ activity: 'nope' }), 'unknown activity');
+});
+
+test('boardSkillForTeam maps minigames to their skill, BA/PvM to none', () => {
+  assert.strictEqual(boardSkillForTeam({ activity: 'wintertodt' }), 'firemaking');
+  assert.strictEqual(boardSkillForTeam({ activity: 'gotr' }), 'runecraft');
+  assert.strictEqual(boardSkillForTeam({ activity: 'tempoross' }), 'fishing');
+  assert.strictEqual(boardSkillForTeam({ activity: 'zalcano' }), 'mining');
+  assert.strictEqual(boardSkillForTeam({ activity: 'wag' }), 'agility');
+  assert.strictEqual(boardSkillForTeam({ activity: 'ba' }), null, 'BA keeps the combat board');
+  assert.strictEqual(boardSkillForTeam({ activity: 'toa' }), null);
+});
+
+test('kcColumnsForTeam: minigames use WOM activity metrics, WAG none', () => {
+  assert.deepStrictEqual(kcColumnsForTeam({ activity: 'wintertodt' }), [{ metric: 'wintertodt', icon: 'wintertodt' }]);
+  assert.deepStrictEqual(kcColumnsForTeam({ activity: 'gotr' }), [{ metric: 'guardians_of_the_rift', icon: 'guardians_of_the_rift' }]);
+  assert.deepStrictEqual(kcColumnsForTeam({ activity: 'tempoross' }), [{ metric: 'tempoross', icon: 'tempoross' }]);
+  assert.deepStrictEqual(kcColumnsForTeam({ activity: 'zalcano' }), [{ metric: 'zalcano', icon: 'zalcano' }]);
+  assert.deepStrictEqual(kcColumnsForTeam({ activity: 'wag' }), [], 'WAG has no WOM tracker');
 });
 
 test('specsForActivity: relevance per boss (wiki strategy pages)', () => {
@@ -919,6 +939,22 @@ test('parseStats reads a WOM snapshot defensively', () => {
   assert.strictEqual(st.attack, 99);
   assert.strictEqual(parseStats({}), null, 'garbage -> null');
   assert.strictEqual(parseStats({ latestSnapshot: {} }), null, 'empty snapshot -> null');
+});
+
+test('parseStats pulls minigame skill levels and activity scores', () => {
+  const skills = {};
+  const lvls = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99,
+    firemaking: 99, runecraft: 80, fishing: 91, mining: 85, agility: 77 };
+  for (const [k, v] of Object.entries(lvls)) skills[k] = { rank: 1, level: v, experience: 13034431 };
+  const activities = { wintertodt: { score: 1240, rank: 500 }, soul_wars_zeal: { score: 36, rank: 1000 } };
+  const st = parseStats({ latestSnapshot: { data: { skills, activities } }, type: 'regular' });
+  assert.strictEqual(st.firemaking, 99);
+  assert.strictEqual(st.runecraft, 80);
+  assert.strictEqual(st.fishing, 91);
+  assert.strictEqual(st.mining, 85);
+  assert.strictEqual(st.agility, 77);
+  assert.strictEqual(st.kc.wintertodt, 1240, 'activity score lands in the kc map');
+  assert.strictEqual(st.combat, 126, 'combat level unchanged by extra skills');
 });
 
 test('cacheLookup reports fresh/stale and misses cleanly', () => {

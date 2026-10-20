@@ -7,11 +7,13 @@ const path = require('path');
 
 const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
-const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache-v2.json');
+const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache-v3.json');
 const CACHE_MS = 24 * 3600 * 1000;
 const MIN_GAP_MS = 1200; // min time between WOM requests
 
 const SKILLS = ['attack', 'strength', 'defence', 'ranged', 'prayer', 'magic', 'hitpoints'];
+// Non-combat skills shown on skilling-minigame boards (level only, no combat math).
+const SKILL_LEVELS = ['firemaking', 'runecraft', 'fishing', 'mining', 'agility'];
 
 function loadCache() {
   try {
@@ -106,6 +108,17 @@ function parseStats(playerJson) {
   const kc = {};
   for (const [key, entry] of Object.entries(bosses)) {
     if (entry && typeof entry.kills === 'number') kc[key] = entry.kills;
+  }
+  // Minigame scores live under activities (score, not kills). Unranked
+  // activities are simply absent from the snapshot, so nothing to filter.
+  const activities = (snap.data && snap.data.activities) || snap.activities || {};
+  for (const [key, entry] of Object.entries(activities)) {
+    if (entry && typeof entry.score === 'number') kc[key] = entry.score;
+  }
+  for (const sk of SKILL_LEVELS) {
+    const entry = skills[sk];
+    const lvl = entry && typeof entry.level === 'number' ? entry.level : null;
+    levels[sk] = lvl == null || lvl < 1 ? 1 : Math.min(lvl, 99);
   }
   const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
   return { combat: combatLevel(levels), ...levels, kc, accountType };

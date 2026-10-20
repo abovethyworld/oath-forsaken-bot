@@ -205,6 +205,14 @@ function loadAssets() {
   for (const name of COLUMNS) {
     icons[name] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'icons', `${name}.png`)));
   }
+  // Skilling icons for the minigame board (single level column).
+  for (const name of ['firemaking', 'runecraft', 'fishing', 'mining', 'agility']) {
+    try {
+      icons[name] = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'icons', `${name}.png`)));
+    } catch {
+      // icon missing: that minigame board just won't draw
+    }
+  }
   for (const id of SPEC_IDS) {
     try {
       specIcons[id] = inkCrop(decodePng(fs.readFileSync(path.join(ASSET_DIR, 'spec-icons', `${id}.png`))));
@@ -381,14 +389,18 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   if (!rows.length) return null;
   const compact = !!opts.compact;
   const shown = rows.slice(0, MAX_ROWS);
-  const statsW = COL_W * COLUMNS.length;
+  // Skill mode (minigame boards): a single skill level column instead of the
+  // combat stat columns, no spec rows. The row stats array holds one value.
+  const columns = opts.skill ? [opts.skill] : COLUMNS;
+  const statsW = COL_W * columns.length;
   // KC columns: [{ icon: 'metric_key' }] or [{ label: 'Text' }]. Defaults to
   // the legacy single bossIcon column.
   const kcCols = opts.kcColumns || (opts.bossIcon ? [{ icon: opts.bossIcon }] : []);
   const kcColW = kcCols.length > 1 ? 260 : KC_COL_W;
   const kcW = kcColW * kcCols.length;
   const gridW = NAME_W + statsW + kcW;
-  const boardW = BOARD_W - KC_COL_W + kcW;
+  // A slim board for skill mode: no wide margins, grid fills the canvas.
+  const boardW = opts.skill ? gridW + 48 : BOARD_W - KC_COL_W + kcW;
   const ox = Math.round((boardW - gridW) / 2);
   const kcCx = (i) => ox + NAME_W + statsW + kcColW * i + kcColW / 2;
   const footerH = extraCount > 0 ? 56 : 24;
@@ -400,7 +412,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
   // Icon header. Each KC column gets its boss icon (WOM's) or a text
   // label, falling back to "KC" when neither is set.
   const cy = HEADER_H / 2;
-  COLUMNS.forEach((name, i) => {
+  columns.forEach((name, i) => {
     const cx = ox + NAME_W + COL_W * i + COL_W / 2;
     drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
   });
@@ -428,7 +440,7 @@ function renderPartyBoard(rows, extraCount, opts = {}) {
       nameX += 56;
     }
     drawText(cv, nameX, Math.round(ry), label, stats ? undefined : gray);
-    COLUMNS.forEach((_, i) => {
+    columns.forEach((_, i) => {
       const cx = ox + NAME_W + COL_W * i + COL_W / 2;
       drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
     });
