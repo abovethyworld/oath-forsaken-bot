@@ -135,6 +135,40 @@ function parseClogTotal(accountJson) {
   return { obtained: clog.obtained, total: clog.total };
 }
 
+// The account collection-log index lists EVERY clog item (game-wide),
+// deduped by item id. Used by the icon warmer to know the full set.
+function parseClogIndex(json) {
+  if (!json || !Array.isArray(json.tabs)) return null;
+  const seen = new Map();
+  for (const tab of json.tabs) {
+    for (const page of (tab.pages || [])) {
+      for (const it of (page.items || [])) {
+        if (it && typeof it.id === 'number' && typeof it.name === 'string' && !seen.has(it.id)) {
+          seen.set(it.id, { id: it.id, name: it.name });
+        }
+      }
+    }
+  }
+  if (!seen.size) return null;
+  return { items: [...seen.values()] };
+}
+
+// { items: [{id, name}] } | { notFound: true } | null. Cached 24h.
+async function getClogIndex(username) {
+  const key = `clogindex:${String(username).toLowerCase().trim()}`;
+  const cached = loadCache()[key];
+  if (cached && Date.now() - cached.fetchedAt < CACHE_MS && Array.isArray(cached.items)) {
+    return { items: cached.items };
+  }
+  if (cached && cached.notFound && Date.now() - cached.fetchedAt < CACHE_MS) return { notFound: true };
+  const u = encodeURIComponent(String(username).trim());
+  return fetchInto(key, `/accounts/${u}/collection-log`, parseClogIndex)
+    .catch((err) => {
+      console.warn(`RuneProfile index lookup failed for ${username}: ${err.message}`);
+      return null;
+    });
+}
+
 async function fetchInto(key, endpoint, parse) {
   return paced(async () => {
     const res = await rpFetch(endpoint);
@@ -254,6 +288,8 @@ async function getProfile(username) {
 
 module.exports = {
   getClogPage,
+  getClogIndex,
+  parseClogIndex,
   getClogPageWithItems,
   getClogTotal,
   getCachedClogPage,
