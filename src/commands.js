@@ -22,6 +22,7 @@ const roster = require('./roster');
 const lore = require('./lore');
 const bounty = require('./bounty');
 const teams = require('./teams');
+const showoff = require('./showoff');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -257,6 +258,7 @@ const commands = [
   ...permissions.commands,
   ...bounty.commands,
   ...teams.commands,
+  ...showoff.commands,
   ...roster.commands,
   ...lore.commands,
 ];
