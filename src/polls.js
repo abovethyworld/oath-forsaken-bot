@@ -10,6 +10,11 @@ const {
 } = require('discord.js');
 const crypto = require('node:crypto');
 const store = require('./store');
+const config = require('./config');
+const { isStaff } = require('./utils');
+
+// Poll drafts wait here for a staff Post/Deny before they go live.
+const STAFF_CHAT_ID = config.ccChecklist?.staffChatId;
 
 const MAX_OPTIONS = 4;
 
@@ -60,7 +65,7 @@ async function createPoll(interaction) {
     return;
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
   const pollId = crypto.randomBytes(8).toString('hex');
   const poll = {
     id: pollId,
@@ -73,22 +78,95 @@ async function createPoll(interaction) {
     messageId: null,
     createdAt: Date.now(),
     closed: false,
+    pending: true,
   };
-  const msg = await interaction.editReply({
-    embeds: [pollEmbed(poll)],
-    components: pollRows(pollId, options),
-    allowedMentions: { parse: [] }, // block @everyone/@here in poll text
-  });
-  poll.messageId = msg.id;
+  const staffChat = STAFF_CHAT_ID ? interaction.guild.channels.cache.get(STAFF_CHAT_ID) : null;
+  if (!staffChat) {
+    await interaction.editReply({ content: 'Staff review channel is not set up. Tell staff to check the bot config.' });
+    return;
+  }
   store.savePoll(poll);
+  const review = new EmbedBuilder()
+    .setTitle(`📊 ${poll.question}`)
+    .setDescription(
+      poll.options.map((opt, i) => `${['1️⃣', '2️⃣', '3️⃣', '4️⃣'][i]} **${opt}**`).join('\n') +
+        `\n\nPoll by ${poll.authorTag} for <#${poll.channelId}>`
+    )
+    .setColor(0x6b0e0e)
+    .setFooter({ text: 'Staff: post it or deny it. It stays here until you do.' });
+  await staffChat.send({
+    embeds: [review],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`poll:gate:${pollId}:post`).setLabel('Post poll').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`poll:gate:${pollId}:deny`).setLabel('Deny').setStyle(ButtonStyle.Danger)
+      ),
+    ],
+    allowedMentions: { parse: [] },
+  });
+  await interaction.editReply({
+    content: 'Poll sent to staff for approval. It posts in this channel if they approve it.',
+  });
+}
+
+async function handleGate(interaction, pollId, action) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Only staff can approve polls.', ephemeral: true });
+    return;
+  }
+  const poll = store.getPoll(pollId);
+  if (!poll || !poll.pending) {
+    await interaction.reply({ content: 'That poll draft is already handled.', ephemeral: true });
+    return;
+  }
+  if (action === 'post') {
+    if (poll.closed) {
+      await interaction.update({ content: 'The author closed that poll, so it is not posting.', embeds: [], components: [] });
+      return;
+    }
+    const channel = interaction.guild.channels.cache.get(poll.channelId);
+    if (!channel) {
+      await interaction.reply({ content: 'That channel is gone. The poll has nowhere to post.', ephemeral: true });
+      return;
+    }
+    const msg = await channel.send({
+      embeds: [pollEmbed(poll)],
+      components: pollRows(pollId, poll.options),
+      allowedMentions: { parse: [] },
+    });
+    poll.messageId = msg.id;
+    poll.pending = false;
+    store.savePoll(poll);
+    await interaction.update({
+      content: `Posted in <#${poll.channelId}> by ${interaction.user.tag}.`,
+      embeds: [],
+      components: [],
+    });
+  } else {
+    poll.closed = true;
+    poll.pending = false;
+    poll.denied = true;
+    store.savePoll(poll);
+    await interaction.update({
+      content: `Denied by ${interaction.user.tag}.`,
+      embeds: [],
+      components: [],
+    });
+  }
 }
 
 async function handlePollButton(interaction) {
-  // customId: poll:<pollId>:<optionIdx>
-  const [, pollId, idxStr] = interaction.customId.split(':');
+  // customId: poll:<pollId>:<optionIdx> | poll:gate:<pollId>:<post|deny>
+  const parts = interaction.customId.split(':');
+  if (parts[1] === 'gate') return handleGate(interaction, parts[2], parts[3]);
+  const [, pollId, idxStr] = parts;
   const poll = store.getPoll(pollId);
   if (!poll) {
     await interaction.reply({ content: 'This poll has expired.', ephemeral: true });
+    return;
+  }
+  if (poll.pending) {
+    await interaction.reply({ content: 'This poll is still waiting on staff approval.', ephemeral: true });
     return;
   }
   if (poll.closed) {
@@ -140,7 +218,7 @@ async function closePollCommand(interaction) {
 const commands = [
   {
     data: (() => {
-      const b = new SlashCommandBuilder().setName('poll').setDescription('Create a poll with button voting');
+      const b = new SlashCommandBuilder().setName('poll').setDescription('Create a poll with button voting (staff approve it first)');
       b.addStringOption((o) => o.setName('question').setDescription('The question').setRequired(true));
       for (let i = 1; i <= MAX_OPTIONS; i++) {
         b.addStringOption((o) => o.setName(`option${i}`).setDescription(`Option ${i}`).setRequired(i <= 2));
