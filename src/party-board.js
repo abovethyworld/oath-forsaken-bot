@@ -188,9 +188,13 @@ const SPEC_IDS = ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'crystalh
 
 function loadAssets() {
   if (atlas) return;
-  const atlasImg = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.png')));
-  const glyphs = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.json'), 'utf8')).glyphs;
-  atlas = { img: atlasImg, glyphs };
+  try {
+    const atlasImg = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.png')));
+    const glyphs = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas.json'), 'utf8')).glyphs;
+    atlas = { img: atlasImg, glyphs };
+  } catch (err) {
+    throw new Error(`party-board: main font atlas failed to load: ${err.message}`);
+  }
   try {
     const smallImg = decodePng(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas-small.png')));
     const smallGlyphs = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, 'font-atlas-small.json'), 'utf8')).glyphs;
