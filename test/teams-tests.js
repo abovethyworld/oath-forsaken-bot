@@ -1222,4 +1222,49 @@ test('wom parseStats leaves missing minigame skills null (not 1)', () => {
   assert.strictEqual(st.runecraft, null, 'missing skill renders as dash, not 1');
 });
 
+test('clog index parser dedupes items by id', () => {
+  const { parseClogIndex } = require('../src/runeprofile');
+  const json = { tabs: [
+    { name: 'Bosses', pages: [{ name: 'Yama', items: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }] }] },
+    { name: 'Other', pages: [{ name: 'Dup', items: [{ id: 2, name: 'B' }, { id: 3, name: 'C' }] }] },
+  ] };
+  const out = parseClogIndex(json);
+  assert.strictEqual(out.items.length, 3, 'duplicate id collapsed');
+  assert.deepStrictEqual(out.items.map((i) => i.id), [1, 2, 3]);
+  assert.strictEqual(parseClogIndex({}), null);
+  assert.strictEqual(parseClogIndex({ tabs: [] }), null);
+});
+
+test('showoff lookups are cache-first: repeats within 24h make no HTTP call', async () => {
+  const fs = require('node:fs');
+  const wom = require('../src/wom');
+  const rp = require('../src/runeprofile');
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  const skills = { attack: { level: 50 }, defence: { level: 45 }, strength: { level: 55 }, ranged: { level: 40 }, prayer: { level: 44 }, magic: { level: 52 }, hitpoints: { level: 48 } };
+  globalThis.fetch = async (url) => {
+    calls += 1;
+    if (String(url).includes('wiseoldman')) {
+      return { status: 200, ok: true, json: async () => ({ username: 'cacheguard', type: 'regular', latestSnapshot: { data: { skills, bosses: {}, activities: {} } } }) };
+    }
+    return { status: 200, ok: true, json: async () => ({ username: 'cacheguard', collectionLog: { obtained: 5, total: 100 } }) };
+  };
+  try {
+    await wom.getStats('CacheGuard');
+    await wom.getStats('CacheGuard');
+    await rp.getClogTotal('CacheGuard');
+    await rp.getClogTotal('CacheGuard');
+    assert.strictEqual(calls, 2, 'one fetch per source; the repeats read the 24h cache');
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const f of ['data/wom-cache-v3.json', 'data/rp-cache-v2.json']) {
+      try {
+        const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+        for (const k of Object.keys(c)) if (k.includes('cacheguard')) delete c[k];
+        fs.writeFileSync(f, JSON.stringify(c));
+      } catch { /* cache file may not exist yet */ }
+    }
+  }
+});
+
 console.log(`Results: ${passed} passed, ${failed} failed`);
