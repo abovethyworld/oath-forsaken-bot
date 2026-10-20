@@ -58,8 +58,13 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   c.user.setActivity('Serving Chaos', { type: 4 }); // custom status, Zamorak theme
 
-  // Heartbeat for Docker HEALTHCHECK — proves the event loop is alive and logged in
+  // Heartbeat for Docker HEALTHCHECK. Only written while the gateway is
+  // connected: a dead WebSocket with a live event loop used to keep the
+  // heartbeat fresh and hide a freeze from the healthcheck (two silent
+  // freezes, Oct 17/18). Now the healthcheck fails within ~3 min and Docker
+  // restarts the bot on its own.
   const heartbeat = () => {
+    if (!c.isReady()) return;
     try {
       require('node:fs').writeFileSync('/tmp/bot-heartbeat', String(Date.now()));
     } catch {}
