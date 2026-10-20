@@ -2752,10 +2752,7 @@ async function handleTeamHubModal(interaction, messageId) {
 async function handleTeamFcButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
   if (!team) return;
-  if (!canManageTeam(interaction, team)) {
-    await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
-    return;
-  }
+  if (!canManageTeam(interaction, team)) return denyManage(interaction);
   const modal = new ModalBuilder()
     .setCustomId(`team:teamfcmodal:${messageId}`)
     .setTitle('Friends chat')

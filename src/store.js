@@ -217,6 +217,28 @@ module.exports = {
     saveJson(HOLDS_FILE, data);
   },
 
+  // Physically drop expired strikes (getStrikes only filters on read,
+  // so without this the file grows forever).
+  pruneStrikes() {
+    const data = load();
+    const cutoff = Date.now() - STRIKE_EXPIRY_DAYS * 24 * 3600 * 1000;
+    let changed = false;
+    for (const guildId of Object.keys(data)) {
+      const guild = data[guildId];
+      if (!guild || typeof guild !== 'object') continue;
+      for (const userId of Object.keys(guild)) {
+        if (!Array.isArray(guild[userId])) continue;
+        const kept = guild[userId].filter((s) => new Date(s.at).getTime() > cutoff);
+        if (kept.length !== guild[userId].length) {
+          changed = true;
+          if (kept.length) guild[userId] = kept;
+          else delete guild[userId];
+        }
+      }
+    }
+    if (changed) save(data);
+  },
+
   // ---- Polls: { pollId: poll } ----
   savePoll(poll) {
     const data = loadJson(POLLS_FILE);

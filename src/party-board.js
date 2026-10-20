@@ -119,6 +119,9 @@ function decodePng(buf) {
     if (type === 'IHDR') {
       w = data.readUInt32BE(0);
       h = data.readUInt32BE(4);
+      // The pixel buffer is allocated from these header values; cap them
+      // so a malformed or oversized PNG cannot OOM the bot.
+      if (w < 1 || h < 1 || w > 4096 || h > 4096 || w * h > 16_777_216) throw new Error(`PNG dimensions out of range: ${w}x${h}`);
       if (data[8] !== 8) throw new Error('Only 8-bit PNG supported');
       colorType = data[9];
       if (data[12] !== 0) throw new Error('Interlaced PNG not supported');

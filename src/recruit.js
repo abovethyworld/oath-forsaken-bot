@@ -69,7 +69,7 @@ async function postApplicationPanel(channel) {
         .setEmoji(t.emoji || '📝')
     );
   }
-  await channel.send({ embeds: [embed], components: [row] }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+  await channel.send({ embeds: [embed], components: [row] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
 }
 
 async function setupApplications(interaction) {
@@ -168,7 +168,7 @@ async function handleModalSubmit(interaction) {
   try {
   // Prevent multiple submissions
   if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
-    await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
 
@@ -242,7 +242,7 @@ async function handleModalSubmit(interaction) {
     await thread.send({
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
       allowedMentions: { users: [interaction.user.id] },
-    }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     await interaction.editReply('Application submitted! Staff will review it soon.');
   } else {
     await interaction.editReply('Could not open your application thread — tell staff.');
@@ -300,7 +300,7 @@ async function handleDenyReasonSubmit(interaction) {
 
   if (thread && thread.isThread()) {
     const base = thread.name.replace(/ - (Approved|Denied)$/, '');
-    await thread.setName(`${base} - Denied`.slice(0, 100)).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await thread.setName(`${base} - Denied`.slice(0, 100)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     try {
       const starter = await thread.fetchStarterMessage().catch(() => null);
       if (starter && starter.embeds.length > 0) {
@@ -309,16 +309,16 @@ async function handleDenyReasonSubmit(interaction) {
           { name: 'Denied', value: `by ${interaction.user.tag}` },
           { name: 'Reason', value: reason }
         );
-        await starter.edit({ embeds: [updated], components: [] }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+        await starter.edit({ embeds: [updated], components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       }
     } catch {}
-    await thread.setLocked(true).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
-    await thread.setArchived(true).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await thread.setLocked(true).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    await thread.setArchived(true).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 
   // DM the applicant with the reason
   if (target) {
-    await target.send(`Your **${t.label || type}** application to **${guild.name}** was denied.\n\nReason: ${reason}`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await target.send(`Your **${t.label || type}** application to **${guild.name}** was denied.\n\nReason: ${reason}`).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 
   await interaction.editReply(`Denied <@${userId}> with reason.`);
@@ -361,15 +361,15 @@ async function handleDecision(interaction) {
     // Still rename the thread so it's not stuck
     if (thread && thread.isThread()) {
       const base = thread.name.replace(/ - (Approved|Denied)$/, '');
-      await thread.setName(`${base} - Denied (left)`.slice(0, 100)).catch((e) => console.error('[recruit.js] Silent failure:', e.message));
-      await thread.setLocked(true).catch((e) => console.error('[recruit.js] Silent failure:', e.message));
-      await thread.setArchived(true).catch((e) => console.error('[recruit.js] Silent failure:', e.message));
+      await thread.setName(`${base} - Denied (left)`.slice(0, 100)).catch((e) => console.error('[recruit.js] Non-fatal error:', e.message));
+      await thread.setLocked(true).catch((e) => console.error('[recruit.js] Non-fatal error:', e.message));
+      await thread.setArchived(true).catch((e) => console.error('[recruit.js] Non-fatal error:', e.message));
     }
     return;
   }
 
   if (decision === 'approve' && target) {
-    if (t.roleId) await target.roles.add(t.roleId).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    if (t.roleId) await target.roles.add(t.roleId).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Everyone-ping role: added on every approval regardless of application type
     try {
       const pingRole = getPingRole(guild);
@@ -383,7 +383,7 @@ async function handleDecision(interaction) {
     // New members start at the bottom of the tenure ladder (not guests).
     if (type !== 'guest') {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
-      if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+      if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     }
     // Auto-nickname: "Nickname [RSN]" (all 3 application types)
     const appAnswers = store.getApplicationAnswers(guild.id, userId);
@@ -395,11 +395,11 @@ async function handleDecision(interaction) {
         const newNick = nick.length + rsnPart.length > 32
           ? nick.slice(0, 32 - rsnPart.length).trimEnd() + rsnPart
           : nick + rsnPart;
-        await target.setNickname(newNick, 'Auto-nickname on approval').catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+        await target.setNickname(newNick, 'Auto-nickname on approval').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       }
     }
     // Welcome DM on approval
-    await target.send(`⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await target.send(`⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
 
     // Public welcome in #general - plain text (finalized 2026-10-13)
     // Guest gets the guest welcome; iron/main get the Initiate announcement.
@@ -412,7 +412,7 @@ async function handleDecision(interaction) {
       } else {
         welcomeMsg = buildInitiateWelcome(target.id);
       }
-      await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+      await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     }
   } else if (target) {
     // Simple deny: no DM sent (2026-10-13)
@@ -423,7 +423,7 @@ async function handleDecision(interaction) {
   if (thread && thread.isThread()) {
     const base = thread.name.replace(/ - (Approved|Denied)$/, '');
     const verdict = decision === 'approve' ? 'Approved' : 'Denied';
-    await thread.setName(`${base} - ${verdict}`.slice(0, 100)).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await thread.setName(`${base} - ${verdict}`.slice(0, 100)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
 
     // Edit the starter message to show who decided.
     try {
@@ -435,12 +435,12 @@ async function handleDecision(interaction) {
           value: `by ${interaction.user.tag}`,
         });
         // Remove the approve/deny buttons so it can't be decided twice.
-        await starter.edit({ embeds: [updated], components: [] }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+        await starter.edit({ embeds: [updated], components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       }
     } catch {}
 
-    await thread.setLocked(true).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
-    await thread.setArchived(true).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await thread.setLocked(true).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    await thread.setArchived(true).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 
   await interaction.editReply(decision === 'approve' ? `Approved <@${userId}> as ${t.label || type}.` : `Denied <@${userId}>.`);
@@ -450,12 +450,12 @@ async function handleDecision(interaction) {
   if (appChannelId) {
     const ch = guild.channels.cache.get(appChannelId);
     store.removeApplication(guild.id, userId);
-    if (ch) setTimeout(() => ch.delete('Application decided').catch((e) => console.error("[recruit.js] Silent failure:", e.message)), 5000);
+    if (ch) setTimeout(() => ch.delete('Application decided').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message)), 5000);
   }
 
   const log = guild.channels.cache.get(config.tickets.logChannelId);
   if (log) {
-    await log.send(`Application **${decision}d** (${t.label || type}): <@${userId}> by ${interaction.user.tag}`).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+    await log.send(`Application **${decision}d** (${t.label || type}): <@${userId}> by ${interaction.user.tag}`).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 
   // Record for /apply-stats
@@ -490,12 +490,12 @@ async function handleApplyButton(interaction) {
     const member = interaction.member;
     const hasBlockedRole = member.roles.cache.some((r) => memberRoleIds.includes(r.id)) || isStaff(interaction);
     if (hasBlockedRole) {
-      await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+      await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       return;
     }
     // Prevent starting a second application
     if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
-      await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Silent failure:", e.message));
+      await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       return;
     }
     const type = parts[2];
