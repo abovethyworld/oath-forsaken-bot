@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
-const { isStaff, ZAMORAK_RED, getRoleById } = require('./utils');
+const { isStaff, ZAMORAK_RED, getRoleById, clampDesc } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bounties.json');
 const CLAIM_ARCHIVE_MIN = 4320; // 3 days
@@ -54,7 +54,7 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention }) {
   const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle('📜 Bounty Contract Available')
-    .setDescription(
+    .setDescription(clampDesc(
       `Chaos demands tribute. A new contract is nailed to the board.\n\n` +
         `**Target:** ${target}\n` +
         `**Location:** ${location}\n` +
@@ -62,7 +62,7 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention }) {
         `**Time Limit:** ${days} day${days === 1 ? '' : 's'}\n` +
         `**Reward:** ${rewardMention}\n\n` +
         `First to return with proof claims the title. The kill must be fresh.`
-    )
+    ))
     .setTimestamp();
   if (image) embed.setThumbnail(image);
   return embed;

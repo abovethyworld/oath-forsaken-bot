@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const crypto = require('node:crypto');
 const store = require('./store');
-const { ZAMORAK_RED } = require('./utils');
+const { ZAMORAK_RED, clampDesc } = require('./utils');
 
 // Roster roles members can sign up for (OSRS group content)
 const ROSTER_ROLES = ['Tank', 'DPS', 'Learner'];
@@ -33,7 +33,7 @@ function rosterEmbed(eventName, roster) {
   }
   return new EmbedBuilder()
     .setTitle(`⛧ ${eventName} — Roster`)
-    .setDescription(lines.join('\n') + `\n\n*${total} signed up — click to join, pick your role*`)
+    .setDescription(clampDesc(lines.join('\n') + `\n\n*${total} signed up — click to join, pick your role*`))
     .setColor(ZAMORAK_RED);
 }
 
