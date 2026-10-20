@@ -158,10 +158,10 @@ const ACTIVITY_EMOJI = {
   cox_cm: '<:cox:1561158969379004510>',
   tob: '<:tob:1561159051147223100>',
   tob_hard: '<:tob:1561159051147223100>',
-  wintertodt: '<:wintertodt:1558470813584465960>',
-  gotr: '<:gotr:1558470845918220318>',
-  tempoross: '<:tempoross:1558470796752457779>',
-  zalcano: '<:zalcano:1558470781946568724>',
+  wintertodt: '<:wintertodt:1561953635884204053>',
+  gotr: '<:gotr:1561953776414359563>',
+  tempoross: '<:tempoross:1561953917825327204>',
+  zalcano: '<:zalcano:1561954058154152026>',
   ba: '<:barbarianassault:1558470749919125557>',
   nex: '<:nex:1558470907956170923>',
   yama: '<:yama:1558470765639372800>',
@@ -171,7 +171,7 @@ const ACTIVITY_EMOJI = {
   callisto: '<:callisto:1558470876075270145>',
   vetion: '<:vetion:1558470891049062400>',
   nm: '<:nightmare:1558470923273637949>',
-  wag: '<:wildyagility:1558470829187006547>',
+  wag: '<:wildyagility:1561954199212662804>',
 };
 
 // For select menus: { id, name } pairs.
@@ -182,10 +182,10 @@ const ACTIVITY_EMOJI_OBJ = {
   cox_cm: { id: '1561158969379004510', name: 'cox' },
   tob: { id: '1561159051147223100', name: 'tob' },
   tob_hard: { id: '1561159051147223100', name: 'tob' },
-  wintertodt: { id: '1558470813584465960', name: 'wintertodt' },
-  gotr: { id: '1558470845918220318', name: 'gotr' },
-  tempoross: { id: '1558470796752457779', name: 'tempoross' },
-  zalcano: { id: '1558470781946568724', name: 'zalcano' },
+  wintertodt: { id: '1561953635884204053', name: 'wintertodt' },
+  gotr: { id: '1561953776414359563', name: 'gotr' },
+  tempoross: { id: '1561953917825327204', name: 'tempoross' },
+  zalcano: { id: '1561954058154152026', name: 'zalcano' },
   ba: { id: '1558470749919125557', name: 'barbarianassault' },
   nex: { id: '1558470907956170923', name: 'nex' },
   yama: { id: '1558470765639372800', name: 'yama' },
@@ -195,7 +195,7 @@ const ACTIVITY_EMOJI_OBJ = {
   callisto: { id: '1558470876075270145', name: 'callisto' },
   vetion: { id: '1558470891049062400', name: 'vetion' },
   nm: { id: '1558470923273637949', name: 'nightmare' },
-  wag: { id: '1558470829187006547', name: 'wildyagility' },
+  wag: { id: '1561954199212662804', name: 'wildyagility' },
 };
 
 // Pre-modal button steps. Label shown on the listing too.
