@@ -20,6 +20,7 @@ const path = require('path');
 const config = require('./config');
 const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
 const { getStats, getCachedStats } = require('./wom');
+const { getClogPage, getCachedClogPage } = require('./runeprofile');
 const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
@@ -486,6 +487,19 @@ function boardSkillForTeam(team) {
   return SKILL_FOR_ACTIVITY[team.activity] || null;
 }
 
+// RuneProfile collection-log page per minigame (tab, page), verified against
+// the live API. WAG has no clog page, so no clog column there.
+const CLOG_PAGE_FOR_ACTIVITY = {
+  wintertodt: ['Bosses', 'Wintertodt'],
+  gotr: ['Minigames', 'Guardians of the Rift'],
+  tempoross: ['Bosses', 'Tempoross'],
+  zalcano: ['Bosses', 'Zalcano'],
+};
+
+function clogPageForActivity(activity) {
+  return CLOG_PAGE_FOR_ACTIVITY[activity] || null;
+}
+
 // WOM boss metric key for a team's KC column. Raids use the mode the
 // team picked; other bosses use their WOM key (overridden where the
 // activity id doesn't match).
@@ -587,6 +601,11 @@ async function partyBoardFile(team, client) {
   }
   const kcCols = kcColumnsForTeam(team);
   const skill = boardSkillForTeam(team);
+  const clogPage = clogPageForActivity(team.activity);
+  // Clog values draw from the RuneProfile cache only (instant); missing or
+  // expired entries are collected for a background refresh, same pattern as
+  // the WOM stats above.
+  const clogRsns = [];
   const rows = ids.map((id, i) => {
     const st = statsList[i];
     // Minigames: single skill level column; no combat stats, no spec rows.
@@ -600,13 +619,19 @@ async function partyBoardFile(team, client) {
       const kills = st && !st.notFound && st.kc ? st.kc[c.metric] : null;
       return typeof kills === 'number' ? kills : null;
     });
+    let clog = null;
+    if (clogPage && rsn) {
+      const c = getCachedClogPage(rsn, clogPage[0], clogPage[1]);
+      if (c && !c.notFound) clog = { obtained: c.obtained, total: c.total };
+      if (!c || !c.fresh) clogRsns.push(rsn);
+    }
     const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
-    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc, badge };
+    return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc, badge, clog };
   });
   if (!rows.some((r) => r.stats)) return null;
   const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact, skill });
-  return { file: new AttachmentBuilder(buf, { name: 'party-board.png' }), staleRsns };
+  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact, skill, clogColumn: !!clogPage });
+  return { file: new AttachmentBuilder(buf, { name: 'party-board.png' }), staleRsns, clogRsns };
 }
 
 // Stale-while-revalidate: a board drawn with expired cache kicks off a
@@ -615,6 +640,37 @@ async function partyBoardFile(team, client) {
 // hammer WOM when it's already struggling.
 const staleRefreshBackoff = new Map(); // lowercased rsn -> timestamp
 const STALE_BACKOFF_MS = 10 * 60 * 1000;
+
+// Same stale-while-revalidate pattern for the RuneProfile clog column:
+// refresh the listed members' clog pages in the background and re-render
+// once if any count moved. Failed lookups back off like the stats refresh.
+const clogRefreshBackoff = new Map(); // lowercased rsn -> timestamp
+
+async function refreshClogColumns(client, team, clogRsns) {
+  const clogPage = clogPageForActivity(team.activity);
+  if (!clogPage || !clogRsns.length) return;
+  try {
+    const now = Date.now();
+    const todo = clogRsns.filter((rsn) => (clogRefreshBackoff.get(rsn.toLowerCase()) || 0) <= now);
+    if (!todo.length) return;
+    const snap = (rsn) => {
+      const c = getCachedClogPage(rsn, clogPage[0], clogPage[1]);
+      return JSON.stringify(c && !c.notFound ? [c.obtained, c.total] : null);
+    };
+    const before = todo.map(snap);
+    const results = await Promise.all(todo.map((rsn) => getClogPage(rsn, clogPage[0], clogPage[1]).catch(() => null)));
+    todo.forEach((rsn, i) => {
+      if (!results[i]) clogRefreshBackoff.set(rsn.toLowerCase(), Date.now() + STALE_BACKOFF_MS);
+      else clogRefreshBackoff.delete(rsn.toLowerCase());
+    });
+    const after = todo.map(snap);
+    if (!after.some((a, i) => a !== before[i])) return;
+    const fresh = loadState().teams[team.messageId];
+    if (fresh && fresh.status === 'open') await refreshListing(client, fresh);
+  } catch (err) {
+    console.warn('Clog refresh failed:', err.message);
+  }
+}
 
 async function refreshStaleStats(client, team, staleRsns) {
   try {
@@ -1609,6 +1665,9 @@ async function finalizeCreation(interaction, creation) {
   if (board && board.staleRsns.length) {
     // Board drew with expired stats; refresh behind it without blocking.
     refreshStaleStats(interaction.client, team, board.staleRsns).catch(() => {});
+  }
+  if (board && board.clogRsns && board.clogRsns.length) {
+    refreshClogColumns(interaction.client, team, board.clogRsns).catch(() => {});
   }
 
   const teamUrl = `https://discord.com/channels/${config.guildId}/${team.channelId}/${msg.id}`;
@@ -2869,6 +2928,9 @@ async function refreshListing(client, team) {
     // Board drew with expired stats; refresh behind it without blocking.
     refreshStaleStats(client, team, board.staleRsns).catch(() => {});
   }
+  if (board && board.clogRsns && board.clogRsns.length) {
+    refreshClogColumns(client, team, board.clogRsns).catch(() => {});
+  }
   return msg;
 }
 
@@ -3239,6 +3301,7 @@ module.exports = {
   handleTeamModal,
   boardApplies,
   boardSkillForTeam,
+  clogPageForActivity,
   loadRsnLinks,
   getRsn,
   SPECS,
