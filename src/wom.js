@@ -118,7 +118,9 @@ function parseStats(playerJson) {
   for (const sk of SKILL_LEVELS) {
     const entry = skills[sk];
     const lvl = entry && typeof entry.level === 'number' ? entry.level : null;
-    levels[sk] = lvl == null || lvl < 1 ? 1 : Math.min(lvl, 99);
+    // Missing in WOM's snapshot (their record can be missing a skill
+    // entirely) renders as null -> the board shows '-', never a fake 1.
+    levels[sk] = lvl == null ? null : Math.min(Math.max(lvl, 1), 99);
   }
   const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
   return { combat: combatLevel(levels), ...levels, kc, accountType };
