@@ -126,7 +126,7 @@ async function createTicket(interaction, ticketType) {
   const embed = new EmbedBuilder()
     .setTitle(`${theme.emoji} ${theme.label}`)
     .setDescription(theme.intro + (theme.noCloser ? '' : '\n\nStaff will be with you shortly.'))
-    .setColor(t.color ?? 0x5865f2);
+    .setColor(t.color ?? ZAMORAK_RED);
 
   const closeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()

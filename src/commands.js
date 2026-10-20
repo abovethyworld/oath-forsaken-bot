@@ -10,6 +10,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
+const { ZAMORAK_RED } = require('./utils');
 const tickets = require('./tickets');
 const calendar = require('./calendar');
 const polls = require('./polls');
@@ -53,7 +54,7 @@ function panelToEmbed(panel) {
   const embed = new EmbedBuilder()
     .setTitle(panel.title)
     .setDescription(panel.description || '')
-    .setColor(panel.color ?? 0xffd700);
+    .setColor(panel.color ?? ZAMORAK_RED);
   if (panel.banner) embed.setImage(panel.banner);
   return embed;
 }
@@ -102,7 +103,7 @@ async function postRules(interaction) {
   const embed = new EmbedBuilder()
     .setTitle(r.title)
     .setDescription(sectionsToDescription(r.intro, r.sections, r.footer))
-    .setColor(r.color ?? 0xffd700);
+    .setColor(r.color ?? ZAMORAK_RED);
   if (r.banner) embed.setImage(r.banner);
   await channel.send({ embeds: [embed] });
   await interaction.editReply(`Rules posted in ${channel}.`);
@@ -136,7 +137,7 @@ async function postRanks(interaction) {
   const embed = new EmbedBuilder()
     .setTitle(r.title)
     .setDescription(sectionsToDescription(r.intro, r.sections, r.footer))
-    .setColor(r.color ?? 0xffd700);
+    .setColor(r.color ?? ZAMORAK_RED);
   if (r.banner) embed.setImage(r.banner);
   await channel.send({ embeds: [embed] });
   await interaction.editReply(`Ranks info posted in ${channel}.`);
