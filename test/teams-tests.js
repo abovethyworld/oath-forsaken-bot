@@ -61,16 +61,21 @@ let passed = 0;
 let failed = 0;
 const failures = [];
 
+// Tests may be async: chain them so each settles before the next runs
+// and before the summary prints (plain sync tests resolve immediately).
+let testChain = Promise.resolve();
 function test(name, fn) {
-  try {
-    fn();
-    passed++;
-    console.log(`  ✓ ${name}`);
-  } catch (e) {
-    failed++;
-    failures.push({ name, error: e.message });
-    console.log(`  ✗ ${name}: ${e.message}`);
-  }
+  testChain = testChain.then(async () => {
+    try {
+      await fn();
+      passed++;
+      console.log(`  ✓ ${name}`);
+    } catch (e) {
+      failed++;
+      failures.push({ name, error: e.message });
+      console.log(`  ✗ ${name}: ${e.message}`);
+    }
+  });
 }
 
 // ─── Activity registry ──────────────────────────────────────────
@@ -1267,4 +1272,31 @@ test('showoff lookups are cache-first: repeats within 24h make no HTTP call', as
   }
 });
 
-console.log(`Results: ${passed} passed, ${failed} failed`);
+test('item icon fetcher tries RuneLite static cache by id first', async () => {
+  const fs = require('node:fs');
+  const { getItemIcon, iconPath } = require('../src/item-icons');
+  const { encodePng } = require('../src/party-board');
+  const id = 999999001;
+  fs.rmSync(iconPath(id), { force: true });
+  const tiny = encodePng(2, 2, Buffer.from(new Uint8Array(2 * 2 * 4).fill(255)));
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (url) => {
+    seen.push(String(url));
+    return { ok: true, status: 200, arrayBuffer: async () => tiny.buffer.slice(tiny.byteOffset, tiny.byteOffset + tiny.byteLength) };
+  };
+  try {
+    const p = await getItemIcon(id, 'Anything');
+    assert.ok(p && fs.existsSync(p), 'icon cached to disk');
+    assert.ok(seen[0].includes('static.runelite.net/cache/item/icon/999999001.png'), 'RuneLite first');
+    assert.strictEqual(seen.length, 1, 'no wiki call when RuneLite answers');
+  } finally {
+    globalThis.fetch = realFetch;
+    fs.rmSync(iconPath(id), { force: true });
+  }
+});
+
+testChain.then(() => {
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  if (failed) process.exitCode = 1;
+});
