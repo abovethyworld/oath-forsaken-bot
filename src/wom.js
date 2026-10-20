@@ -22,6 +22,11 @@ function loadCache() {
 }
 
 function saveCache(cache) {
+  // Prune expired entries so the file doesn't grow one row per RSN forever.
+  const cutoff = Date.now() - CACHE_MS;
+  for (const [key, entry] of Object.entries(cache)) {
+    if (!entry || typeof entry.fetchedAt !== 'number' || entry.fetchedAt < cutoff) delete cache[key];
+  }
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
   fs.writeFileSync(CACHE_FILE, JSON.stringify(cache));
 }
