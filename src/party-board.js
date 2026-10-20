@@ -110,6 +110,8 @@ function decodePng(buf) {
   let pos = 8;
   let w, h, colorType;
   const idat = [];
+  let palette = null;
+  let trns = null;
   while (pos < buf.length) {
     const len = buf.readUInt32BE(pos);
     const type = buf.toString('ascii', pos + 4, pos + 8);
@@ -120,7 +122,12 @@ function decodePng(buf) {
       if (data[8] !== 8) throw new Error('Only 8-bit PNG supported');
       colorType = data[9];
       if (data[12] !== 0) throw new Error('Interlaced PNG not supported');
-      if (colorType !== 6 && colorType !== 2) throw new Error(`Unsupported color type ${colorType}`);
+      if (colorType !== 6 && colorType !== 2 && colorType !== 3) throw new Error(`Unsupported color type ${colorType}`);
+    } else if (type === 'PLTE') {
+      palette = data;
+    } else if (type === 'tRNS') {
+      // Only palette alpha is handled; RGB tRNS is rare in our sources.
+      if (colorType === 3) trns = data;
     } else if (type === 'IDAT') {
       idat.push(data);
     } else if (type === 'IEND') {
@@ -128,7 +135,7 @@ function decodePng(buf) {
     }
     pos += 12 + len;
   }
-  const bpp = colorType === 6 ? 4 : 3;
+  const bpp = colorType === 6 ? 4 : colorType === 3 ? 1 : 3;
   const stride = w * bpp;
   const raw = zlib.inflateSync(Buffer.concat(idat));
   const out = Buffer.alloc(w * h * 4);
@@ -155,6 +162,17 @@ function decodePng(buf) {
   let rgba;
   if (bpp === 4) {
     rgba = out;
+  } else if (colorType === 3) {
+    // Palette: map each index through PLTE (+ tRNS alpha when present).
+    if (!palette) throw new Error('Palette PNG without PLTE chunk');
+    rgba = Buffer.alloc(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      const idx = out[i] * 3;
+      rgba[i * 4] = palette[idx] || 0;
+      rgba[i * 4 + 1] = palette[idx + 1] || 0;
+      rgba[i * 4 + 2] = palette[idx + 2] || 0;
+      rgba[i * 4 + 3] = trns && out[i] < trns.length ? trns[out[i]] : 255;
+    }
   } else {
     rgba = Buffer.alloc(w * h * 4);
     for (let i = 0; i < w * h; i++) {
@@ -501,4 +519,155 @@ function boardHeight(rowCount) {
   return HEADER_H + 62 * shown + (rowCount > MAX_ROWS ? 56 : 24);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng };
+// ─── Game-panel cards (profile / leaderboard / clog) ───────────────
+// Styled after the in-game RuneProfile panel: dark stone, orange labels,
+// green values. Alex's call 2026-10-19 ("copy how it would look in game").
+const TINT_WHITE = [236, 236, 236];
+const TINT_ORANGE = [255, 160, 60];
+const TINT_GREEN = [110, 255, 130];
+const TINT_DIM = [150, 150, 150];
+const PANEL_BG = [26, 22, 19];
+const TILE_BG = [36, 31, 27];
+
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString('en-US');
+}
+
+// Dark stone texture, deterministic per pixel so renders are stable.
+function stoneCanvas(w, h) {
+  const cv = newCanvas(w, h, PANEL_BG[0], PANEL_BG[1], PANEL_BG[2]);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const hash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+      const v = (hash % 13) - 6;
+      cv.buf[i] = Math.max(0, PANEL_BG[0] + v);
+      cv.buf[i + 1] = Math.max(0, PANEL_BG[1] + v);
+      cv.buf[i + 2] = Math.max(0, PANEL_BG[2] + v);
+    }
+  }
+  hline(cv, 0, 0, w, 150, 24, 24, 6);
+  hline(cv, h - 6, 0, w, 150, 24, 24, 6);
+  return cv;
+}
+
+function fillRect(cv, x, y, w, h, rgb) {
+  for (let yy = Math.max(0, y); yy < Math.min(cv.h, y + h); yy++) {
+    for (let xx = Math.max(0, x); xx < Math.min(cv.w, x + w); xx++) {
+      const i = (yy * cv.w + xx) * 4;
+      cv.buf[i] = rgb[0]; cv.buf[i + 1] = rgb[1]; cv.buf[i + 2] = rgb[2]; cv.buf[i + 3] = 255;
+    }
+  }
+}
+
+function progressBarDraw(cv, x, y, w, frac) {
+  fillRect(cv, x, y, w, 10, [70, 62, 55]);
+  fillRect(cv, x, y, Math.round(w * Math.max(0, Math.min(1, frac))), 10, [150, 24, 24]);
+}
+
+// data = { name, accountLabel, combat, totalLevel, totalXp, clan,
+//          quests:{done,total}, achievements:{done,total},
+//          combatTasks:{done,total}, clog:{done,total} }
+function renderProfileCard(data) {
+  loadAssets();
+  const W = 780;
+  const tiles = [
+    ['Combat Level', String(data.combat != null ? data.combat : '-')],
+    ['Total Level', fmtNum(data.totalLevel)],
+    ['Total XP', fmtNum(data.totalXp)],
+    ['Quests Completed', `${data.quests.done}/${data.quests.total}`],
+    ['Achievements Completed', `${data.achievements.done}/${data.achievements.total}`],
+    ['Combat Tasks Completed', `${data.combatTasks.done}/${data.combatTasks.total}`],
+    ['Collections Logged', `${fmtNum(data.clog.done)}/${fmtNum(data.clog.total)}`],
+    ['Clan', data.clan || '-'],
+  ];
+  const TILE_W = 360, TILE_H = 108, GAP = 24;
+  const rows = Math.ceil(tiles.length / 2);
+  const H = 150 + rows * (TILE_H + GAP) + 8;
+  const cv = stoneCanvas(W, H);
+  drawCentered(cv, W / 2, 28, data.name, TINT_WHITE);
+  if (data.accountLabel) {
+    // small-font centered label under the name
+    const w = textWidth(data.accountLabel, atlasSmall || atlas);
+    drawText(cv, Math.round(W / 2 - w / 2), 92, data.accountLabel, TINT_ORANGE, atlasSmall || atlas);
+  }
+  let ty = 150;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < 2; c++) {
+      const t = tiles[r * 2 + c];
+      if (!t) break;
+      const tx = 24 + c * (TILE_W + GAP);
+      fillRect(cv, tx, ty, TILE_W, TILE_H, TILE_BG);
+      const lw = textWidth(t[0], atlasSmall || atlas);
+      drawText(cv, Math.round(tx + TILE_W / 2 - lw / 2), ty + 12, t[0], TINT_ORANGE, atlasSmall || atlas);
+      drawCentered(cv, tx + TILE_W / 2, ty + 50, t[1], TINT_GREEN);
+    }
+    ty += TILE_H + GAP;
+  }
+  return encodePng(W, H, cv.buf);
+}
+
+// rows = [{ name, obtained, total }] pre-sorted, top first.
+function renderClogLeaderboard(rows) {
+  loadAssets();
+  const W = 780;
+  const shown = rows.slice(0, 10);
+  const ROW_H = 76;
+  const H = 110 + shown.length * ROW_H + 24;
+  const cv = stoneCanvas(W, H);
+  drawCentered(cv, W / 2, 26, 'Clan Clog Leaderboard', TINT_WHITE);
+  let y = 110;
+  shown.forEach((r, i) => {
+    drawText(cv, 28, y + 4, `${i + 1}.`, TINT_ORANGE);
+    const count = `${fmtNum(r.obtained)}/${fmtNum(r.total)}`;
+    const cw = textWidth(count);
+    drawText(cv, W - 28 - cw, y + 4, count, TINT_GREEN);
+    // Truncate the name so it never runs into the count.
+    let name = r.name;
+    const maxW = W - 28 - cw - 24 - 100;
+    if (textWidth(name) > maxW) {
+      while (name.length > 1 && textWidth(name + '...') > maxW) name = name.slice(0, -1);
+      name += '...';
+    }
+    drawText(cv, 100, y + 4, name, TINT_WHITE);
+    progressBarDraw(cv, 100, y + 52, W - 100 - 28, r.total > 0 ? r.obtained / r.total : 0);
+    y += ROW_H;
+  });
+  if (!shown.length) drawCentered(cv, W / 2, 130, 'No profiles yet', TINT_DIM);
+  return encodePng(W, H, cv.buf);
+}
+
+// data = { title, obtained, total, items: [{ icon (decoded img or null), qty }] }
+function renderClogCard(data) {
+  loadAssets();
+  const W = 780;
+  const items = data.items || [];
+  const CELL = 104, PER_ROW = 7;
+  const rows = Math.max(1, Math.ceil(items.length / PER_ROW));
+  const H = 150 + rows * CELL + 24;
+  const cv = stoneCanvas(W, H);
+  drawCentered(cv, W / 2, 26, data.title, TINT_WHITE);
+  const sub = `${fmtNum(data.obtained)}/${fmtNum(data.total)} logged`;
+  const sw = textWidth(sub, atlasSmall || atlas);
+  drawText(cv, Math.round(W / 2 - sw / 2), 84, sub, TINT_DIM, atlasSmall || atlas);
+  progressBarDraw(cv, 60, 122, W - 120, data.total > 0 ? data.obtained / data.total : 0);
+  items.forEach((it, idx) => {
+    const col = idx % PER_ROW;
+    const row = Math.floor(idx / PER_ROW);
+    const cx = 60 + col * CELL + CELL / 2;
+    const cy = 150 + row * CELL + 40;
+    if (it.icon) drawIcon(cv, it.icon, cx, cy, 72);
+    else {
+      fillRect(cv, cx - 34, cy - 34, 68, 68, TILE_BG);
+      drawCentered(cv, cx, cy - 12, '?', TINT_DIM);
+    }
+    if (it.qty > 1) {
+      const label = `x${it.qty}`;
+      const lw = textWidth(label, atlasSmall || atlas);
+      drawText(cv, Math.round(cx - lw / 2), cy + 42, label, TINT_WHITE, atlasSmall || atlas);
+    }
+  });
+  return encodePng(W, H, cv.buf);
+}
+
+module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, stoneCanvas, fmtNum };
