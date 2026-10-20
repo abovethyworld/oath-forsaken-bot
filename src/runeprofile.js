@@ -8,7 +8,7 @@ const path = require('path');
 
 const BASE = 'https://api.runeprofile.com/v1';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
-const CACHE_FILE = path.join(__dirname, '..', 'data', 'rp-cache-v1.json');
+const CACHE_FILE = path.join(__dirname, '..', 'data', 'rp-cache-v2.json');
 const CACHE_MS = 24 * 3600 * 1000;
 const MIN_GAP_MS = 2500; // keyless tier is 30 req/min; pace well under it
 
@@ -84,6 +84,51 @@ function parseClogPage(json) {
   return { obtained: json.obtained, total: json.total };
 }
 
+// Full page parse including the item list for the !clog card.
+function parseClogPageItems(json) {
+  const base = parseClogPage(json);
+  if (!base) return null;
+  const items = Array.isArray(json.items) ? json.items : [];
+  return { ...base, items: items.filter((it) => it && typeof it.id === 'number' && typeof it.name === 'string') };
+}
+
+// Parse the profile bundle pieces into the shapes the card needs.
+function parseSkills(data) {
+  const arr = data && data.data;
+  if (!Array.isArray(arr)) return null;
+  const levels = {};
+  for (const s of arr) {
+    if (s && s.name && typeof s.level === 'number') levels[String(s.name).toLowerCase()] = s.level;
+  }
+  return { levels };
+}
+
+function sumTiers(groups, tierKey) {
+  let done = 0, total = 0;
+  for (const g of groups || []) {
+    const tiers = g && g[tierKey];
+    if (!Array.isArray(tiers)) continue;
+    for (const t of tiers) {
+      if (t && typeof t.completed === 'number' && typeof t.total === 'number') {
+        done += t.completed; total += t.total;
+      }
+    }
+  }
+  return { done, total };
+}
+
+function parseCombatAchievements(json) {
+  const arr = json && json.data;
+  if (!Array.isArray(arr)) return null;
+  return sumTiers([{ tiers: arr }], 'tiers');
+}
+
+function parseDiaries(json) {
+  const arr = json && json.data;
+  if (!Array.isArray(arr)) return null;
+  return sumTiers(arr, 'tiers');
+}
+
 function parseClogTotal(accountJson) {
   const clog = accountJson && accountJson.collectionLog;
   if (!clog || typeof clog.obtained !== 'number' || typeof clog.total !== 'number') return null;
@@ -109,14 +154,23 @@ async function fetchInto(key, endpoint, parse) {
 }
 
 // Returns { obtained, total } | { notFound: true } | null on error.
+// The cache entry also carries the item list for the !clog card.
 async function getClogPage(username, tab, page) {
+  const full = await getClogPageWithItems(username, tab, page);
+  if (!full || full.notFound) return full;
+  return { obtained: full.obtained, total: full.total };
+}
+
+// Returns { obtained, total, items } | { notFound: true } | null on error.
+async function getClogPageWithItems(username, tab, page) {
   const key = clogCacheKey(username, tab, page);
   const cached = loadCache()[key];
   if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
-    return cached.notFound ? { notFound: true } : { obtained: cached.obtained, total: cached.total };
+    if (cached.notFound) return { notFound: true };
+    return { obtained: cached.obtained, total: cached.total, items: cached.items || [] };
   }
   const u = encodeURIComponent(String(username).trim());
-  return fetchInto(key, `/accounts/${u}/collection-log/${encodeURIComponent(tab)}/${encodeURIComponent(page)}`, parseClogPage)
+  return fetchInto(key, `/accounts/${u}/collection-log/${encodeURIComponent(tab)}/${encodeURIComponent(page)}`, parseClogPageItems)
     .catch((err) => {
       console.warn(`RuneProfile clog lookup failed for ${username}: ${err.message}`);
       return null;
@@ -124,6 +178,16 @@ async function getClogPage(username, tab, page) {
 }
 
 // Total collection log: { obtained, total } | { notFound: true } | null.
+// Sync read of the cached clog total: { obtained, total, fresh } |
+// { notFound, fresh } | null. Used by the leaderboard (instant render).
+function getCachedClogTotal(username) {
+  const entry = loadCache()[totalCacheKey(username)];
+  if (!entry) return null;
+  const fresh = Date.now() - entry.fetchedAt < CACHE_MS;
+  if (entry.notFound) return { notFound: true, fresh };
+  return { obtained: entry.obtained, total: entry.total, fresh };
+}
+
 async function getClogTotal(username) {
   const key = totalCacheKey(username);
   const cached = loadCache()[key];
@@ -148,12 +212,59 @@ function getCachedClogPage(username, tab, page) {
   return { obtained: hit.obtained, total: hit.total, fresh };
 }
 
+// Profile bundle: account summary + skills + combat achievements + diaries.
+// Returns { account, skills, ca, diaries } | { notFound: true } | null.
+async function getProfile(username) {
+  const u = encodeURIComponent(String(username).trim());
+  const jobs = [
+    ['profile:account', `/accounts/${u}`, (j) => (j && j.username ? j : null)],
+    ['profile:skills', `/accounts/${u}/skills`, parseSkills],
+    ['profile:ca', `/accounts/${u}/combat-achievements`, parseCombatAchievements],
+    ['profile:diaries', `/accounts/${u}/achievement-diaries`, parseDiaries],
+  ];
+  const out = {};
+  for (const [tag, endpoint, parse] of jobs) {
+    const key = `profile:${String(username).toLowerCase().trim()}:${tag.split(':')[1]}`;
+    const cached = loadCache()[key];
+    if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
+      if (cached.notFound) return { notFound: true };
+      out[tag.split(':')[1]] = cached.data;
+      continue;
+    }
+    const res = await paced(() => rpFetch(endpoint)).catch((err) => {
+      console.warn(`RuneProfile ${tag} lookup failed for ${username}: ${err.message}`);
+      return null;
+    });
+    if (!res) return null;
+    if (res.notFound) {
+      const cache = loadCache();
+      cache[key] = { fetchedAt: Date.now(), notFound: true };
+      saveCache(cache);
+      return { notFound: true };
+    }
+    const parsed = parse(res.json);
+    if (!parsed) return null;
+    const cache = loadCache();
+    cache[key] = { fetchedAt: Date.now(), data: parsed };
+    saveCache(cache);
+    out[tag.split(':')[1]] = parsed;
+  }
+  return { account: out.account, skills: out.skills, ca: out.ca, diaries: out.diaries };
+}
+
 module.exports = {
   getClogPage,
+  getClogPageWithItems,
   getClogTotal,
   getCachedClogPage,
+  getCachedClogTotal,
+  getProfile,
   parseClogPage,
+  parseClogPageItems,
   parseClogTotal,
+  parseSkills,
+  parseCombatAchievements,
+  parseDiaries,
   clogCacheKey,
   CACHE_MS,
 };
