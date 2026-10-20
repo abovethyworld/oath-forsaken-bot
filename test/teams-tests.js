@@ -1323,6 +1323,19 @@ test('/kc slash payload renders a card; slash commands register', async () => {
 
 console.log(`Results: ${passed} passed, ${failed} failed`);
 
+test('showoff cooldown: one notice per window, shared !/slash bucket', () => {
+  const so = require('../src/showoff');
+  const uid = 'cooldown-tester';
+  assert.strictEqual(so.checkCooldown(uid, 1_000_000).wait, 0, 'first use is free');
+  so.noteUse(uid, 1_000_000);
+  const mid = so.checkCooldown(uid, 1_004_000);
+  assert.strictEqual(mid.wait, 6);
+  assert.strictEqual(mid.notify, true, 'first notice fires');
+  const again = so.checkCooldown(uid, 1_005_000);
+  assert.strictEqual(again.notify, false, 'repeat inside window is silent');
+  assert.strictEqual(so.checkCooldown(uid, 1_010_001).wait, 0, 'window expires');
+});
+
 testChain.then(() => {
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;
