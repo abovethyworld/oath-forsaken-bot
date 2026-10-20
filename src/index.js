@@ -184,8 +184,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // !-prefixed show-off commands (!kc / !clog / !profile / !leaderboard). Everything else ignores
 // messages; interactions are the bot's main input.
 client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot || !message.content.startsWith('!')) return;
-  const parts = message.content.slice(1).trim().split(/\s+/);
+  if (message.author.bot) return;
+  let text = message.content.trim();
+  if (text.startsWith('/!')) text = text.slice(1); // accept /!kc as well as !kc
+  if (!text.startsWith('!')) return;
+  const parts = text.slice(1).trim().split(/\s+/);
   const cmd = (parts[0] || '').toLowerCase();
   try {
     if (cmd === 'kc') await handleKcCommand(message, parts.slice(1));
