@@ -229,7 +229,7 @@ const commands = [
       .setDescription('Give a user a strike')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
       .addUserOption((o) => o.setName('user').setDescription('Who to warn').setRequired(true))
-      .addStringOption((o) => o.setName('reason').setDescription('Why').setRequired(true)),
+      .addStringOption((o) => o.setName('reason').setDescription('Why').setRequired(true).setMaxLength(1000)),
     run: warnUser,
   },
   {

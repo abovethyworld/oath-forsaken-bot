@@ -71,8 +71,10 @@ async function fetchEvents() {
     `?key=${API_KEY}` +
     `&timeMin=${now.toISOString()}&timeMax=${twoWeeks.toISOString()}` +
     `&singleEvents=true&orderBy=startTime&maxResults=25`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) {
       console.error('Calendar fetch failed:', res.status);
       return [];
@@ -82,6 +84,8 @@ async function fetchEvents() {
   } catch (err) {
     console.error('Calendar fetch error:', err.message);
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 

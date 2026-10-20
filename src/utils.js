@@ -130,7 +130,17 @@ async function safeFetch(promise, label) {
   }
 }
 
+// Discord caps an embed description at 4096 characters; an over-long
+// build fails the whole send. Builders clamp through here instead of
+// discovering the limit in production.
+const EMBED_DESC_MAX = 4096;
+function clampDesc(text) {
+  if (typeof text !== 'string' || text.length <= EMBED_DESC_MAX) return text;
+  return text.slice(0, EMBED_DESC_MAX - 1) + '…';
+}
+
 module.exports = {
+  clampDesc,
   ZAMORAK_RED,
   DAY_MS,
   MONTH_MS,

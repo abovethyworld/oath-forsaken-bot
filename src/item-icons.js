@@ -50,11 +50,28 @@ async function fetchIcon(id, name) {
   return null;
 }
 
+// Downloads run one at a time with a small gap: a clog card can need
+// dozens of first-time icons at once, and the hosts are shared services.
+const MIN_GAP_MS = 150;
+let iconQueue = Promise.resolve();
+let lastIconFetchAt = 0;
+function pacedFetchIcon(id, name) {
+  const run = iconQueue.then(async () => {
+    const wait = MIN_GAP_MS - (Date.now() - lastIconFetchAt);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastIconFetchAt = Date.now();
+    return fetchIcon(id, name);
+  });
+  iconQueue = run.catch(() => {});
+  return run;
+}
+
 // Local path to the icon, downloading it first when missing.
 async function getItemIcon(id, name) {
+  if (!Number.isInteger(id) || id <= 0) return null;
   const p = iconPath(id);
   if (fs.existsSync(p)) return p;
-  return fetchIcon(id, name);
+  return pacedFetchIcon(id, name);
 }
 
 module.exports = { getItemIcon, iconPath };

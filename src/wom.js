@@ -10,6 +10,7 @@ const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache-v3.json');
 const CACHE_MS = 24 * 3600 * 1000;
+const NOTFOUND_MS = 6 * 3600 * 1000; // unknown names re-check after 6h, not 24h
 const MIN_GAP_MS = 1200; // min time between WOM requests
 
 const SKILLS = ['attack', 'strength', 'defence', 'ranged', 'prayer', 'magic', 'hitpoints'];
@@ -108,13 +109,14 @@ function parseStats(playerJson) {
   const bosses = (snap.data && snap.data.bosses) || snap.bosses || {};
   const kc = {};
   for (const [key, entry] of Object.entries(bosses)) {
-    if (entry && typeof entry.kills === 'number') kc[key] = entry.kills;
+    if (entry && typeof entry.kills === 'number' && entry.kills >= 0) kc[key] = entry.kills;
   }
-  // Minigame scores live under activities (score, not kills). Unranked
-  // activities are simply absent from the snapshot, so nothing to filter.
+  // Minigame scores live under activities (score, not kills). WOM marks
+  // unranked bosses -1 kills (verified live 2026-10-20), so both maps
+  // keep only values >= 0; unranked renders as '-' downstream.
   const activities = (snap.data && snap.data.activities) || snap.activities || {};
   for (const [key, entry] of Object.entries(activities)) {
-    if (entry && typeof entry.score === 'number') kc[key] = entry.score;
+    if (entry && typeof entry.score === 'number' && entry.score >= 0) kc[key] = entry.score;
   }
   for (const sk of SKILL_LEVELS) {
     const entry = skills[sk];
@@ -143,7 +145,8 @@ function cacheLookup(cache, rsn) {
   if (!key) return null;
   const hit = cache[key];
   if (!hit || typeof hit.fetchedAt !== 'number') return null;
-  return { stats: hit.stats, fresh: Date.now() - hit.fetchedAt < CACHE_MS };
+  const ttl = hit.stats && hit.stats.notFound ? NOTFOUND_MS : CACHE_MS;
+  return { stats: hit.stats, fresh: Date.now() - hit.fetchedAt < ttl };
 }
 
 function getCachedStats(rsn) {
@@ -157,7 +160,17 @@ async function getStats(rsn) {
   if (!key) return null;
   const cache = loadCache();
   const hit = cache[key];
-  if (hit && Date.now() - hit.fetchedAt < CACHE_MS) return hit.stats;
+  const ttl = hit && hit.stats && hit.stats.notFound ? NOTFOUND_MS : CACHE_MS;
+  if (hit && Date.now() - hit.fetchedAt < ttl) return hit.stats;
+
+  // Cache unknown names too (shorter TTL): repeat lookups of a garbage
+  // name must not re-run the GET/POST/GET track flow and burn quota.
+  const rememberNotFound = () => {
+    const freshCache = loadCache();
+    freshCache[key] = { fetchedAt: Date.now(), stats: { notFound: true } };
+    saveCache(freshCache);
+    return { notFound: true };
+  };
 
   return paced(async () => {
     try {
@@ -165,9 +178,9 @@ async function getStats(rsn) {
       if (details.notFound) {
         // Start tracking them (the intended one-time flow), then read back.
         const track = await womFetch('POST', `/players/${encodeURIComponent(key)}`, {});
-        if (track.status === 404 || track.status === 400) return { notFound: true };
+        if (track.status === 404 || track.status === 400) return rememberNotFound();
         details = await fetchPlayerDetails(key);
-        if (details.notFound || !details.player) return { notFound: true };
+        if (details.notFound || !details.player) return rememberNotFound();
       }
       const stats = parseStats(details.player);
       if (!stats) return null;
@@ -182,4 +195,4 @@ async function getStats(rsn) {
   });
 }
 
-module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, CACHE_MS };
+module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, CACHE_MS, NOTFOUND_MS };
