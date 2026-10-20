@@ -49,7 +49,8 @@ const client = new Client({
     GatewayIntentBits.Guilds, // slash commands, buttons
     GatewayIntentBits.GuildMembers, // welcome messages (enable "Server Members Intent" in portal)
     GatewayIntentBits.GuildMessages, // reading messages for the !kc / !clog commands
-    GatewayIntentBits.MessageContent, // message text (enable "Message Content Intent" in portal)
+    // MessageContent intent is needed for !-commands: enable it in the portal
+    // ("Message Content Intent" under Bot), then add GatewayIntentBits.MessageContent here.
   ],
 });
 
