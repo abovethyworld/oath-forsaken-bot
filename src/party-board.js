@@ -670,4 +670,31 @@ function renderClogCard(data) {
   return encodePng(W, H, cv.buf);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, stoneCanvas, fmtNum };
+// Decoded WOM boss/activity icon by metric key (null when we don't have it).
+function getBossIcon(key) {
+  loadAssets();
+  return (key && bossIcons[bossIconKey(key)]) || null;
+}
+
+// !kc card: title + one row per KC column (WOM icon, label, value).
+// data = { title, entries: [{ icon, label, value }] }
+function renderKcCard(data) {
+  loadAssets();
+  const W = 780;
+  const ROW_H = 116;
+  const entries = data.entries || [];
+  const H = 110 + entries.length * ROW_H + 20;
+  const cv = stoneCanvas(W, H);
+  drawCentered(cv, W / 2, 26, data.title, TINT_WHITE);
+  let y = 110;
+  for (const e of entries) {
+    if (e.icon) drawIcon(cv, e.icon, 110, y + ROW_H / 2 - 10, 84);
+    const lw = textWidth(e.label, atlasSmall || atlas);
+    drawText(cv, 180, y + 6, e.label, TINT_ORANGE, atlasSmall || atlas);
+    drawText(cv, 180, y + 40, e.value, TINT_GREEN);
+    y += ROW_H;
+  }
+  return encodePng(W, H, cv.buf);
+}
+
+module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, stoneCanvas, fmtNum };

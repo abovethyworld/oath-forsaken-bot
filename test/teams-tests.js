@@ -1192,4 +1192,14 @@ test('RuneProfile parsers: skills, CA, diaries, clog items', () => {
   assert.strictEqual(page.items.length, 1);
 });
 
+test('KC card renders with WOM boss icon', () => {
+  const { renderKcCard, getBossIcon } = require('../src/party-board');
+  const icon = getBossIcon('yama');
+  assert.ok(icon && icon.w > 0, 'yama WOM icon loads');
+  const buf = renderKcCard({ title: 'T: Yama', entries: [{ icon, label: 'Yama', value: '438 KC' }] });
+  assert.strictEqual(buf.toString('ascii', 1, 4), 'PNG');
+  const noIcon = renderKcCard({ title: 'T: X', entries: [{ icon: null, label: 'Artio', value: '10 KC' }] });
+  assert.strictEqual(noIcon.toString('ascii', 1, 4), 'PNG');
+});
+
 console.log(`Results: ${passed} passed, ${failed} failed`);

@@ -5,7 +5,7 @@ const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { getStats, combatLevel } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks } = require('./teams');
-const { renderProfileCard, renderClogLeaderboard, renderClogCard, decodePng } = require('./party-board');
+const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const fs = require('fs');
 const { ZAMORAK_RED } = require('./utils');
@@ -60,12 +60,17 @@ async function handleKcCommand(message, args) {
     return;
   }
   const cols = kcColumnsForTeam({ activity });
-  const lines = cols.map((c) => `**${c.label || prettyMetric(c.metric)}:** ${fmtKc(st.kc ? st.kc[c.metric] : null)}`);
-  const embed = new EmbedBuilder()
-    .setColor(ZAMORAK_RED)
-    .setTitle(`${rsn} — ${ACTIVITIES[activity].name}`)
-    .setDescription(lines.join('\n'));
-  await message.reply({ embeds: [embed] }).catch(() => {});
+  if (!cols.length) {
+    await message.reply(`No kill count is tracked for ${ACTIVITIES[activity].name}.`).catch(() => {});
+    return;
+  }
+  const entries = cols.map((c) => ({
+    icon: getBossIcon(c.icon || c.metric),
+    label: c.label || prettyMetric(c.metric),
+    value: fmtKc(st.kc ? st.kc[c.metric] : null),
+  }));
+  const buf = renderKcCard({ title: `${rsn}: ${ACTIVITIES[activity].name}`, entries });
+  await message.reply({ files: [new AttachmentBuilder(buf, { name: 'kc.png' })] }).catch(() => {});
 }
 
 function progressBar(obtained, total) {
