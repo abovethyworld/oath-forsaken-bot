@@ -156,7 +156,7 @@ async function handleEventButton(interaction) {
     const embed = new EmbedBuilder()
       .setTitle(`📅 ${name}`)
       .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)`)
-      .setColor(0x5865f2);
+      .setColor(0x6b0e0e);
     await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
   }
 
@@ -204,7 +204,7 @@ async function listEvents(interaction) {
     return `**${e.name}** — <t:${u}:F> (<t:${u}:R>)${e.description ? `\n${e.description}` : ''}`;
   });
   await interaction.reply({
-    embeds: [new EmbedBuilder().setTitle('📅 Upcoming events').setDescription(lines.join('\n\n')).setColor(0x5865f2)],
+    embeds: [new EmbedBuilder().setTitle('📅 Upcoming events').setDescription(lines.join('\n\n')).setColor(0x6b0e0e)],
     ephemeral: true,
   });
 }
