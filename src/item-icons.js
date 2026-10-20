@@ -12,24 +12,29 @@ function iconPath(id) {
 }
 
 async function fetchIcon(id, name) {
-  const file = encodeURIComponent(String(name).replace(/ /g, '_'));
-  const url = `https://oldschool.runescape.wiki/images/${file}.png`;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10000);
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctrl.signal });
-    if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.length < 8 || buf.toString('ascii', 1, 4) !== 'PNG') return null;
-    decodePng(buf); // throws if the board's decoder can't handle it
-    fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(iconPath(id), buf);
-    return iconPath(id);
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+  // Stacked items live at <name>_1.png on the wiki (e.g. Oathplate_shards_1).
+  const base = String(name).replace(/ /g, '_');
+  const candidates = [`${base}.png`, `${base}_1.png`];
+  for (const file of candidates) {
+    const url = `https://oldschool.runescape.wiki/images/${encodeURIComponent(file)}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctrl.signal });
+      if (!res.ok) continue;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length < 8 || buf.toString('ascii', 1, 4) !== 'PNG') continue;
+      decodePng(buf); // throws if the board's decoder can't handle it
+      fs.mkdirSync(DIR, { recursive: true });
+      fs.writeFileSync(iconPath(id), buf);
+      return iconPath(id);
+    } catch {
+      continue;
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return null;
 }
 
 // Local path to the icon, downloading it first when missing.
