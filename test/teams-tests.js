@@ -1135,4 +1135,61 @@ test('Yama listing has Set Contract button, others do not', () => {
   assert.ok(!nexIds.some((id) => id.startsWith('team:teamcontract:')), 'nex has no contract button');
 });
 
+test('decodePng handles palette (type 3) PNGs', () => {
+  const { decodePng, encodePng } = require('../src/party-board');
+  const zlib = require('zlib');
+  // Build a 2x2 palette PNG by hand: palette [red, green], pixels [0,1,1,0]
+  const crcTable = [];
+  const deflate = zlib.deflateSync;
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; crcTable[n] = c >>> 0; }
+  const crc = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  const chunk = (type, data) => { const len = Buffer.alloc(4); len.writeUInt32BE(data.length); const td = Buffer.concat([Buffer.from(type), data]); const c = Buffer.alloc(4); c.writeUInt32BE(crc(td)); return Buffer.concat([len, td, c]); };
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(2, 0); ihdr.writeUInt32BE(2, 4); ihdr[8] = 8; ihdr[9] = 3;
+  const plte = Buffer.from([255, 0, 0, 0, 255, 0]);
+  const raw = Buffer.from([0, 0, 1, 0, 1, 0]); // filter byte + 2 indices, two rows
+  const png = Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('PLTE', plte), chunk('IDAT', deflate(raw)), chunk('IEND', Buffer.alloc(0))]);
+  const img = decodePng(png);
+  assert.strictEqual(img.w, 2); assert.strictEqual(img.h, 2);
+  assert.strictEqual(img.rgba[0], 255); assert.strictEqual(img.rgba[1], 0); // red
+  assert.strictEqual(img.rgba[4], 0); assert.strictEqual(img.rgba[5], 255); // green
+  assert.ok(encodePng(img.w, img.h, img.rgba).length > 0);
+});
+
+test('profile card / leaderboard / clog card render PNGs', () => {
+  const { renderProfileCard, renderClogLeaderboard, renderClogCard } = require('../src/party-board');
+  const isPng = (b) => Buffer.isBuffer(b) && b.toString('ascii', 1, 4) === 'PNG';
+  assert.ok(isPng(renderProfileCard({
+    name: 'Test', accountLabel: 'IRONMAN', combat: 100, totalLevel: 1500, totalXp: 50000000,
+    quests: { done: 100, total: 170 }, achievements: { done: 200, total: 492 },
+    combatTasks: { done: 300, total: 599 }, clog: { done: 500, total: 1717 }, clan: 'Clan',
+  })), 'profile card renders');
+  assert.ok(isPng(renderClogLeaderboard([
+    { name: 'A very long name here', obtained: 912, total: 1717 },
+    { name: 'two', obtained: 10, total: 1717 },
+  ])), 'leaderboard renders');
+  assert.ok(isPng(renderClogCard({ title: 'T: X', obtained: 3, total: 10, items: [{ icon: null, qty: 2 }, { icon: null, qty: 1 }] })), 'clog card renders');
+  assert.ok(isPng(renderClogLeaderboard([])), 'empty leaderboard renders');
+});
+
+test('!clog command pages cover all clog activities', () => {
+  const { clogPageForCommand } = require('../src/showoff');
+  assert.deepStrictEqual(clogPageForCommand('cox'), ['Raids', 'Chambers of Xeric']);
+  assert.deepStrictEqual(clogPageForCommand('yama'), ['Bosses', 'Yama']);
+  assert.deepStrictEqual(clogPageForCommand('ba'), ['Minigames', 'Barbarian Assault']);
+  assert.strictEqual(clogPageForCommand('wag'), null, 'WAG has no clog page');
+});
+
+test('RuneProfile parsers: skills, CA, diaries, clog items', () => {
+  const rp = require('../src/runeprofile');
+  const sk = rp.parseSkills({ data: [{ name: 'Attack', level: 99 }, { name: 'Hitpoints', level: 92 }] });
+  assert.strictEqual(sk.levels.attack, 99);
+  assert.strictEqual(sk.levels.hitpoints, 92);
+  const ca = rp.parseCombatAchievements({ data: [{ name: 'Easy', completed: 5, total: 10 }, { name: 'Hard', completed: 3, total: 4 }] });
+  assert.deepStrictEqual(ca, { done: 8, total: 14 });
+  const di = rp.parseDiaries({ data: [{ area: 'Ardougne', tiers: [{ tier: 'Easy', completed: 2, total: 3 }] }, { area: 'Desert', tiers: [{ tier: 'Easy', completed: 1, total: 1 }] }] });
+  assert.deepStrictEqual(di, { done: 3, total: 4 });
+  const page = rp.parseClogPageItems({ obtained: 2, total: 3, items: [{ id: 1, name: 'A', quantity: 2 }, { id: 'x', name: 'Bad' }] });
+  assert.strictEqual(page.items.length, 1);
+});
+
 console.log(`Results: ${passed} passed, ${failed} failed`);
