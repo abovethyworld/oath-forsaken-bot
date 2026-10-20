@@ -1336,6 +1336,44 @@ test('showoff cooldown: one notice per window, shared !/slash bucket', () => {
   assert.strictEqual(so.checkCooldown(uid, 1_010_001).wait, 0, 'window expires');
 });
 
+test('wom parseStats drops the -1 unranked sentinel from KC', () => {
+  const wom = require('../src/wom');
+  const skills = {};
+  for (const sk of ['attack','defence','strength','hitpoints','ranged','prayer','magic']) skills[sk] = { level: 99 };
+  const player = {
+    type: 'ironman',
+    latestSnapshot: { data: {
+      skills,
+      bosses: { yama: { kills: 438 }, the_fractured_archive: { kills: -1 } },
+      activities: { wintertodt: { score: 120 } },
+    } },
+  };
+  const stats = wom.parseStats(player);
+  assert.strictEqual(stats.kc.yama, 438);
+  assert.ok(!('the_fractured_archive' in stats.kc), 'unranked -1 is absent, not -1');
+  assert.strictEqual(stats.kc.wintertodt, 120);
+});
+
+test('wom cacheLookup: notFound entries go stale on the short TTL', () => {
+  const wom = require('../src/wom');
+  const now = Date.now();
+  const cache = {
+    ghost: { fetchedAt: now - 7 * 3600 * 1000, stats: { notFound: true } },
+    real: { fetchedAt: now - 7 * 3600 * 1000, stats: { combat: 100 } },
+  };
+  assert.strictEqual(wom.cacheLookup(cache, 'ghost').fresh, false, 'notFound older than 6h is stale');
+  assert.strictEqual(wom.cacheLookup(cache, 'real').fresh, true, 'real stats stay fresh for 24h');
+});
+
+test('utils clampDesc caps at the Discord embed limit', () => {
+  const { clampDesc } = require('../src/utils');
+  assert.strictEqual(clampDesc('short'), 'short');
+  const long = clampDesc('x'.repeat(5000));
+  assert.strictEqual(long.length, 4096);
+  assert.ok(long.endsWith('…'));
+  assert.strictEqual(clampDesc(null), null);
+});
+
 testChain.then(() => {
   console.log(`Results: ${passed} passed, ${failed} failed`);
   if (failed) process.exitCode = 1;

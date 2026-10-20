@@ -19,7 +19,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
-const { isStaff, ZAMORAK_RED, DAY_MS } = require('./utils');
+const { isStaff, ZAMORAK_RED, DAY_MS, clampDesc } = require('./utils');
 const { getStats, getCachedStats } = require('./wom');
 const { getClogPage, getCachedClogPage } = require('./runeprofile');
 const { renderPartyBoard, MAX_ROWS } = require('./party-board');
@@ -889,7 +889,7 @@ function buildTeamEmbed(team, opts) {
   lines.push(sizeStr ? `Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}` : `Posted by ${names[team.organizerId] || 'organizer'}`);
   if (team.status === 'closed') lines.push('**Closed.**');
 
-  return new EmbedBuilder().setColor(ZAMORAK_RED).setTitle(teamTitle(team)).setDescription(lines.join('\n')).setTimestamp();
+  return new EmbedBuilder().setColor(ZAMORAK_RED).setTitle(teamTitle(team)).setDescription(clampDesc(lines.join('\n'))).setTimestamp();
 }
 
 function shortName(name, max = 24) {
