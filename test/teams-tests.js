@@ -497,7 +497,7 @@ test('buildTeamFromData starts Nex and Hueycoatl open (mass is post-creation)', 
 test('buildTeamEmbed shows Mass for mass teams', () => {
   const team = {
     activity: 'nex', status: 'open', size: null, mass: true, roleMode: null,
-    members: { u1: true, u2: true }, memberNames: { u1: 'Alex', u2: 'Suga', org1: 'Alex' },
+    members: { u1: true, u2: true }, memberNames: { u1: 'Alex', u2: 'Sam', org1: 'Alex' },
     organizerId: 'org1', region: 'US', messageId: 'm1',
   };
   const desc = buildTeamEmbed(team).toJSON().description;
@@ -683,7 +683,7 @@ test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
     activity: 'tob', status: 'open', pre: '4s', roleMode: 'exclusive',
     roles: ['Mage', 'North FZ', 'RDPS', 'MDPS'],
     members: { u1: 'Mage', u2: 'RDPS' },
-    memberNames: { u1: 'Alex', u2: 'Suga', org1: 'Alex' },
+    memberNames: { u1: 'Alex', u2: 'Sam', org1: 'Alex' },
     organizerId: 'org1', world: '388',
   };
   const desc = buildTeamEmbed(team).toJSON().description;

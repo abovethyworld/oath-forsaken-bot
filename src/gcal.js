@@ -10,6 +10,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { google } = require('googleapis');
+const { atomicWrite } = require('./store');
 
 const TOKENS_FILE = path.join(__dirname, '..', 'data', 'gcal-tokens.json');
 const REDIRECT_URI = 'http://localhost:53682/callback';
@@ -30,7 +31,7 @@ function loadTokens() {
 
 function saveTokens(tokens) {
   fs.mkdirSync(path.dirname(TOKENS_FILE), { recursive: true });
-  fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
+  atomicWrite(TOKENS_FILE, tokens);
 }
 
 function isConfigured() {

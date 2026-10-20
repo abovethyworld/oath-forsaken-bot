@@ -521,7 +521,7 @@ function boardHeight(rowCount) {
 
 // ─── Game-panel cards (profile / leaderboard / clog) ───────────────
 // Styled after the in-game RuneProfile panel: dark stone, orange labels,
-// green values. Alex's call 2026-10-19 ("copy how it would look in game").
+// green values, matching the in-game panel look.
 const TINT_WHITE = [236, 236, 236];
 const TINT_ORANGE = [255, 160, 60];
 const TINT_GREEN = [110, 255, 130];

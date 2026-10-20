@@ -14,7 +14,7 @@ const {
 const fs = require('node:fs');
 const path = require('node:path');
 const config = require('./config');
-const { safeFetch, ZAMORAK_RED } = require('./utils');
+const { safeFetch, ZAMORAK_RED, isStaff } = require('./utils');
 const { atomicWrite } = require('./store');
 
 // All IDs from config.json — no hardcoded IDs in this file.
@@ -35,12 +35,21 @@ function rankDisplay(rankName) {
 }
 const DATA_FILE = path.join(__dirname, '..', 'data', 'cc-checklist.json');
 
+function entryId(e) {
+  return `${e.userId}:${e.newRank}:${e.at}`;
+}
+
 function load() {
+  let data;
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
   } catch {
     return { entries: [], messageId: null, page: 0 };
   }
+  for (const e of data.entries || []) {
+    if (!e.id) e.id = entryId(e);
+  }
+  return data;
 }
 
 function save(data) {
@@ -89,18 +98,18 @@ function buildButtons(entries, page) {
   const doneRow = new ActionRowBuilder();
   const holdRow = new ActionRowBuilder();
   for (let i = 0; i < pageEntries.length; i++) {
-    const globalIdx = start + i;
-    const num = globalIdx + 1;
+    const e = pageEntries[i];
+    const num = start + i + 1;
     doneRow.addComponents(
       new ButtonBuilder()
-        .setCustomId(`cc:done:${globalIdx}`)
+        .setCustomId(`cc:done:${e.id}`)
         .setLabel(`${num}`)
         .setStyle(ButtonStyle.Success)
         .setEmoji('\u2705')
     );
     holdRow.addComponents(
       new ButtonBuilder()
-        .setCustomId(`cc:hold:${globalIdx}`)
+        .setCustomId(`cc:hold:${e.id}`)
         .setLabel(`${num}`)
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('\u23f8\ufe0f')
@@ -169,11 +178,13 @@ async function addEntry(guild, userId, oldRank, newRank) {
   const data = load();
   // Don't add duplicates
   if (data.entries.some(e => e.userId === userId && e.newRank === newRank)) return;
+  const at = Math.floor(Date.now() / 1000);
   data.entries.push({
+    id: `${userId}:${newRank}:${at}`,
     userId,
     oldRank: oldRank || 'None',
     newRank,
-    at: Math.floor(Date.now() / 1000),
+    at,
     held: false,
   });
   save(data);
@@ -203,6 +214,14 @@ async function handleCcButton(interaction) {
   const parts = interaction.customId.split(':');
   if (parts[0] !== 'cc') return false;
   const action = parts[1];
+
+  const canUse =
+    isStaff(interaction) ||
+    interaction.member?.roles?.cache?.has(CC_UPDATER_ROLE_ID);
+  if (!canUse) {
+    await interaction.reply({ content: 'Only staff and CC Updaters can use the checklist.', ephemeral: true });
+    return true;
+  }
 
   const data = load();
   data.page = data.page || 0;
@@ -268,9 +287,10 @@ async function handleCcButton(interaction) {
     return true;
   }
 
-  const idx = parseInt(parts[2], 10);
-  if (isNaN(idx) || idx < 0 || idx >= data.entries.length) {
-    await interaction.reply({ content: 'Entry not found.', ephemeral: true });
+  const wantedId = parts.slice(2).join(':');
+  const idx = data.entries.findIndex((e) => e.id === wantedId);
+  if (idx < 0) {
+    await interaction.reply({ content: 'Entry not found. The list may have changed.', ephemeral: true });
     return true;
   }
 
