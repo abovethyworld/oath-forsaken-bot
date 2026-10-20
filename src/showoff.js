@@ -1,7 +1,7 @@
 // !-prefixed show-off commands: !kc <activity> [name], !clog <activity|total> [name],
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
-const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
 const { getStats, combatLevel } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks } = require('./teams');
@@ -45,45 +45,36 @@ function takeActivity(args, table) {
   return (args.shift() || '').toLowerCase();
 }
 
-async function handleKcCommand(message, args) {
-  const activity = takeActivity(args, ACTIVITIES);
+// Payload builders: return what to reply with ({ files }, { embeds }, or
+// { content }), shared by the !-commands and the slash commands.
+async function kcPayload(activity, rsn) {
   if (!activity || !ACTIVITIES[activity]) {
-    const list = Object.keys(ACTIVITIES).join(', ');
-    await message.reply(`Pick an activity: \`!kc <activity> [name]\`\nActivities: ${list}`).catch(() => {});
-    return;
-  }
-  const { rsn, error } = resolveName(args, message.author.id);
-  if (error) {
-    await message.reply(error).catch(() => {});
-    return;
+    return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(ACTIVITIES).join(', ')}` };
   }
   let st;
   try {
     st = await getStats(rsn);
   } catch (err) {
-    await message.reply('Could not reach the stats service right now. Try again in a bit.').catch(() => {});
-    return;
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   }
-  if (!st) {
-    await message.reply('Could not reach the stats service right now. Try again in a bit.').catch(() => {});
-    return;
-  }
-  if (st.notFound) {
-    await message.reply(`Could not find the RuneScape name **${rsn}**. Check the spelling and try again.`).catch(() => {});
-    return;
-  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
   const cols = kcColumnsForTeam({ activity });
-  if (!cols.length) {
-    await message.reply(`No kill count is tracked for ${ACTIVITIES[activity].name}.`).catch(() => {});
-    return;
-  }
+  if (!cols.length) return { content: `No kill count is tracked for ${ACTIVITIES[activity].name}.` };
   const entries = cols.map((c) => ({
     icon: getBossIcon(c.icon || c.metric),
     label: c.label || prettyMetric(c.metric),
     value: fmtKc(st.kc ? st.kc[c.metric] : null),
   }));
   const buf = renderKcCard({ title: `${rsn}: ${ACTIVITIES[activity].name}`, entries });
-  await message.reply({ files: [new AttachmentBuilder(buf, { name: 'kc.png' })] }).catch(() => {});
+  return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
+}
+
+async function handleKcCommand(message, args) {
+  const activity = takeActivity(args, ACTIVITIES);
+  const { rsn, error } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  await message.reply(await kcPayload(activity, rsn)).catch(() => {});
 }
 
 function progressBar(obtained, total) {
@@ -125,51 +116,28 @@ function clogPageForCommand(key) {
 }
 
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
-async function handleClogCommand(message, args) {
-  const key = takeActivity(args, CLOG_PAGES);
-  if (!key) {
-    await message.reply('Usage: `!clog <activity|total> [name]`').catch(() => {});
-    return;
-  }
-  const { rsn, error } = resolveName(args, message.author.id);
-  if (error) {
-    await message.reply(error).catch(() => {});
-    return;
-  }
+async function clogPayload(key, rsn) {
+  if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   if (key === 'total') {
     const res = await getClogTotal(rsn).catch(() => null);
-    if (!res) {
-      await message.reply('Could not reach the collection log service right now. Try again in a bit.').catch(() => {});
-      return;
-    }
-    if (res.notFound) {
-      await message.reply(RP_GUIDE).catch(() => {});
-      return;
-    }
+    if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
+    if (res.notFound) return { content: RP_GUIDE };
     const embed = new EmbedBuilder()
       .setColor(ZAMORAK_RED)
-      .setTitle(`${rsn} — Collection Log`)
+      .setTitle(`${rsn}: Collection Log`)
       .setDescription(progressBar(res.obtained, res.total));
-    await message.reply({ embeds: [embed] }).catch(() => {});
-    return;
+    return { embeds: [embed] };
   }
   const page = clogPageForCommand(key);
   if (!page) {
     const wag = key === 'wag';
-    await message.reply(wag
+    return { content: wag
       ? 'Wilderness Agility has no collection log page to show.'
-      : `No collection log page for \`${key}\`. Try one of: ${Object.keys(CLOG_PAGES).join(', ')}.`).catch(() => {});
-    return;
+      : `No collection log page for \`${key}\`. Try one of: ${Object.keys(CLOG_PAGES).join(', ')}.` };
   }
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
-  if (!res) {
-    await message.reply('Could not reach the collection log service right now. Try again in a bit.').catch(() => {});
-    return;
-  }
-  if (res.notFound) {
-    await message.reply(RP_GUIDE).catch(() => {});
-    return;
-  }
+  if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
+  if (res.notFound) return { content: RP_GUIDE };
   const obtained = (res.items || []).filter((it) => it.quantity > 0);
   const drawn = [];
   for (const it of obtained.slice(0, 49)) {
@@ -186,24 +154,20 @@ async function handleClogCommand(message, args) {
     total: res.total,
     items: drawn,
   });
-  await message.reply({ files: [new AttachmentBuilder(buf, { name: 'clog.png' })] }).catch(() => {});
+  return { files: [new AttachmentBuilder(buf, { name: 'clog.png' })] };
 }
 
-async function handleProfileCommand(message, args) {
+async function handleClogCommand(message, args) {
+  const key = takeActivity(args, CLOG_PAGES);
   const { rsn, error } = resolveName(args, message.author.id);
-  if (error) {
-    await message.reply(error).catch(() => {});
-    return;
-  }
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  await message.reply(await clogPayload(key, rsn)).catch(() => {});
+}
+
+async function profilePayload(rsn) {
   const prof = await getProfile(rsn).catch(() => null);
-  if (!prof) {
-    await message.reply('Could not reach the profile service right now. Try again in a bit.').catch(() => {});
-    return;
-  }
-  if (prof.notFound) {
-    await message.reply(RP_GUIDE).catch(() => {});
-    return;
-  }
+  if (!prof) return { content: 'Could not reach the profile service right now. Try again in a bit.' };
+  if (prof.notFound) return { content: RP_GUIDE };
   const a = prof.account;
   const buf = renderProfileCard({
     name: a.username || rsn,
@@ -217,7 +181,13 @@ async function handleProfileCommand(message, args) {
     clog: { done: a.collectionLog ? a.collectionLog.obtained : 0, total: a.collectionLog ? a.collectionLog.total : 0 },
     clan: a.clan && a.clan.name ? a.clan.name : null,
   });
-  await message.reply({ files: [new AttachmentBuilder(buf, { name: 'profile.png' })] }).catch(() => {});
+  return { files: [new AttachmentBuilder(buf, { name: 'profile.png' })] };
+}
+
+async function handleProfileCommand(message, args) {
+  const { rsn, error } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  await message.reply(await profilePayload(rsn)).catch(() => {});
 }
 
 // Leaderboard rows from cached clog totals (instant); missing profiles get a
@@ -239,14 +209,87 @@ function leaderboardRows() {
   return rows;
 }
 
-async function handleLeaderboardCommand(message) {
+async function leaderboardPayload() {
   const rows = leaderboardRows();
   if (!rows.length) {
-    await message.reply('No ranked profiles yet. Link an RSN and use `!clog total` once, or wait a minute and try again.').catch(() => {});
-    return;
+    return { content: 'No ranked profiles yet. Link an RSN and use `!clog total` once, or wait a minute and try again.' };
   }
   const buf = renderClogLeaderboard(rows);
-  await message.reply({ files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] }).catch(() => {});
+  return { files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] };
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
+async function handleLeaderboardCommand(message) {
+  await message.reply(await leaderboardPayload()).catch(() => {});
+}
+
+// ---- slash commands (same payloads as the !-commands) --------------------
+function resolveNameFor(userId, named) {
+  if (named && String(named).trim()) {
+    const name = String(named).trim().replace(/\s+/g, ' ');
+    if (!RSN_RE.test(name)) return { error: 'That name has characters RuneScape does not allow. Try again.' };
+    return { rsn: name };
+  }
+  const linked = getRsn(userId);
+  if (!linked) return { error: 'Link your RSN first with the Link RSN button, or pass a name in the player option.' };
+  return { rsn: linked };
+}
+
+async function slashReply(interaction, payloadPromise) {
+  await interaction.deferReply();
+  const payload = await payloadPromise;
+  await interaction.editReply(payload).catch(() => {});
+}
+
+const activityChoices = Object.entries(ACTIVITIES).map(([value, a]) => ({ name: a.name, value }));
+const clogChoices = [
+  { name: 'Total (whole log)', value: 'total' },
+  ...Object.keys(CLOG_PAGES).map((k) => ({ name: ACTIVITIES[k] ? ACTIVITIES[k].name : k, value: k })),
+];
+
+const commands = [
+  {
+    data: new SlashCommandBuilder()
+      .setName('kc')
+      .setDescription("Show a player's boss kill count card")
+      .addStringOption((o) => o.setName('activity').setDescription('Which boss or raid').setRequired(true).addChoices(...activityChoices))
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('clog')
+      .setDescription("Show a player's collection log card")
+      .addStringOption((o) => o.setName('activity').setDescription('Which page, or the whole log').setRequired(true).addChoices(...clogChoices))
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('profile')
+      .setDescription("Show a player's RuneProfile card")
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      await slashReply(interaction, profilePayload(rsn));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('leaderboard')
+      .setDescription('Collection log leaderboard for linked clan members'),
+    run: async (interaction) => {
+      await slashReply(interaction, leaderboardPayload());
+    },
+  },
+];
+
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows };
