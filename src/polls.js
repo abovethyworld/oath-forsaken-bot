@@ -28,7 +28,7 @@ function pollEmbed(poll) {
   });
   return new EmbedBuilder()
     .setTitle(`📊 ${poll.question}`)
-    .setDescription(lines.join('\n') + `\n\n*${total} total vote${total === 1 ? '' : 's'} — click to vote, click again to change*`)
+    .setDescription(lines.join('\n') + `\n\n*${total} total vote${total === 1 ? '' : 's'}*`)
     .setColor(0x6b0e0e)
     .setFooter({ text: `Poll by ${poll.authorTag}` });
 }

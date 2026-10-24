@@ -101,7 +101,7 @@ function discordTimestamp(dateStr) {
 
 function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL) {
   const embed = new EmbedBuilder()
-    .setTitle('Oath Forsaken Event Calendar')
+    .setTitle('⛧ Event Calendar ⛧')
     .setColor(ZAMORAK_RED)
     .setDescription('*Upcoming Events over the next 2 weeks*')
     .setFooter({ text: 'Oath Forsaken Event Calendar' })
@@ -172,6 +172,7 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
         m.author.id === client.user.id &&
         m.embeds.some(
           (e) =>
+            e.title === '⛧ Event Calendar ⛧' ||
             e.title === 'Oath Forsaken Event Calendar' ||
             e.title === '⛧ Upcoming Events ⛧'
         )
