@@ -49,7 +49,7 @@ async function postApplicationPanel(channel) {
   const guild = channel.guild;
 
   const embed = new EmbedBuilder()
-    .setTitle('📝 Clan Application')
+    .setTitle('⛧ Clan Application ⛧')
     .setDescription(
       `To join **${guild.name}**, pick the application that fits you.\n\n` +
         `**Ironman** — you play an ironman.\n` +
@@ -82,7 +82,7 @@ async function setupApplications(interaction) {
 async function applyCommand(interaction) {
   const types = appTypes();
   const embed = new EmbedBuilder()
-    .setTitle('📝 Clan Application')
+    .setTitle('⛧ Clan Application ⛧')
     .setDescription(
       `Pick the application that fits you.\n\n` +
         `**Ironman** — you play an ironman.\n` +

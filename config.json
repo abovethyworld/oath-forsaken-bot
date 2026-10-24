@@ -108,9 +108,9 @@
       "banner": "https://lh3.googleusercontent.com/d/1G_HSGorfzH_VoOSTmbKVzL7XM55YGWQX"
     },
     {
-      "title": "CLAN ROLES",
+      "title": "\u26e7 Clan Roles \u26e7",
       "color": 7015950,
-      "description": "Please click the button with each clan related role that you would like to have.\n\nKeep in mind that these roles may be pinged.\n\n<@&1558399088687587401> - Get notifications for all clan events!\n<@&1558399093905293445> - Get pinged when we run giveaways.\n<@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<@&1558468773806084168> - Unlocks hidden channels for RS3, Dragonwilds, WoW, and more.\n<@&1558468788897452174> - Chat about movies, shows, and other games.",
+      "description": "Tap each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.",
       "banner": "https://lh3.googleusercontent.com/d/16vydXtdTcjnau6S1l0564WrCw9HYckk2",
       "buttons": [
         {
@@ -155,9 +155,9 @@
       ]
     },
     {
-      "title": "PVM ROLES",
+      "title": "\u26e7 PvM Roles \u26e7",
       "color": 7015950,
-      "description": "Please click the button with each PvM related role that you would like to have.\n\nKeep in mind that these roles may be pinged for forming bossing teams in <#1558428263322357811>.",
+      "description": "Tap each PvM role you want.\n\nThese roles get pinged when people form bossing teams in <#1558428263322357811>.",
       "banner": "https://lh3.googleusercontent.com/d/1ImVfnZbTmZn1RcNmS2JOA3DQ2U-SHt6G",
       "buttons": [
         {
@@ -280,7 +280,7 @@
       ]
     },
     {
-      "title": "SKILLING ROLES",
+      "title": "\u26e7 Skilling Roles \u26e7",
       "color": 7015950,
       "description": "Pick the skilling activities you do. You'll get pinged when people are putting together a group in <#1558428263322357811>.",
       "banner": "https://lh3.googleusercontent.com/d/1pNLTIUHNbHOZaA6RbTrfMKaBKKXgXoQS",
@@ -333,9 +333,9 @@
       ]
     },
     {
-      "title": "WISE OLD MAN WEEKLY COMPS",
+      "title": "\u26e7 Wise Old Man Weekly Comps \u26e7",
       "color": 7015950,
-      "description": "Please click the button with each WOM competition you'd like to join.\n\nKeep in mind that these roles may be pinged when competition polls are announced, events start, and winners are announced.\n\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>\n\n_Top 3 in each competition earn the winner role. Discord role held for 6 weeks, CC rank title for 2 weeks._",
+      "description": "Tap each comp you want in on.\n\nThese roles get pinged for comp polls, starts, and winner posts.\n\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>\n\n_Top 3 in each competition earn the winner role. Discord role held for 6 weeks, CC rank title for 2 weeks._",
       "buttons": [
         {
           "label": "Boss of the Week",
@@ -371,84 +371,92 @@
   "rules": {
     "banner": "https://lh3.googleusercontent.com/d/1TI29g6w1TEaU2NLdfmN4-GkdGIbsFL6R",
     "color": 7015950,
-    "footer": "Staff enforce the rules. If you are not sure about something just ask a mod.\nSee <#1558481986706870445> for the rank ladders.",
-    "intro": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\nIf you are in this server you agree to the rules below.",
+    "footer": "Our staff team enforces these rules to keep Oath Forsaken a great place to be. Questions? Open a ticket in <#1558399103757717518>.\nSee <#1558481986706870445> for rank information and <#1558399101454786670> to set up your notifications.",
+    "intro": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\n**New here?**\n1. Pick your application in <#1558905814482423818>\n2. Once approved, you'll unlock the rest of the server. Grab your roles in <#1558399101454786670>\n\n**TL;DR:** Be respectful. Ironman-centric clan. FFA loot.\n\nIf you are in this server you agree to the rules below.",
     "sections": [
       {
-        "heading": "1. Be respectful",
-        "body": "Don't be a jerk. No harassment, no hate speech, no drama. Banter is fine."
+        "heading": "\u26e7 Be respectful",
+        "body": "We're here to have fun together. Treat everyone with respect. No harassment, hate speech, or drama. Don't ask others for items or GP. Don't crash others or PK clanmates. Friendly banter is always welcome."
       },
       {
-        "heading": "2. No scamming",
-        "body": "Scam a clanmate and you are banned. No second chances."
+        "heading": "\u26e7 LGBTQ+ friendly",
+        "body": "We're LGBTQ+ friendly. Whoever you are, you belong here. Discrimination isn't tolerated."
       },
       {
-        "heading": "3. Keep it SFW",
-        "body": "Keep public channels clean. Keep it classy."
+        "heading": "\u26e7 No scamming",
+        "body": "Trust matters here. Scamming a fellow clanmate will result in a permanent ban and a report to RuneWatch. If you lend items, do so at your own risk and always use collateral."
       },
       {
-        "heading": "4. No spam or ads",
-        "body": "No spam. Don't advertise other servers unless staff says it is ok."
+        "heading": "\u26e7 Keep it clean",
+        "body": "Keep public channels safe for work so everyone feels comfortable here."
       },
       {
-        "heading": "5. Iron first clan",
-        "body": "This is an ironman clan. Mains are welcome in the Discord, you earn seniority ranks and you can join casual stuff like skilling events and weekly PvM nights. But bingos and WOM comps are ironmen only."
+        "heading": "\u26e7 No spam or advertising",
+        "body": "Don't spam or advertise other servers without checking with staff first."
       },
       {
-        "heading": "6. No begging",
-        "body": "Don't ask clanmates for handouts, items or GP."
+        "heading": "\u26e7 Ironman-centric",
+        "body": "Oath Forsaken is an ironman-centric clan. Mains are welcome too. Earn seniority, join events, game nights, group PvM and skilling. Be part of the clan. Alts are welcome and earn ranks independently. Our team events and weekly skilling, raiding, and bossing competitions are designed for ironmen."
       },
       {
-        "heading": "7. No poaching",
-        "body": "Don't try to recruit our members to other clans."
+        "heading": "\u26e7 No poaching",
+        "body": "Don't recruit our members to other clans."
       },
       {
-        "heading": "8. Pvm etiquette",
-        "body": "We are an FFA clan. You keep your own drops. If your group wants to split instead, agree on it before you go. Bring screenshots if there is a dispute."
+        "heading": "\u26e7 PvM etiquette",
+        "body": "We're an FFA clan, so your drops are yours to keep. If your group would prefer to split, agree on it before you head out. Screenshots help resolve any disputes."
       },
       {
-        "heading": "9. Discord name matches RSN",
-        "body": "Match your Discord name to your RSN so we know who is who. Ask staff if you need help."
+        "heading": "\u26e7 Match your RSN",
+        "body": "Set your Discord nickname to match your RuneScape name so we know who's who. Staff are happy to help if you need it."
       },
       {
-        "heading": "10. Alt accounts",
-        "body": "Alts are welcome but they earn ranks on their own like everyone else."
+        "heading": "\u26e7 Handle disputes maturely",
+        "body": "If something comes up, try to work it out directly first. Staff are here if you need them, but they're the last resort."
       },
       {
-        "heading": "11. Be an adult",
-        "body": "Handle your own disputes first like an adult. Staff are the last resort, not the first stop."
+        "heading": "\u26e7 Stay active",
+        "body": "After 90 days of no gains and no Discord activity without notifying staff, you may be removed from the CC and Discord. Doesn't apply to alts.\n\nIf you join but don't apply within 7 days, you'll be removed from the server."
       },
       {
-        "heading": "12. Stay active",
-        "body": "Gone a long time with no word and you might get removed from the clan."
+        "heading": "\u26e7 Keep chat comfortable",
+        "body": "Avoid spoilers for games, shows, books, or movies. Political discussions stay out of the server to keep things relaxed for everyone."
+      },
+      {
+        "heading": "\u26e7 Jagex rules apply",
+        "body": "All of Jagex's rules apply here as well."
       }
     ],
-    "title": "RULES"
+    "title": "\u26e7 Rules \u26e7"
   },
   "strikeSystem": {
     "banner": "https://lh3.googleusercontent.com/d/1hSDNxaZHmS1H3kBrGjsuLLeJT4u7eAuH",
     "color": 7015950,
-    "footer": "Strikes go away after 90 days of good behavior. Staff decisions are final. Got an issue, bring it up in private, not in public channels.",
-    "intro": "Staff keep track of strikes. 3 strikes and you are out.",
+    "footer": "Strikes expire after 90 days of good behavior. We're all here to enjoy the game together.",
+    "intro": "We use a three-strike system to keep things fair.",
     "levels": [
       {
-        "heading": "Strike 1: verbal warning",
-        "body": "Staff DMs you about what went wrong."
+        "heading": "Strike 1: Warning",
+        "body": "A staff member will reach out to discuss what happened."
       },
       {
-        "heading": "Strike 2: muted 24 hours",
-        "body": "Last chance to shape up."
+        "heading": "Strike 2: 24-hour mute",
+        "body": "This is your final warning."
       },
       {
-        "heading": "Strike 3: banned",
-        "body": "Removed from the server and the in-game clan."
+        "heading": "Strike 3: Ban",
+        "body": "Removal from the server and the in-game clan."
       },
       {
-        "heading": "Immediate ban, no strikes",
-        "body": "Hate speech, doxxing, or scamming gets you banned on the spot. No warnings."
+        "heading": "Immediate ban (no strikes):",
+        "body": "Hate speech, doxxing, or scamming will result in an immediate permanent ban."
+      },
+      {
+        "heading": "Appeals",
+        "body": "We believe in second chances. If you feel a strike or ban was unfair, please open a ticket in <#1558399103757717518>.\n\u26e7 Staff will review every appeal carefully.\n\u26e7 A successful appeal means a fresh start, though previous strikes will remain on record.\n\u26e7 If issues continue after a successful appeal, the ban will be permanent."
       }
     ],
-    "title": "STRIKE SYSTEM"
+    "title": "\u26e7 Strike System \u26e7"
   },
   "welcome": {
     "banner": "",
