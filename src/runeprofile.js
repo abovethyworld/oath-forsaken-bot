@@ -136,6 +136,47 @@ function parseClogTotal(accountJson) {
   return { obtained: clog.obtained, total: clog.total };
 }
 
+// Tab order for the summary card, matching the in-game log.
+const CLOG_TAB_ORDER = ['Bosses', 'Raids', 'Clues', 'Minigames', 'Other'];
+
+// Summary parse of the collection-log index: the official unique
+// obtained/total plus per-tab counts. Tab counts do NOT sum to the
+// headline: the Other tab repeats Bosses items (All Pets, Slayer), so
+// shared items count once in the headline and once per tab they sit on.
+// Both figures are what the API returns; neither is adjusted.
+function parseClogSummary(json) {
+  if (!json || typeof json.obtained !== 'number' || typeof json.total !== 'number' || !Array.isArray(json.tabs)) return null;
+  const tabs = json.tabs.map((tab) => {
+    const items = (tab.pages || []).flatMap((page) => (page.items || [])
+      .filter((it) => it && typeof it.id === 'number' && typeof it.name === 'string'));
+    return {
+      name: String(tab.name || 'Other'),
+      obtained: items.filter((it) => (it.quantity || 0) > 0).length,
+      total: items.length,
+    };
+  });
+  const order = (name) => { const i = CLOG_TAB_ORDER.indexOf(name); return i < 0 ? 99 : i; };
+  tabs.sort((a, b) => order(a.name) - order(b.name));
+  return { obtained: json.obtained, total: json.total, tabs };
+}
+
+// { obtained, total, tabs: [{ name, obtained, total }] } |
+// { notFound: true } | null on error. Cached 24h.
+async function getClogSummary(username) {
+  const key = `clogsummary:${String(username).toLowerCase().trim()}`;
+  const cached = loadCache()[key];
+  if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
+    if (cached.notFound) return { notFound: true };
+    return { obtained: cached.obtained, total: cached.total, tabs: cached.tabs || [] };
+  }
+  const u = encodeURIComponent(String(username).trim());
+  return fetchInto(key, `/accounts/${u}/collection-log`, parseClogSummary)
+    .catch((err) => {
+      console.warn(`RuneProfile summary lookup failed for ${username}: ${err.message}`);
+      return null;
+    });
+}
+
 // The account collection-log index lists EVERY clog item (game-wide),
 // deduped by item id. Used by the icon warmer to know the full set.
 function parseClogIndex(json) {
@@ -290,6 +331,7 @@ async function getProfile(username) {
 module.exports = {
   getClogPage,
   getClogIndex,
+  getClogSummary,
   parseClogIndex,
   getClogPageWithItems,
   getClogTotal,
