@@ -673,6 +673,53 @@ function renderClogCard(data) {
   return encodePng(W, H, cv.buf);
 }
 
+// Simple summary card for !clog total: headline unique total, percent on
+// the bar, one box per log tab. No Latest strip: the API carries no
+// recency data, so nothing there would be real. Footer points at the
+// existing per-page command, never at a viewer that does not exist.
+// data = { name, obtained, total, tabs: [{ name, obtained, total }] }
+function renderClogSummaryCard(data) {
+  loadAssets();
+  const W = 780;
+  const M = 24, GAP = 24, BOX_W = 228, BOX_H = 108, PER_ROW = 3;
+  const tabs = data.tabs || [];
+  const rows = Math.max(1, Math.ceil(tabs.length / PER_ROW));
+  const barY = 178, boxTop = 256;
+  const footerY = boxTop + rows * BOX_H + (rows - 1) * GAP + 24;
+  const H = footerY + 44;
+  const cv = stoneCanvas(W, H);
+  drawCentered(cv, W / 2, 26, fitTitle(data.name, W - 48), TINT_WHITE);
+  const sub = 'COLLECTIONS LOGGED';
+  const sw = textWidth(sub, atlasSmall || atlas);
+  drawText(cv, Math.round(W / 2 - sw / 2), 84, sub, TINT_ORANGE, atlasSmall || atlas);
+  drawCentered(cv, W / 2, 118, `${fmtNum(data.obtained)} / ${fmtNum(data.total)}`, TINT_GREEN);
+  const frac = data.total > 0 ? data.obtained / data.total : 0;
+  const barX = 60, barW = W - 120;
+  fillRect(cv, barX, barY, barW, 24, [70, 62, 55]);
+  fillRect(cv, barX, barY, Math.round(barW * Math.max(0, Math.min(1, frac))), 24, [150, 24, 24]);
+  const pct = `${(frac * 100).toFixed(1)}%`;
+  const pw = textWidth(pct, atlasSmall || atlas);
+  drawText(cv, barX + barW - pw - 10, barY + 2, pct, TINT_WHITE, atlasSmall || atlas);
+  const catLabel = 'BY CATEGORY';
+  drawText(cv, M, 226, catLabel, TINT_ORANGE, atlasSmall || atlas);
+  tabs.forEach((t, idx) => {
+    const row = Math.floor(idx / PER_ROW);
+    const inRow = Math.min(PER_ROW, tabs.length - row * PER_ROW);
+    const rowW = inRow * BOX_W + (inRow - 1) * GAP;
+    const col = idx % PER_ROW;
+    const bx = Math.round((W - rowW) / 2) + col * (BOX_W + GAP);
+    const by = boxTop + row * (BOX_H + GAP);
+    fillRect(cv, bx, by, BOX_W, BOX_H, TILE_BG);
+    const lw = textWidth(t.name, atlasSmall || atlas);
+    drawText(cv, Math.round(bx + BOX_W / 2 - lw / 2), by + 12, t.name, TINT_ORANGE, atlasSmall || atlas);
+    drawCentered(cv, bx + BOX_W / 2, by + 50, `${fmtNum(t.obtained)}/${fmtNum(t.total)}`, TINT_GREEN);
+  });
+  const foot = 'Type !clog yama for a single boss page.';
+  const fw = textWidth(foot, atlasSmall || atlas);
+  drawText(cv, Math.round(W / 2 - fw / 2), footerY, foot, TINT_DIM, atlasSmall || atlas);
+  return encodePng(W, H, cv.buf);
+}
+
 // Decoded WOM boss/activity icon by metric key (null when we don't have it).
 function getBossIcon(key) {
   loadAssets();
@@ -710,4 +757,4 @@ function renderKcCard(data) {
   return encodePng(W, H, cv.buf);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, fitTitle, stoneCanvas, fmtNum };
+module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, fitTitle, stoneCanvas, fmtNum };

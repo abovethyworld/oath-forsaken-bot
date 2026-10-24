@@ -1,14 +1,13 @@
 // !-prefixed show-off commands: !kc <activity> [name], !clog <activity|total> [name],
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
-const { EmbedBuilder, AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
+const { AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
 const { getStats, combatLevel } = require('./wom');
-const { getClogPageWithItems, getClogTotal, getProfile, getCachedClogTotal } = require('./runeprofile');
+const { getClogPageWithItems, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks } = require('./teams');
-const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
+const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const fs = require('fs');
-const { ZAMORAK_RED } = require('./utils');
 
 const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
 
@@ -159,14 +158,11 @@ function clogPageForCommand(key) {
 async function clogPayload(key, rsn) {
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   if (key === 'total') {
-    const res = await getClogTotal(rsn).catch(() => null);
+    const res = await getClogSummary(rsn).catch(() => null);
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
-    const embed = new EmbedBuilder()
-      .setColor(ZAMORAK_RED)
-      .setTitle(`${rsn}: Collection Log`)
-      .setDescription(progressBar(res.obtained, res.total));
-    return { embeds: [embed] };
+    const buf = renderClogSummaryCard({ name: rsn, obtained: res.obtained, total: res.total, tabs: res.tabs });
+    return { files: [new AttachmentBuilder(buf, { name: 'clog.png' })] };
   }
   const page = clogPageForCommand(key);
   if (!page) {
