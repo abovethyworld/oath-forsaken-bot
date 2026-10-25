@@ -1,10 +1,15 @@
 // Wise Old Man API client for the party board.
-// Good-citizen rules (per WOM docs): paced requests, identifying user
-// agent, 24h cache, never poll. No API key yet (20 req/min is plenty);
-// set WOM_API_KEY in .env later to raise it to 100/min.
+// Good-citizen rules (per WOM docs and the Oct 25, 2026 rate-limit
+// announcement): paced requests, identifying user agent, 24h cache,
+// never poll, and all live requests gated through the shared limiter in
+// wom-limiter.js (keyless 20/min, 500/hr, 3,000/day; keyed 100/min,
+// 20,000/day). Cached reads never count against the caps.
 const fs = require('fs');
 const path = require('path');
 const { atomicWrite } = require('./store');
+const { createLimiter } = require('./wom-limiter');
+
+const limiter = createLimiter();
 
 const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
@@ -54,6 +59,9 @@ function paced(fn) {
 const FETCH_TIMEOUT_MS = 15000;
 
 async function womFetch(method, endpoint, body) {
+  // Every live request takes a limiter slot first. Cached reads never
+  // reach here, so they never count against WOM's caps.
+  await limiter.takeSlot();
   const headers = { 'User-Agent': USER_AGENT, 'Content-Type': 'application/json' };
   if (process.env.WOM_API_KEY) headers['x-api-key'] = process.env.WOM_API_KEY;
   const ctrl = new AbortController();
@@ -74,11 +82,15 @@ async function womFetch(method, endpoint, body) {
   }
   if (res.status === 429) {
     const retryAfter = parseInt(res.headers.get('Retry-After') || '60', 10);
+    // Back off: record the block and do NOT retry this request. The next
+    // call re-enters the limiter after the block instead of hammering.
+    limiter.noteRateLimited(retryAfter);
     const err = new Error(`WOM rate limited, retry after ${retryAfter}s`);
     err.retryAfter = retryAfter;
     err.rateLimited = true;
     throw err;
   }
+  limiter.noteSuccess();
   return res;
 }
 
