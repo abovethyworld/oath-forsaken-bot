@@ -2,6 +2,8 @@
 // A daily loop assigns each member the seniority role matching their server
 // join date: Initiate (<1 mo) -> Acolyte (1-2) -> Devout (3-5) ->
 // Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
+// Only Iron Sworn/Unbound members get ranks (guard set 2026-10-25);
+// everyone else is skipped and stripped of any seniority rank they hold.
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
 // On rank-up, the bot pings the member in #general with their story.
 // Stories finalized 2026-10-13: unified single arc (no iron/main split).
@@ -129,19 +131,21 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (m.user.bot) continue;
       // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
       if (store.isSeniorityHeld(guild.id, m.id)) continue;
-      // Guests and Friends of the Clan never get seniority roles
-      // Strip any they already have, then skip.
+      // Only clan members (Iron Sworn or Unbound) get seniority roles.
+      // Guests, Friends of the Clan, and joiners who have not applied yet
+      // hold neither role: strip any seniority rank they hold, then skip.
       // The permission-audit canary (turtlepace7 alt) must stay @everyone-only.
-      const skipIds = [config.recruit?.types?.guest?.roleId, SEN.friendOfClanRoleId].filter(Boolean);
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
-      if (skipIds.some((id) => m.roles.cache.has(id))) {
+      const memberRoleIds = [IRON_ROLE_ID, MAIN_ROLE_ID].filter(Boolean);
+      const isMember = memberRoleIds.length === 0 || memberRoleIds.some((id) => m.roles.cache.has(id));
+      if (!isMember) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
           if (dryRun) {
-            changes.push(`${m.user.tag}: strip seniority (guest/friend)`);
+            changes.push(`${m.user.tag}: strip seniority (not a clan member)`);
           } else {
-            await m.roles.remove(rankIds, 'Seniority sync: Guest/Friend of Clan should not have seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+            await m.roles.remove(rankIds, 'Seniority sync: only clan members (Iron Sworn/Unbound) hold seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
           }
         }
         continue;
