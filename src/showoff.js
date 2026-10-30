@@ -94,9 +94,94 @@ function takeActivity(args, table) {
 
 // Payload builders: return what to reply with ({ files }, { embeds }, or
 // { content }), shared by the !-commands and the slash commands.
+// !kc beyond the team-finder activities: every other kill-count
+// metric Wise Old Man tracks. Team activities stay in ACTIVITIES
+// (teams.js) so the Find a Team panel is untouched; this table is
+// show-off only. Multi-metric cards group the variants members
+// expect together (Dagannoth Kings, Gauntlet, clue tiers).
+const KC_ACTIVITIES = {
+  sire: { name: 'Abyssal Sire', cols: [{ metric: 'abyssal_sire' }] },
+  hydra: { name: 'Alchemical Hydra', cols: [{ metric: 'alchemical_hydra' }] },
+  amoxliatl: { name: 'Amoxliatl', cols: [{ metric: 'amoxliatl' }] },
+  araxxor: { name: 'Araxxor', cols: [{ metric: 'araxxor' }] },
+  barrows: { name: 'Barrows', cols: [{ metric: 'barrows_chests', label: 'Chests' }] },
+  bh: { name: 'Bounty Hunter', cols: [{ metric: 'bounty_hunter_hunter', label: 'Hunter' }, { metric: 'bounty_hunter_rogue', label: 'Rogue' }] },
+  brutus: { name: 'Brutus', cols: [{ metric: 'brutus' }] },
+  bryophyta: { name: 'Bryophyta', cols: [{ metric: 'bryophyta' }] },
+  cerberus: { name: 'Cerberus', cols: [{ metric: 'cerberus' }] },
+  chaos_ele: { name: 'Chaos Elemental', cols: [{ metric: 'chaos_elemental' }] },
+  chaos_elemental: { name: 'Chaos Elemental', cols: [{ metric: 'chaos_elemental' }] },
+  chaos_fanatic: { name: 'Chaos Fanatic', cols: [{ metric: 'chaos_fanatic' }] },
+  clues: { name: 'Clue Scrolls', cols: [{ metric: 'clue_scrolls_all', label: 'All' }, { metric: 'clue_scrolls_beginner', label: 'Beginner' }, { metric: 'clue_scrolls_easy', label: 'Easy' }, { metric: 'clue_scrolls_medium', label: 'Medium' }, { metric: 'clue_scrolls_hard', label: 'Hard' }, { metric: 'clue_scrolls_elite', label: 'Elite' }, { metric: 'clue_scrolls_master', label: 'Master' }] },
+  colosseum: { name: 'Fortis Colosseum', cols: [{ metric: 'sol_heredit', label: 'Sol Heredit' }, { metric: 'colosseum_glory', label: 'Glory' }] },
+  zilyana: { name: 'Commander Zilyana', cols: [{ metric: 'commander_zilyana' }] },
+  commander_zilyana: { name: 'Commander Zilyana', cols: [{ metric: 'commander_zilyana' }] },
+  corp: { name: 'Corporeal Beast', cols: [{ metric: 'corporeal_beast' }] },
+  crazy_arch: { name: 'Crazy Archaeologist', cols: [{ metric: 'crazy_archaeologist' }] },
+  crazy_archaeologist: { name: 'Crazy Archaeologist', cols: [{ metric: 'crazy_archaeologist' }] },
+  dks: { name: 'Dagannoth Kings', cols: [{ metric: 'dagannoth_rex', label: 'Rex' }, { metric: 'dagannoth_prime', label: 'Prime' }, { metric: 'dagannoth_supreme', label: 'Supreme' }] },
+  dagannoth_kings: { name: 'Dagannoth Kings', cols: [{ metric: 'dagannoth_rex', label: 'Rex' }, { metric: 'dagannoth_prime', label: 'Prime' }, { metric: 'dagannoth_supreme', label: 'Supreme' }] },
+  deranged_arch: { name: 'Deranged Archaeologist', cols: [{ metric: 'deranged_archaeologist' }] },
+  deranged_archaeologist: { name: 'Deranged Archaeologist', cols: [{ metric: 'deranged_archaeologist' }] },
+  doom: { name: 'Doom of Mokhaiotl', cols: [{ metric: 'doom_of_mokhaiotl' }] },
+  duke: { name: 'Duke Sucellus', cols: [{ metric: 'duke_sucellus' }] },
+  fractured_archive: { name: 'The Fractured Archive', cols: [{ metric: 'the_fractured_archive' }] },
+  gauntlet: { name: 'The Gauntlet', cols: [{ metric: 'the_gauntlet', label: 'Gauntlet' }, { metric: 'the_corrupted_gauntlet', label: 'Corrupted Gauntlet' }] },
+  graardor: { name: 'General Graardor', cols: [{ metric: 'general_graardor' }] },
+  mole: { name: 'Giant Mole', cols: [{ metric: 'giant_mole' }] },
+  grotesque_guardians: { name: 'Grotesque Guardians', cols: [{ metric: 'grotesque_guardians' }] },
+  gg: { name: 'Grotesque Guardians', cols: [{ metric: 'grotesque_guardians' }] },
+  hespori: { name: 'Hespori', cols: [{ metric: 'hespori' }] },
+  jad: { name: 'Fight Caves', cols: [{ metric: 'tztok_jad', label: 'TzTok-Jad' }] },
+  fight_caves: { name: 'Fight Caves', cols: [{ metric: 'tztok_jad', label: 'TzTok-Jad' }] },
+  zuk: { name: 'The Inferno', cols: [{ metric: 'tzkal_zuk', label: 'TzKal-Zuk' }] },
+  inferno: { name: 'The Inferno', cols: [{ metric: 'tzkal_zuk', label: 'TzKal-Zuk' }] },
+  kq: { name: 'Kalphite Queen', cols: [{ metric: 'kalphite_queen' }] },
+  kbd: { name: 'King Black Dragon', cols: [{ metric: 'king_black_dragon' }] },
+  kraken: { name: 'Kraken', cols: [{ metric: 'kraken' }] },
+  kree: { name: 'Kree\'arra', cols: [{ metric: 'kreearra' }] },
+  kreearra: { name: 'Kree\'arra', cols: [{ metric: 'kreearra' }] },
+  kril: { name: 'K\'ril Tsutsaroth', cols: [{ metric: 'kril_tsutsaroth' }] },
+  kril_tsutsaroth: { name: 'K\'ril Tsutsaroth', cols: [{ metric: 'kril_tsutsaroth' }] },
+  leviathan: { name: 'The Leviathan', cols: [{ metric: 'the_leviathan' }] },
+  lms: { name: 'Last Man Standing', cols: [{ metric: 'last_man_standing' }] },
+  mad_angel: { name: 'The Mad Angel', cols: [{ metric: 'mad_angel' }] },
+  maggot_king: { name: 'Maggot King', cols: [{ metric: 'maggot_king' }] },
+  mimic: { name: 'The Mimic', cols: [{ metric: 'mimic' }] },
+  moons: { name: 'Moons of Peril', cols: [{ metric: 'lunar_chests', label: 'Lunar Chests' }] },
+  moons_of_peril: { name: 'Moons of Peril', cols: [{ metric: 'lunar_chests', label: 'Lunar Chests' }] },
+  muspah: { name: 'Phantom Muspah', cols: [{ metric: 'phantom_muspah' }] },
+  phantom_muspah: { name: 'Phantom Muspah', cols: [{ metric: 'phantom_muspah' }] },
+  obor: { name: 'Obor', cols: [{ metric: 'obor' }] },
+  pvp_arena: { name: 'PvP Arena', cols: [{ metric: 'pvp_arena' }] },
+  sarachnis: { name: 'Sarachnis', cols: [{ metric: 'sarachnis' }] },
+  scorpia: { name: 'Scorpia', cols: [{ metric: 'scorpia' }] },
+  scurrius: { name: 'Scurrius', cols: [{ metric: 'scurrius' }] },
+  shellbane: { name: 'Shellbane Gryphon', cols: [{ metric: 'shellbane_gryphon' }] },
+  skotizo: { name: 'Skotizo', cols: [{ metric: 'skotizo' }] },
+  soul_wars: { name: 'Soul Wars', cols: [{ metric: 'soul_wars_zeal', label: 'Zeal' }] },
+  sw: { name: 'Soul Wars', cols: [{ metric: 'soul_wars_zeal', label: 'Zeal' }] },
+  thermy: { name: 'Thermonuclear Smoke Devil', cols: [{ metric: 'thermonuclear_smoke_devil' }] },
+  vardorvis: { name: 'Vardorvis', cols: [{ metric: 'vardorvis' }] },
+  vorkath: { name: 'Vorkath', cols: [{ metric: 'vorkath' }] },
+  whisperer: { name: 'The Whisperer', cols: [{ metric: 'the_whisperer' }] },
+  zulrah: { name: 'Zulrah', cols: [{ metric: 'zulrah' }] },
+};
+
+// Every key !kc accepts: team activities plus the table above.
+const KC_KEYS = { ...ACTIVITIES, ...KC_ACTIVITIES };
+
+function kcEntry(key) {
+  if (ACTIVITIES[key]) return { name: ACTIVITIES[key].name, cols: kcColumnsForTeam({ activity: key }) };
+  const extra = KC_ACTIVITIES[key];
+  if (extra) return { name: extra.name, cols: extra.cols };
+  return null;
+}
+
 async function kcPayload(activity, rsn, userId) {
-  if (!activity || !ACTIVITIES[activity]) {
-    return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(ACTIVITIES).join(', ')}` };
+  const entry = activity ? kcEntry(activity) : null;
+  if (!entry) {
+    return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(KC_KEYS).join(', ')}` };
   }
   if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   let st;
@@ -107,21 +192,20 @@ async function kcPayload(activity, rsn, userId) {
   }
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
-  const cols = kcColumnsForTeam({ activity });
-  if (!cols.length) return { content: `No kill count is tracked for ${ACTIVITIES[activity].name}.` };
-  const entries = cols.map((c) => ({
+  if (!entry.cols.length) return { content: `No kill count is tracked for ${entry.name}.` };
+  const entries = entry.cols.map((c) => ({
     icon: getBossIcon(c.icon || c.metric),
     label: c.label || prettyMetric(c.metric),
     value: fmtKc(st.kc ? st.kc[c.metric] : null),
   }));
-  const buf = renderKcCard({ title: `${rsn}: ${ACTIVITIES[activity].name}`, entries });
+  const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
 }
 
 async function handleKcCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  const activity = takeActivity(args, ACTIVITIES);
+  const activity = takeActivity(args, KC_KEYS);
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
@@ -136,9 +220,12 @@ function progressBar(obtained, total) {
 
 const RP_GUIDE = 'No RuneProfile profile found for that name. Run the RuneProfile plugin ([runeprofile.com/info/guide](https://runeprofile.com/info/guide)) and it syncs on its own.';
 
-// !clog covers ALL activities, not just the four with board columns:
-// the RuneProfile collection log is grouped by TAB, and each activity
-// points at its page. Grouped by where the page lives.
+// !clog covers the whole collection log: every RuneProfile page,
+// grouped by tab. Keys are the short names members type; common
+// aliases point at the same page. Page names must match
+// RuneProfile exactly (the paired wildy bosses live on combined
+// pages: "Venenatis and Spindel", "Callisto and Artio",
+// "Vet'ion and Calvar'ion").
 const CLOG_PAGES = {
   toa: ['Raids', 'Tombs of Amascut'],
   toa_expert: ['Raids', 'Tombs of Amascut'],
@@ -146,19 +233,178 @@ const CLOG_PAGES = {
   cox_cm: ['Raids', 'Chambers of Xeric'],
   tob: ['Raids', 'Theatre of Blood'],
   tob_hard: ['Raids', 'Theatre of Blood'],
-  yama: ['Bosses', 'Yama'],
-  nex: ['Bosses', 'Nex'],
+  fractured_archive: ['Raids', 'The Fractured Archive'],
+  abyssal_sire: ['Bosses', 'Abyssal Sire'],
+  sire: ['Bosses', 'Abyssal Sire'],
+  alchemical_hydra: ['Bosses', 'Alchemical Hydra'],
+  hydra: ['Bosses', 'Alchemical Hydra'],
+  amoxliatl: ['Bosses', 'Amoxliatl'],
+  araxxor: ['Bosses', 'Araxxor'],
+  barrows: ['Bosses', 'Barrows Chests'],
+  barrows_chests: ['Bosses', 'Barrows Chests'],
+  brutus: ['Bosses', 'Brutus'],
+  bryophyta: ['Bosses', 'Bryophyta'],
+  callisto: ['Bosses', 'Callisto and Artio'],
+  cerberus: ['Bosses', 'Cerberus'],
+  chaos_elemental: ['Bosses', 'Chaos Elemental'],
+  chaos_ele: ['Bosses', 'Chaos Elemental'],
+  chaos_fanatic: ['Bosses', 'Chaos Fanatic'],
+  commander_zilyana: ['Bosses', 'Commander Zilyana'],
+  zilyana: ['Bosses', 'Commander Zilyana'],
+  corporeal_beast: ['Bosses', 'Corporeal Beast'],
+  corp: ['Bosses', 'Corporeal Beast'],
+  crazy_archaeologist: ['Bosses', 'Crazy Archaeologist'],
+  crazy_arch: ['Bosses', 'Crazy Archaeologist'],
+  dagannoth_kings: ['Bosses', 'Dagannoth Kings'],
+  dks: ['Bosses', 'Dagannoth Kings'],
+  deranged_archaeologist: ['Bosses', 'Deranged Archaeologist'],
+  deranged_arch: ['Bosses', 'Deranged Archaeologist'],
+  doom_of_mokhaiotl: ['Bosses', 'Doom of Mokhaiotl'],
+  doom: ['Bosses', 'Doom of Mokhaiotl'],
+  duke_sucellus: ['Bosses', 'Duke Sucellus'],
+  duke: ['Bosses', 'Duke Sucellus'],
+  fight_caves: ['Bosses', 'The Fight Caves'],
+  jad: ['Bosses', 'The Fight Caves'],
+  fortis_colosseum: ['Bosses', 'Fortis Colosseum'],
+  colosseum: ['Bosses', 'Fortis Colosseum'],
+  gauntlet: ['Bosses', 'The Gauntlet'],
+  general_graardor: ['Bosses', 'General Graardor'],
+  graardor: ['Bosses', 'General Graardor'],
+  giant_mole: ['Bosses', 'Giant Mole'],
+  mole: ['Bosses', 'Giant Mole'],
+  grotesque_guardians: ['Bosses', 'Grotesque Guardians'],
+  gg: ['Bosses', 'Grotesque Guardians'],
+  hespori: ['Bosses', 'Hespori'],
   huey: ['Bosses', 'The Hueycoatl'],
+  inferno: ['Bosses', 'The Inferno'],
+  zuk: ['Bosses', 'The Inferno'],
+  kalphite_queen: ['Bosses', 'Kalphite Queen'],
+  kq: ['Bosses', 'Kalphite Queen'],
+  king_black_dragon: ['Bosses', 'King Black Dragon'],
+  kbd: ['Bosses', 'King Black Dragon'],
+  kraken: ['Bosses', 'Kraken'],
+  kreearra: ['Bosses', 'Kree\'arra'],
+  kree: ['Bosses', 'Kree\'arra'],
+  kril_tsutsaroth: ['Bosses', 'K\'ril Tsutsaroth'],
+  kril: ['Bosses', 'K\'ril Tsutsaroth'],
+  leviathan: ['Bosses', 'The Leviathan'],
+  mad_angel: ['Bosses', 'The Mad Angel'],
+  maggot_king: ['Bosses', 'Maggot King'],
+  moons_of_peril: ['Bosses', 'Moons of Peril'],
+  moons: ['Bosses', 'Moons of Peril'],
+  nex: ['Bosses', 'Nex'],
+  nm: ['Bosses', 'The Nightmare'],
+  obor: ['Bosses', 'Obor'],
+  phantom_muspah: ['Bosses', 'Phantom Muspah'],
+  muspah: ['Bosses', 'Phantom Muspah'],
   royals: ['Bosses', 'Royal Titans'],
-  nm: ['Bosses', "The Nightmare"],
-  venenatis: ['Bosses', 'Venenatis'],
-  callisto: ['Bosses', 'Callisto'],
-  vetion: ['Bosses', "Vet'ion"],
-  wintertodt: ['Bosses', 'Wintertodt'],
+  sarachnis: ['Bosses', 'Sarachnis'],
+  scorpia: ['Bosses', 'Scorpia'],
+  scurrius: ['Bosses', 'Scurrius'],
+  shellbane_gryphon: ['Bosses', 'Shellbane Gryphon'],
+  shellbane: ['Bosses', 'Shellbane Gryphon'],
+  skotizo: ['Bosses', 'Skotizo'],
   tempoross: ['Bosses', 'Tempoross'],
+  thermonuclear_smoke_devil: ['Bosses', 'Thermonuclear Smoke Devil'],
+  thermy: ['Bosses', 'Thermonuclear Smoke Devil'],
+  vardorvis: ['Bosses', 'Vardorvis'],
+  venenatis: ['Bosses', 'Venenatis and Spindel'],
+  vetion: ['Bosses', 'Vet\'ion and Calvar\'ion'],
+  vorkath: ['Bosses', 'Vorkath'],
+  whisperer: ['Bosses', 'The Whisperer'],
+  wintertodt: ['Bosses', 'Wintertodt'],
+  yama: ['Bosses', 'Yama'],
   zalcano: ['Bosses', 'Zalcano'],
-  gotr: ['Minigames', 'Guardians of the Rift'],
+  zulrah: ['Bosses', 'Zulrah'],
+  clues_beginner: ['Clues', 'Beginner Treasure Trails'],
+  clues_easy: ['Clues', 'Easy Treasure Trails'],
+  clues_medium: ['Clues', 'Medium Treasure Trails'],
+  clues_hard: ['Clues', 'Hard Treasure Trails'],
+  clues_elite: ['Clues', 'Elite Treasure Trails'],
+  clues_master: ['Clues', 'Master Treasure Trails'],
+  clues_hard_rare: ['Clues', 'Hard Treasure Trails (Rare)'],
+  clues_elite_rare: ['Clues', 'Elite Treasure Trails (Rare)'],
+  clues_master_rare: ['Clues', 'Master Treasure Trails (Rare)'],
+  clues_shared: ['Clues', 'Shared Treasure Trail Rewards'],
+  scroll_cases: ['Clues', 'Scroll Cases'],
   ba: ['Minigames', 'Barbarian Assault'],
+  barracuda_trials: ['Minigames', 'Barracuda Trials'],
+  brimhaven_agility_arena: ['Minigames', 'Brimhaven Agility Arena'],
+  brimhaven: ['Minigames', 'Brimhaven Agility Arena'],
+  castle_wars: ['Minigames', 'Castle Wars'],
+  cw: ['Minigames', 'Castle Wars'],
+  fishing_trawler: ['Minigames', 'Fishing Trawler'],
+  trawler: ['Minigames', 'Fishing Trawler'],
+  giants_foundry: ['Minigames', 'Giants\' Foundry'],
+  foundry: ['Minigames', 'Giants\' Foundry'],
+  gnome_restaurant: ['Minigames', 'Gnome Restaurant'],
+  gotr: ['Minigames', 'Guardians of the Rift'],
+  hallowed_sepulchre: ['Minigames', 'Hallowed Sepulchre'],
+  sepulchre: ['Minigames', 'Hallowed Sepulchre'],
+  last_man_standing: ['Minigames', 'Last Man Standing'],
+  lms: ['Minigames', 'Last Man Standing'],
+  magic_training_arena: ['Minigames', 'Magic Training Arena'],
+  mta: ['Minigames', 'Magic Training Arena'],
+  mahogany_homes: ['Minigames', 'Mahogany Homes'],
+  mastering_mixology: ['Minigames', 'Mastering Mixology'],
+  mixology: ['Minigames', 'Mastering Mixology'],
+  pest_control: ['Minigames', 'Pest Control'],
+  pc: ['Minigames', 'Pest Control'],
+  rogues_den: ['Minigames', 'Rogues\' Den'],
+  shades_of_mortton: ['Minigames', 'Shades of Mort\'ton'],
+  shades: ['Minigames', 'Shades of Mort\'ton'],
+  soul_wars: ['Minigames', 'Soul Wars'],
+  sw: ['Minigames', 'Soul Wars'],
+  temple_trekking: ['Minigames', 'Temple Trekking'],
+  tithe_farm: ['Minigames', 'Tithe Farm'],
+  tithe: ['Minigames', 'Tithe Farm'],
+  trouble_brewing: ['Minigames', 'Trouble Brewing'],
+  vale_totems: ['Minigames', 'Vale Totems'],
+  volcanic_mine: ['Minigames', 'Volcanic Mine'],
+  aerial_fishing: ['Other', 'Aerial Fishing'],
+  all_pets: ['Other', 'All Pets'],
+  pets: ['Other', 'All Pets'],
+  boat_paints: ['Other', 'Boat Paints'],
+  camdozaal: ['Other', 'Camdozaal'],
+  champions_challenge: ['Other', 'Champion\'s Challenge'],
+  chompy_bird_hunting: ['Other', 'Chompy Bird Hunting'],
+  chompy: ['Other', 'Chompy Bird Hunting'],
+  champions: ['Other', 'Champion\'s Challenge'],
+  colossal_wyrm_agility: ['Other', 'Colossal Wyrm Agility'],
+  colossal_wyrm: ['Other', 'Colossal Wyrm Agility'],
+  creature_creation: ['Other', 'Creature Creation'],
+  cyclopes: ['Other', 'Cyclopes'],
+  elder_chaos_druids: ['Other', 'Elder Chaos Druids'],
+  forestry: ['Other', 'Forestry'],
+  fossil_island_notes: ['Other', 'Fossil Island Notes'],
+  fossil_notes: ['Other', 'Fossil Island Notes'],
+  gloughs_experiments: ['Other', 'Glough\'s Experiments'],
+  gloughs: ['Other', 'Glough\'s Experiments'],
+  hunter_guild: ['Other', 'Hunter Guild'],
+  lost_schematics: ['Other', 'Lost Schematics'],
+  monkey_backpacks: ['Other', 'Monkey Backpacks'],
+  motherlode_mine: ['Other', 'Motherlode Mine'],
+  mlm: ['Other', 'Motherlode Mine'],
+  my_notes: ['Other', 'My Notes'],
+  ocean_encounters: ['Other', 'Ocean Encounters'],
+  random_events: ['Other', 'Random Events'],
+  revenants: ['Other', 'Revenants'],
+  revs: ['Other', 'Revenants'],
+  rooftop_agility: ['Other', 'Rooftop Agility'],
+  rooftops: ['Other', 'Rooftop Agility'],
+  sailing_miscellaneous: ['Other', 'Sailing Miscellaneous'],
+  sailing: ['Other', 'Sailing Miscellaneous'],
+  sea_treasures: ['Other', 'Sea Treasures'],
+  shayzien_armour: ['Other', 'Shayzien Armour'],
+  shayzien: ['Other', 'Shayzien Armour'],
+  shooting_stars: ['Other', 'Shooting Stars'],
+  skilling_pets: ['Other', 'Skilling Pets'],
+  slayer: ['Other', 'Slayer'],
+  tormented_demons: ['Other', 'Tormented Demons'],
+  tds: ['Other', 'Tormented Demons'],
+  tzhaar: ['Other', 'TzHaar'],
+  miscellaneous: ['Other', 'Miscellaneous'],
+  misc: ['Other', 'Miscellaneous'],
   // wag: no Wilderness Agility page exists in the collection log.
 };
 
@@ -182,7 +428,7 @@ async function clogPayload(key, rsn, userId) {
     const wag = key === 'wag';
     return { content: wag
       ? 'Wilderness Agility has no collection log page to show.'
-      : `No collection log page for \`${key}\`. Try one of: ${Object.keys(CLOG_PAGES).join(', ')}.` };
+      : `No collection log page for \`${key}\`. Every boss, raid, clue, minigame, and other page works: try the boss or page name, or \`total\` for the whole log.` };
   }
   if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
@@ -317,18 +563,43 @@ async function slashCooldown(interaction) {
   return true;
 }
 
-const activityChoices = Object.entries(ACTIVITIES).map(([value, a]) => ({ name: a.name, value }));
-const clogChoices = [
-  { name: 'Total (whole log)', value: 'total' },
-  ...Object.keys(CLOG_PAGES).map((k) => ({ name: ACTIVITIES[k] ? ACTIVITIES[k].name : k, value: k })),
-];
+// Slash activity options use autocomplete, not fixed choices: the full
+// kc and clog lists are far past Discord's 25-choice cap. Choices are
+// { name, value } pairs filtered by what the member has typed.
+function kcAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  const all = Object.entries(KC_KEYS).map(([value, a]) => ({ name: a.name, value }));
+  return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
+}
+
+function clogAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  const seen = new Set();
+  const all = [{ name: 'Total (whole log)', value: 'total' }];
+  for (const [value, page] of Object.entries(CLOG_PAGES)) {
+    if (seen.has(page[1])) continue; // aliases share one dropdown row
+    seen.add(page[1]);
+    all.push({ name: page[1], value });
+  }
+  return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
+}
+
+async function handleAutocomplete(interaction) {
+  const focused = interaction.options.getFocused();
+  const choices = interaction.commandName === 'kc'
+    ? kcAutocompleteChoices(focused)
+    : interaction.commandName === 'clog'
+      ? clogAutocompleteChoices(focused)
+      : [];
+  await interaction.respond(choices).catch(() => {});
+}
 
 const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('kc')
       .setDescription("Show a player's boss kill count card")
-      .addStringOption((o) => o.setName('activity').setDescription('Which boss or raid').setRequired(true).addChoices(...activityChoices))
+      .addStringOption((o) => o.setName('activity').setDescription('Which boss or activity').setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
@@ -342,7 +613,7 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('clog')
       .setDescription("Show a player's collection log card")
-      .addStringOption((o) => o.setName('activity').setDescription('Which page, or the whole log').setRequired(true).addChoices(...clogChoices))
+      .addStringOption((o) => o.setName('activity').setDescription('Which page, or the whole log').setRequired(true).setAutocomplete(true))
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
@@ -376,4 +647,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
