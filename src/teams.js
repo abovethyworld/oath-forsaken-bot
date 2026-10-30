@@ -2920,6 +2920,9 @@ async function refreshListing(client, team) {
   const file = board ? board.file : null;
   const embed = buildTeamEmbed(team, { hideSignedUp: !!file });
   const payload = { embeds: [embed], components: buildListingComponents(team), files: file ? [file] : [] };
+  // No board this time: clear attachments so a stale board image from a
+  // previous refresh does not stay under the new embed.
+  if (!file) payload.attachments = [];
   if (file) embed.setImage('attachment://party-board.png');
   await msg.edit(payload).catch((err) => console.warn('Team refresh failed:', err.message));
   if (board && board.staleRsns.length) {
@@ -2940,6 +2943,12 @@ async function sendFillPing(client, team) {
     if (!fresh || fresh.status !== 'open' || !isTeamFull(fresh)) return;
     const channel = await client.channels.fetch(team.channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) return;
+    // Refill after a leave: delete the previous fill ping so it is not
+    // orphaned when the new ping's id overwrites the stored one.
+    if (fresh.fillPingMsgId) {
+      const oldPing = await channel.messages.fetch(fresh.fillPingMsgId).catch(() => null);
+      if (oldPing) await oldPing.delete().catch(() => {});
+    }
     const mentions = Object.keys(team.members)
       .map((id) => `<@${id}>`)
       .join(' ');
@@ -3181,7 +3190,12 @@ async function sweepPendingButtons(client) {
       const msg = await channel.messages.fetch(team.messageId).catch(() => null);
       if (!msg) continue;
       const hasPending = msg.components.some((row) =>
-        row.components.some((b) => (b.customId || '').includes(':pending:'))
+        row.components.some((b) => {
+          const cid = b.customId || '';
+          // Placeholder ids put 'pending' where the message id goes:
+          // 'team:join:pending', or 'team:role:pending:<idx>'.
+          return cid.includes(':pending:') || cid.split(':')[2] === 'pending';
+        })
       );
       if (hasPending) {
         await msg.edit({ components: buildListingComponents(team) }).catch(() => {});
