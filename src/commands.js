@@ -71,6 +71,10 @@ function sectionsToDescription(intro, sections, footer) {
 }
 
 async function postRolePanels(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.roles);
   if (!channel) {
@@ -93,6 +97,10 @@ async function postRolePanels(interaction) {
 }
 
 async function postRules(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.rules);
   if (!channel) {
@@ -110,6 +118,10 @@ async function postRules(interaction) {
 }
 
 async function postStrikes(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.rules);
   if (!channel) {
@@ -127,6 +139,10 @@ async function postStrikes(interaction) {
 }
 
 async function postRanks(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.clanRanks || config.channels.rules);
   if (!channel) {
@@ -144,6 +160,10 @@ async function postRanks(interaction) {
 }
 
 async function warnUser(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   const user = interaction.options.getUser('user');
   const reason = interaction.options.getString('reason');
   const count = store.addStrike(interaction.guildId, user.id, reason, interaction.user.id);
@@ -151,6 +171,7 @@ async function warnUser(interaction) {
   await interaction.reply({
     content: `⚠️ ${user} has been warned (strike ${count}/3).\nReason: ${reason}`,
     ephemeral: true,
+    allowedMentions: { users: [user.id] },
   });
 
   const log = interaction.guild.channels.cache.get(config.channels.modLog);
@@ -172,6 +193,10 @@ async function warnUser(interaction) {
 }
 
 async function showStrikes(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   const user = interaction.options.getUser('user');
   const strikes = store.getStrikes(interaction.guildId, user.id);
   if (strikes.length === 0) {
@@ -190,6 +215,10 @@ async function showStrikes(interaction) {
 }
 
 async function clearStrikesCmd(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
+    return;
+  }
   const user = interaction.options.getUser('user');
   store.clearStrikes(interaction.guildId, user.id);
   await interaction.reply({ content: `Cleared all strikes for ${user}.`, ephemeral: true });

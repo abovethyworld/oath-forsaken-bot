@@ -32,6 +32,14 @@ function atomicWrite(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  // Flush the temp file to disk before the rename, so an OS/power crash
+  // cannot leave a renamed-but-unflushed file behind.
+  const fd = fs.openSync(tmp, 'r');
+  try {
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
   fs.renameSync(tmp, file);
 }
 
@@ -56,6 +64,28 @@ function saveJson(file, data) {
   atomicWrite(file, data);
 }
 
+// Drop dead roster records so rosters.json can't grow forever: orphans whose
+// message never posted (messageId still null an hour after creation, e.g. a
+// failed send in postRoster) and rosters whose event time has passed.
+// Returns true if anything was dropped.
+function pruneRosterRecords(all) {
+  const now = Date.now();
+  let changed = false;
+  for (const [rosterId, data] of Object.entries(all)) {
+    if (!data || typeof data !== 'object') continue;
+    const eventAt = data.eventTime ?? data.startTime ?? data.eventAt;
+    const eventTs = eventAt != null ? new Date(eventAt).getTime() : NaN;
+    if (
+      (data.messageId == null && data.createdAt && now - data.createdAt > 3600 * 1000) ||
+      (!Number.isNaN(eventTs) && eventTs < now)
+    ) {
+      delete all[rosterId];
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 module.exports = {
   atomicWrite,
   addStrike(guildId, userId, reason, modId) {
@@ -64,7 +94,9 @@ module.exports = {
     data[guildId][userId] ??= [];
     data[guildId][userId].push({ reason, modId, at: new Date().toISOString() });
     save(data);
-    return data[guildId][userId].length;
+    // Match getStrikes: expired strikes don't count toward the total.
+    const cutoff = Date.now() - STRIKE_EXPIRY_DAYS * 24 * 3600 * 1000;
+    return data[guildId][userId].filter((s) => new Date(s.at).getTime() > cutoff).length;
   },
 
   getStrikes(guildId, userId) {
@@ -216,6 +248,10 @@ module.exports = {
     const data = loadJson(HOLDS_FILE);
     return !!(data[guildId] && data[guildId][userId]);
   },
+  getSeniorityHolds(guildId) {
+    const data = loadJson(HOLDS_FILE);
+    return new Set(Object.keys(data[guildId] || {}));
+  },
   setSeniorityHold(guildId, userId, held) {
     const data = loadJson(HOLDS_FILE);
     data[guildId] ??= {};
@@ -288,13 +324,16 @@ module.exports = {
     if (changed) saveJson(POLLS_FILE, data);
   },
 
-  // ---- Rosters: { rosterId: { eventName, roster: { userId: role|null }, channelId, messageId } } ----
+  // ---- Rosters: { rosterId: { eventName, roster: { userId: role|null }, channelId, messageId, createdAt } } ----
   saveRoster(rosterId, data) {
     const all = loadJson(ROSTERS_FILE);
+    pruneRosterRecords(all);
     all[rosterId] = data;
     saveJson(ROSTERS_FILE, all);
   },
   getRoster(rosterId) {
-    return loadJson(ROSTERS_FILE)[rosterId] || null;
+    const all = loadJson(ROSTERS_FILE);
+    if (pruneRosterRecords(all)) saveJson(ROSTERS_FILE, all);
+    return all[rosterId] || null;
   },
 };

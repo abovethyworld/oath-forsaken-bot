@@ -73,6 +73,10 @@ async function postApplicationPanel(channel) {
 }
 
 async function setupApplications(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.channel;
   await postApplicationPanel(channel);
@@ -266,6 +270,17 @@ async function handleDenyReasonPrompt(interaction) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true });
     return;
   }
+  // Same guards as handleDecision: don't even open the modal when another
+  // staff member is deciding this application or it was already decided.
+  if (decisionLocks.has(`decision:${userId}`)) {
+    await interaction.reply({ content: 'Someone else is already handling this application.', ephemeral: true });
+    return;
+  }
+  const thread = interaction.channel;
+  if (thread && thread.isThread() && / - (Approved|Denied)/.test(thread.name)) {
+    await interaction.reply({ content: 'This application was already decided.', ephemeral: true });
+    return;
+  }
   const modal = new ModalBuilder()
     .setCustomId(`apply:denyreasonmodal:${userId}:${type}:${bracket || 'none'}`)
     .setTitle('Deny with Reason');
@@ -289,12 +304,25 @@ async function handleDenyReasonSubmit(interaction) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true });
     return;
   }
+  // Same race + idempotency guards as handleDecision: a deny-with-reason
+  // submitted after another staff member already decided must do nothing.
+  const lockKey = `decision:${userId}`;
+  if (decisionLocks.has(lockKey)) {
+    await interaction.reply({ content: 'Someone else is already handling this application.', ephemeral: true });
+    return;
+  }
+  const thread = interaction.channel;
+  if (thread && thread.isThread() && / - (Approved|Denied)/.test(thread.name)) {
+    await interaction.reply({ content: 'This application was already decided.', ephemeral: true });
+    return;
+  }
+  decisionLocks.add(lockKey);
+  try {
   const reason = interaction.fields.getTextInputValue('reason');
   // Reuse handleDecision by faking a deny interaction customId, then add reason
   await interaction.deferReply({ ephemeral: true });
   const guild = interaction.guild;
   const target = await guild.members.fetch(userId).catch(() => null);
-  const thread = interaction.channel;
   const types = appTypes();
   const t = types[type] || {};
 
@@ -322,6 +350,9 @@ async function handleDenyReasonSubmit(interaction) {
   }
 
   await interaction.editReply(`Denied <@${userId}> with reason.`);
+  } finally {
+    decisionLocks.delete(lockKey);
+  }
 }
 
 async function handleDecision(interaction) {
@@ -538,6 +569,10 @@ const commands = [
       .setDefaultMemberPermissions(PFB.Administrator)
       .addUserOption((o) => o.setName('user').setDescription('Who to reset').setRequired(true)),
     run: async (interaction) => {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: 'Staff only.', ephemeral: true });
+        return;
+      }
       const target = interaction.options.getUser('user');
       store.removeApplication(interaction.guildId, target.id);
       await interaction.reply({ content: `Cleared application for ${target.tag}. They can apply again.`, ephemeral: true });
@@ -554,6 +589,10 @@ const commands = [
 ];
 
 async function applyStatsCommand(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageRoles)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
   const days = interaction.options.getInteger('days') || 30;
   const since = Date.now() - days * 24 * 3600 * 1000;
   const stats = store.getApplicationStats(interaction.guildId, since);

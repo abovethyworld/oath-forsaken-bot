@@ -323,14 +323,26 @@ function getRsnEntry(userId) {
   return normalizeRsnEntry(loadRsnLinks()[userId]) || { rsns: [], active: null };
 }
 
-function addRsn(userId, rsn) {
+// ─── Serialized RSN-link mutations ──────────────────────────────────
+// Same load-mutate-save discipline as mutateTeams: the whole
+// read-modify-write runs as one unit against a single load, so two
+// quick taps cannot build on the same stale load and have the last
+// save silently win.
+function mutateRsnLinks(fn) {
   const links = loadRsnLinks();
-  const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null };
-  if (!entry.rsns.includes(rsn)) entry.rsns.push(rsn);
-  entry.active = rsn;
-  links[userId] = entry;
+  const result = fn(links);
   saveRsnLinks(links);
-  return entry;
+  return result;
+}
+
+function addRsn(userId, rsn) {
+  return mutateRsnLinks((links) => {
+    const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null };
+    if (!entry.rsns.includes(rsn)) entry.rsns.push(rsn);
+    entry.active = rsn;
+    links[userId] = entry;
+    return entry;
+  });
 }
 
 function setActiveRsn(userId, rsn) {
@@ -412,14 +424,30 @@ function validSpecId(id) {
 
 // Entry shape: { owned: [specId], show: { activity: [specId] } }.
 // Migrates the old flat { userId: [specId] } shape on read.
-function getSpecEntry(userId) {
-  const specs = loadSpecs();
+function specEntryFrom(specs, userId) {
   let entry = specs[userId];
   if (Array.isArray(entry)) entry = { owned: entry, show: {} };
   if (!entry || typeof entry !== 'object') entry = { owned: [], show: {} };
   if (!Array.isArray(entry.owned)) entry.owned = [];
   if (!entry.show || typeof entry.show !== 'object') entry.show = {};
-  return { specs, entry };
+  return entry;
+}
+
+function getSpecEntry(userId) {
+  const specs = loadSpecs();
+  return { specs, entry: specEntryFrom(specs, userId) };
+}
+
+// ─── Serialized spec mutations ──────────────────────────────────────
+// Same load-mutate-save discipline as mutateTeams: the whole
+// read-modify-write runs as one unit against a single load, so two
+// quick taps cannot build on the same stale load and have the last
+// save silently drop one of the toggles.
+function mutateSpecs(fn) {
+  const specs = loadSpecs();
+  const result = fn(specs);
+  saveSpecs(specs);
+  return result;
 }
 
 function getOwnedSpecs(userId) {
@@ -429,43 +457,49 @@ function getOwnedSpecs(userId) {
 
 function toggleOwnedSpec(userId, specId) {
   if (!validSpecId(specId)) return getOwnedSpecs(userId);
-  const { specs, entry } = getSpecEntry(userId);
-  const list = getOwnedSpecs(userId);
-  const i = list.indexOf(specId);
-  if (i >= 0) list.splice(i, 1);
-  else list.push(specId);
-  entry.owned = list;
-  // Dropping ownership also drops it from every per-boss selection.
-  for (const act of Object.keys(entry.show)) {
-    entry.show[act] = (entry.show[act] || []).filter((id) => list.includes(id));
-  }
-  specs[userId] = entry;
-  saveSpecs(specs);
-  return list;
+  return mutateSpecs((specs) => {
+    const entry = specEntryFrom(specs, userId);
+    const list = entry.owned.filter(validSpecId);
+    const i = list.indexOf(specId);
+    if (i >= 0) list.splice(i, 1);
+    else list.push(specId);
+    entry.owned = list;
+    // Dropping ownership also drops it from every per-boss selection.
+    for (const act of Object.keys(entry.show)) {
+      entry.show[act] = (entry.show[act] || []).filter((id) => list.includes(id));
+    }
+    specs[userId] = entry;
+    return list;
+  });
 }
 
 // Specs a member shows for an activity: their per-boss pick, defaulting
 // to everything they own that is relevant there.
-function getShownSpecs(userId, activity) {
-  const { entry } = getSpecEntry(userId);
-  const ownedRelevant = getOwnedSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
+function shownSpecsFrom(entry, activity) {
+  const ownedRelevant = entry.owned.filter(validSpecId).filter((id) => specsForActivity(activity).includes(id));
   const sel = entry.show[activity];
   if (!Array.isArray(sel)) return ownedRelevant;
   return sel.filter((id) => ownedRelevant.includes(id));
 }
 
+function getShownSpecs(userId, activity) {
+  const { entry } = getSpecEntry(userId);
+  return shownSpecsFrom(entry, activity);
+}
+
 function toggleShownSpec(userId, activity, specId) {
   const ownedRelevant = getOwnedSpecs(userId).filter((id) => specsForActivity(activity).includes(id));
   if (!ownedRelevant.includes(specId)) return getShownSpecs(userId, activity);
-  const { specs, entry } = getSpecEntry(userId);
-  const sel = getShownSpecs(userId, activity).slice();
-  const i = sel.indexOf(specId);
-  if (i >= 0) sel.splice(i, 1);
-  else sel.push(specId);
-  entry.show[activity] = sel;
-  specs[userId] = entry;
-  saveSpecs(specs);
-  return sel;
+  return mutateSpecs((specs) => {
+    const entry = specEntryFrom(specs, userId);
+    const sel = shownSpecsFrom(entry, activity).slice();
+    const i = sel.indexOf(specId);
+    if (i >= 0) sel.splice(i, 1);
+    else sel.push(specId);
+    entry.show[activity] = sel;
+    specs[userId] = entry;
+    return sel;
+  });
 }
 
 // The board renders on every team: full combat board for PvM, and a slim
@@ -1656,9 +1690,19 @@ async function finalizeCreation(interaction, creation) {
   }
 
   team.messageId = msg.id;
-  await mutateTeams((state) => {
+  const saved = await mutateTeams((state) => {
     state.teams[msg.id] = team;
-  }).catch((err) => console.warn('Team creation save failed:', err.message));
+  }).then(() => true).catch((err) => {
+    console.warn('Team creation save failed:', err.message);
+    return false;
+  });
+  if (!saved) {
+    // No state behind the listing: every button on it would answer 'That
+    // team is gone.' Delete the post instead of leaving an orphan behind.
+    await msg.delete().catch(() => {});
+    await interaction.followUp({ content: 'Could not save that team. Tell staff.', ephemeral: true }).catch(() => {});
+    return;
+  }
 
   // Patch the buttons with the real message id now that we have it.
   await msg.edit({ components: buildListingComponents(team) }).catch((err) => console.warn('Team button patch failed:', err.message));
@@ -2007,9 +2051,15 @@ function findTeamByMessage(messageId) {
   return team && team.status === 'open' ? team : undefined;
 }
 
+// Shared reply for taps on a listing whose team is closed or swept. The
+// interaction must be acknowledged or Discord reports it as failed.
+async function replyTeamGone(interaction) {
+  await interaction.reply({ content: 'That team is closed or gone.', ephemeral: true }).catch(() => {});
+}
+
 async function handleTeamSpecsButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   const userId = interaction.user.id;
   if (!team.members || !team.members[userId]) {
     await interaction.reply({ content: 'Join the team first.', ephemeral: true }).catch(() => {});
@@ -2034,7 +2084,7 @@ async function handleTeamSpecsButton(interaction, messageId) {
 
 async function handleTeamSpecsToggle(interaction, messageId, specId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!team.members || !team.members[interaction.user.id]) {
     await interaction.reply({ content: 'Join the team first.', ephemeral: true })
       .catch((err) => console.warn('Spec show toggle reply failed:', err.message));
@@ -2202,7 +2252,7 @@ function teamSizeRows(team, messageId) {
 
 async function handleTeamSizeButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2256,7 +2306,7 @@ function coxPresetRows(prefix, messageId, presets, current, customId) {
 
 async function handleCoxRaidersButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2271,7 +2321,7 @@ async function handleCoxRaidersButton(interaction, messageId) {
 
 async function handleCoxRaidersCustomButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2295,7 +2345,7 @@ async function handleCoxRaidersCustomButton(interaction, messageId) {
 
 async function handleCoxRaidersCustomModal(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2318,7 +2368,7 @@ async function handleCoxRaidersCustomModal(interaction, messageId) {
 
 async function handleCoxRaidersSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2341,7 +2391,7 @@ async function handleCoxRaidersSet(interaction, messageId, value) {
 
 async function handleCoxScalersButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2356,7 +2406,7 @@ async function handleCoxScalersButton(interaction, messageId) {
 
 async function handleCoxScalersCustomButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2380,7 +2430,7 @@ async function handleCoxScalersCustomButton(interaction, messageId) {
 
 async function handleCoxScalersCustomModal(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2402,7 +2452,7 @@ async function handleCoxScalersCustomModal(interaction, messageId) {
 
 async function handleCoxScalersSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2424,7 +2474,7 @@ async function handleCoxScalersSet(interaction, messageId, value) {
 
 async function handleCoxLayoutButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2443,7 +2493,7 @@ async function handleCoxLayoutButton(interaction, messageId) {
 
 async function handleCoxLayoutSet(interaction, messageId, value) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2469,7 +2519,7 @@ async function handleCoxLayoutSet(interaction, messageId, value) {
 
 async function handleTeamSizeSet(interaction, messageId, value) {
   let team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2510,7 +2560,7 @@ async function handleTeamSizeSet(interaction, messageId, value) {
 
 async function handleTeamWorldButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2535,7 +2585,7 @@ async function handleTeamWorldButton(interaction, messageId) {
 
 async function handleTeamWorldModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2596,7 +2646,7 @@ function teamRegionRows(team, messageId) {
 
 async function handleTeamRegionButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2612,7 +2662,7 @@ async function handleTeamRegionButton(interaction, messageId) {
 
 async function handleTeamRegionSet(interaction, messageId, regionId) {
   let team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2642,7 +2692,7 @@ async function handleTeamRegionSet(interaction, messageId, regionId) {
 
 async function handleTeamHubButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2667,7 +2717,8 @@ async function handleTeamHubButton(interaction, messageId) {
 
 async function handleTeamContractButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || team.activity !== 'yama') return;
+  if (!team) return replyTeamGone(interaction);
+  if (team.activity !== 'yama') return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2694,7 +2745,8 @@ async function handleTeamContractButton(interaction, messageId) {
 
 async function handleTeamContractSelect(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team || team.activity !== 'yama') return;
+  if (!team) return replyTeamGone(interaction);
+  if (team.activity !== 'yama') return;
   if (!canManageTeam(interaction, team)) {
     await interaction.reply({ content: 'Only the organizer or staff can change this.', ephemeral: true }).catch(() => {});
     return;
@@ -2716,7 +2768,7 @@ async function handleTeamContractSelect(interaction, messageId) {
 
 async function handleTeamHubModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -2751,7 +2803,7 @@ async function handleTeamHubModal(interaction, messageId) {
 
 async function handleTeamFcButton(interaction, messageId) {
   const team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) return denyManage(interaction);
   const modal = new ModalBuilder()
     .setCustomId(`team:teamfcmodal:${messageId}`)
@@ -2773,7 +2825,7 @@ async function handleTeamFcButton(interaction, messageId) {
 
 async function handleTeamFcModal(interaction, messageId) {
   let team = findTeamByMessage(messageId);
-  if (!team) return;
+  if (!team) return replyTeamGone(interaction);
   if (!canManageTeam(interaction, team)) {
     await denyManage(interaction);
     return;
@@ -3029,7 +3081,13 @@ async function handleRoleClaim(interaction, messageId, roleIdx) {
     if (!team) return { error: 'That team is gone.' };
     const r = applyRoleClaim(team, userId, roleIdx);
     if (!r.ok) return { error: r.error };
-    team.memberNames[userId] = interaction.user.displayName;
+    if (r.action === 'released') {
+      // Released the role: drop the name too, so memberNames stays a
+      // true roster of who currently holds a spot.
+      if (team.memberNames) delete team.memberNames[userId];
+    } else {
+      team.memberNames[userId] = interaction.user.displayName;
+    }
     return { ok: true, filled: r.filled, fillPing: team.fillPing, messageId: team.messageId, team: JSON.parse(JSON.stringify(team)) };
   }).catch((err) => {
     console.warn('Team role claim mutation failed:', err.message);
@@ -3219,6 +3277,24 @@ async function sweepExpiredTeams(client) {
     else if (shouldSweepTeam(team, now)) toDelete.push(id);
   }
   if (!toClose.length && !toDelete.length) return;
+  // Delete expired teams' messages before dropping their state (same
+  // order as handleDelete). If a delete fails, the state entry survives
+  // and the next sweep retries instead of orphaning the message.
+  for (const id of toDelete) {
+    const team = state.teams[id];
+    if (!team) continue;
+    try {
+      const channel = await client.channels.fetch(team.channelId).catch(() => null);
+      if (channel && channel.isTextBased()) {
+        await channel.messages.delete(id).catch((err) => console.warn('Team sweep delete failed:', err.message));
+        if (team.fillPingMsgId) {
+          await channel.messages.delete(team.fillPingMsgId).catch((err) => console.warn('Fill ping sweep delete failed:', err.message));
+        }
+      }
+    } catch (err) {
+      console.warn('Team sweep delete failed:', err.message);
+    }
+  }
   await mutateTeams((s) => {
     for (const id of toClose) {
       const t = s.teams[id];
@@ -3233,17 +3309,6 @@ async function sweepExpiredTeams(client) {
   for (const id of toClose) {
     const team = fresh.teams[id];
     if (team) await refreshListing(client, team).catch((err) => console.warn('Team auto-close refresh failed:', err.message));
-  }
-  for (const id of toDelete) {
-    const team = state.teams[id];
-    if (!team) continue;
-    try {
-      const channel = await client.channels.fetch(team.channelId).catch(() => null);
-      const msg = channel && channel.isTextBased() ? await channel.messages.fetch(id).catch(() => null) : null;
-      if (msg) await msg.delete().catch((err) => console.warn('Team sweep delete failed:', err.message));
-    } catch (err) {
-      console.warn('Team sweep delete failed:', err.message);
-    }
   }
 }
 

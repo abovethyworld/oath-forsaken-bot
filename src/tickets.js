@@ -23,6 +23,10 @@ const TICKET_TYPES = {
 };
 
 async function setupTickets(interaction) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const t = config.tickets;
   const channel = interaction.guild.channels.cache.get(t.panelChannelId);

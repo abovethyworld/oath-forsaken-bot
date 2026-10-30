@@ -10,7 +10,10 @@ const {
   ButtonBuilder,
   ButtonStyle,
 } = require('discord.js');
+const fs = require('node:fs');
+const path = require('node:path');
 const config = require('./config');
+const { atomicWrite } = require('./store');
 
 const { ZAMORAK_RED, safeFetch, clampDesc } = require('./utils');
 const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId; // #event-calendar
@@ -163,6 +166,27 @@ function viewCalendarButton() {
   );
 }
 
+// Persisted calendar message ids, keyed by channel id: { channelId: messageId }.
+// store.loadJson/saveJson are not exported, so read the file and write via atomicWrite.
+const MESSAGE_ID_FILE = path.join(__dirname, '..', 'data', 'event-calendar.json');
+
+function loadPostedMessageId(channelId) {
+  try {
+    return JSON.parse(fs.readFileSync(MESSAGE_ID_FILE, 'utf8'))[channelId] || null;
+  } catch {
+    return null;
+  }
+}
+
+function savePostedMessageId(channelId, messageId) {
+  let data = {};
+  try {
+    data = JSON.parse(fs.readFileSync(MESSAGE_ID_FILE, 'utf8'));
+  } catch {}
+  data[channelId] = messageId;
+  atomicWrite(MESSAGE_ID_FILE, data);
+}
+
 async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
   const guild = client.guilds.cache.get(config.guildId);
   if (!guild) return;
@@ -183,27 +207,38 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
   const bannerUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, BANNER_MSG_ID, BANNER_URL, 'banner');
   const { embed, components } = buildEmbed(events, thumbnailUrl, bannerUrl);
 
-  // Find existing calendar message to update, or post new one
-  const messages = await safeFetch(channel.messages.fetch({ limit: 20 }), 'event-calendar scan');
+  // Find existing calendar message to update, or post new one. Prefer the
+  // persisted message id: the scan fallback only covers the last 20 messages,
+  // so once the embed scrolls past that window every sync would duplicate it.
   let existing = null;
-  if (messages) {
-    existing = messages.find(
-      (m) =>
-        m.author.id === client.user.id &&
-        m.embeds.some(
-          (e) =>
-            e.title === '⛧ Event Calendar ⛧' ||
-            e.title === 'Oath Forsaken Event Calendar' ||
-            e.title === '⛧ Upcoming Events ⛧'
-        )
-    );
+  const storedId = loadPostedMessageId(channel.id);
+  if (storedId) {
+    const m = await safeFetch(channel.messages.fetch(storedId), 'event-calendar fetch');
+    if (m && m.author.id === client.user.id) existing = m;
+  }
+  if (!existing) {
+    const messages = await safeFetch(channel.messages.fetch({ limit: 20 }), 'event-calendar scan');
+    if (messages) {
+      existing = messages.find(
+        (m) =>
+          m.author.id === client.user.id &&
+          m.embeds.some(
+            (e) =>
+              e.title === '⛧ Event Calendar ⛧' ||
+              e.title === 'Oath Forsaken Event Calendar' ||
+              e.title === '⛧ Upcoming Events ⛧'
+          )
+      );
+    }
   }
   const payload = { embeds: [embed], components };
   if (existing) {
     await existing.edit(payload).catch((e) => console.error("[event-calendar.js] Non-fatal error:", e.message));
+    if (existing.id !== storedId) savePostedMessageId(channel.id, existing.id);
     console.log('Calendar: updated existing embed');
   } else {
-    await channel.send(payload).catch((e) => console.error("[event-calendar.js] Non-fatal error:", e.message));
+    const sent = await channel.send(payload).catch((e) => console.error("[event-calendar.js] Non-fatal error:", e.message));
+    if (sent) savePostedMessageId(channel.id, sent.id);
     console.log('Calendar: posted new embed');
   }
 }

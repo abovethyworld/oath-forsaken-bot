@@ -11,7 +11,7 @@ const BASE = 'https://api.runeprofile.com/v1';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'rp-cache-v2.json');
 const CACHE_MS = 24 * 3600 * 1000;
-const MIN_GAP_MS = 2500; // keyless tier is 30 req/min; pace well under it
+const MIN_GAP_MS = 2500; // keyed tier is 120 req/min; pacing stays deliberately conservative
 
 function loadCache() {
   try {
@@ -34,10 +34,12 @@ function saveCache(cache) {
 // Serialized, paced request queue. All RuneProfile traffic goes through here.
 let queueTail = Promise.resolve();
 let lastRequestAt = 0;
+let blockedUntil = 0; // set on a 429; the queue waits it out before the next request
 
 function paced(fn) {
   const run = queueTail.then(async () => {
-    const wait = MIN_GAP_MS - (Date.now() - lastRequestAt);
+    const now = Date.now();
+    const wait = Math.max(MIN_GAP_MS - (now - lastRequestAt), blockedUntil - now);
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastRequestAt = Date.now();
     return fn();
@@ -64,6 +66,11 @@ async function rpFetch(endpoint) {
   }
   if (res.status === 404 || res.status === 400) return { notFound: true };
   if (res.status === 429) {
+    // Honor Retry-After and pause the queue until the block lifts (same
+    // pattern as wom-limiter); the failed request itself is never retried.
+    const retryAfter = parseInt(res.headers.get('Retry-After') || '', 10);
+    const waitSecs = Math.min(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60, 3600);
+    blockedUntil = Math.max(blockedUntil, Date.now() + waitSecs * 1000);
     const err = new Error('RuneProfile rate limited');
     err.rateLimited = true;
     throw err;

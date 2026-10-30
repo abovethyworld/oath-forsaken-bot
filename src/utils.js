@@ -47,10 +47,10 @@ function getPingRole(guild) {
 // Single source of truth. Was triple-duplicated in seniority.js,
 // recruit.js, and tickets.js.
 function buildInitiateWelcome(userId) {
-  const introduceId = config.channels?.introduceYourself || '1558428255940378715';
-  const rolesId = config.channels?.roles || '1558399101454786670';
-  const staffId = config.tickets?.staffRoleIds?.[0] || '1558735997922054225';
-  const initiateId = config.seniorityRanks?.find((r) => r.minMonths === 0)?.roleId || '1558452023790276659';
+  const introduceId = config.channels?.introduceYourself;
+  const rolesId = config.channels?.roles;
+  const staffId = config.tickets?.staffRoleIds?.[0];
+  const initiateId = config.seniorityRanks?.find((r) => r.minMonths === 0)?.roleId;
 
   return (
     `⛧ <@&${initiateId}> ⛧\n` +
@@ -66,11 +66,11 @@ function buildInitiateWelcome(userId) {
 // ─── Guest welcome message ────────────────────────────────────────
 // Single source of truth for the guest welcome posted in #general.
 function buildGuestWelcome(userId) {
-  const guestId = config.recruit?.guestRoleId || '1558540445611728997';
-  const introduceId = config.channels?.introduceYourself || '1558428255940378715';
-  const rolesId = config.channels?.roles || '1558399101454786670';
-  const staffId = config.tickets?.staffRoleIds?.[0] || '1558735997922054225';
-  const contactId = config.recruit?.contactStaffChannelId || '1558399103757717518';
+  const guestId = config.recruit?.guestRoleId;
+  const introduceId = config.channels?.introduceYourself;
+  const rolesId = config.channels?.roles;
+  const staffId = config.tickets?.staffRoleIds?.[0];
+  const contactId = config.recruit?.contactStaffChannelId;
 
   return (
     `Welcome, <@&${guestId}>\n` +

@@ -179,6 +179,7 @@ async function refreshChecklist(guild) {
 }
 
 async function addEntry(guild, userId, oldRank, newRank) {
+  const normalizedOld = oldRank || 'None';
   const data = load();
   // Don't add duplicates
   if (data.entries.some(e => e.userId === userId && e.newRank === newRank)) return;
@@ -186,7 +187,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
   data.entries.push({
     id: `${userId}:${newRank}:${at}`,
     userId,
-    oldRank: oldRank || 'None',
+    oldRank: normalizedOld,
     newRank,
     at,
     held: false,
@@ -204,7 +205,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
       if (pingMsg) {
         // Store ping message ID on the entry for cleanup
         const d2 = load();
-        const entry = d2.entries.find(e => e.userId === userId && e.oldRank === oldRank && e.newRank === newRank && !e.pingMsgId);
+        const entry = d2.entries.find(e => e.userId === userId && e.oldRank === normalizedOld && e.newRank === newRank && !e.pingMsgId);
         if (entry) {
           entry.pingMsgId = pingMsg.id;
           save(d2);
