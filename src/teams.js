@@ -3367,6 +3367,8 @@ module.exports = {
   teamPanelPayload,
   settingsPanelPayload,
   rsnSwitchPayload,
+  rsnLinkRow,
+  teamsChannelId,
   normalizeRsnEntry,
   getRsnEntry,
   addRsn,
