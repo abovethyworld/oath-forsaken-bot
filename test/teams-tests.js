@@ -1323,6 +1323,20 @@ test('/kc slash payload renders a card; slash commands register', async () => {
 
 console.log(`Results: ${passed} passed, ${failed} failed`);
 
+test('showoff unlinked payload carries the Link RSN button and names the panel channel', () => {
+  const so = require('../src/showoff');
+  const p = so.unlinkedPayload('!clog total YourName', 'Usage: `!clog <activity|total> [name]`');
+  assert.ok(p.content.includes('<#1558428263322357811>'), 'names the Find a Team channel');
+  assert.ok(p.content.includes('!clog total YourName'), 'example matches the command used');
+  assert.ok(!p.content.includes('!kc'), 'no wrong-command example');
+  assert.ok(p.content.includes('Usage:'), 'usage shows even when unlinked');
+  assert.strictEqual(p.components.length, 1, 'one action row');
+  assert.strictEqual(p.components[0].components[0].data.custom_id, 'team:rsn', 'button is the existing Link RSN handler');
+  const s = so.unlinkedSlashPayload();
+  assert.ok(s.content.includes('<#1558428263322357811>'), 'slash version names the channel too');
+  assert.strictEqual(s.components[0].components[0].data.custom_id, 'team:rsn');
+});
+
 test('showoff cooldown: one notice per window, shared !/slash bucket', () => {
   const so = require('../src/showoff');
   const uid = 'cooldown-tester';
