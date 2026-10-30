@@ -13,7 +13,10 @@ const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
 
 // Per-user cooldown across every show-off command (! and slash share one
 // bucket). The window exists to protect the WOM/RuneProfile paced queues;
-// members get told once per window instead of silent nothing.
+// members get told once per window instead of silent nothing. The window
+// starts when a lookup actually fires (inside the payload builders, via
+// noteUse), never on a failed validation, so a typo costs nothing. The
+// global API limiters still cap total traffic regardless.
 const COOLDOWN_MS = 10_000;
 const lastUseAt = new Map();
 const lastNotifyAt = new Map();
@@ -83,10 +86,11 @@ function takeActivity(args, table) {
 
 // Payload builders: return what to reply with ({ files }, { embeds }, or
 // { content }), shared by the !-commands and the slash commands.
-async function kcPayload(activity, rsn) {
+async function kcPayload(activity, rsn, userId) {
   if (!activity || !ACTIVITIES[activity]) {
     return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(ACTIVITIES).join(', ')}` };
   }
+  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   let st;
   try {
     st = await getStats(rsn);
@@ -109,11 +113,10 @@ async function kcPayload(activity, rsn) {
 async function handleKcCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  noteUse(message.author.id);
   const activity = takeActivity(args, ACTIVITIES);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
-  await message.reply(await kcPayload(activity, rsn)).catch(() => {});
+  await message.reply(await kcPayload(activity, rsn, message.author.id)).catch(() => {});
 }
 
 function progressBar(obtained, total) {
@@ -155,9 +158,10 @@ function clogPageForCommand(key) {
 }
 
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
-async function clogPayload(key, rsn) {
+async function clogPayload(key, rsn, userId) {
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   if (key === 'total') {
+    if (userId) noteUse(userId); // a real lookup fires: start the cooldown
     const res = await getClogSummary(rsn).catch(() => null);
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
@@ -171,6 +175,7 @@ async function clogPayload(key, rsn) {
       ? 'Wilderness Agility has no collection log page to show.'
       : `No collection log page for \`${key}\`. Try one of: ${Object.keys(CLOG_PAGES).join(', ')}.` };
   }
+  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
@@ -198,14 +203,14 @@ async function clogPayload(key, rsn) {
 async function handleClogCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  noteUse(message.author.id);
   const key = takeActivity(args, CLOG_PAGES);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
-  await message.reply(await clogPayload(key, rsn)).catch(() => {});
+  await message.reply(await clogPayload(key, rsn, message.author.id)).catch(() => {});
 }
 
-async function profilePayload(rsn) {
+async function profilePayload(rsn, userId) {
+  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   const prof = await getProfile(rsn).catch(() => null);
   if (!prof) return { content: 'Could not reach the profile service right now. Try again in a bit.' };
   if (prof.notFound) return { content: RP_GUIDE };
@@ -228,10 +233,9 @@ async function profilePayload(rsn) {
 async function handleProfileCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  noteUse(message.author.id);
   const { rsn, error } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
-  await message.reply(await profilePayload(rsn)).catch(() => {});
+  await message.reply(await profilePayload(rsn, message.author.id)).catch(() => {});
 }
 
 // Leaderboard rows from cached clog totals (instant); missing profiles get a
@@ -253,7 +257,10 @@ function leaderboardRows() {
   return rows;
 }
 
-async function leaderboardPayload() {
+async function leaderboardPayload(userId) {
+  // Served from cache, but it fires background warming lookups, so it
+  // counts as a use like the other commands.
+  if (userId) noteUse(userId);
   const rows = leaderboardRows();
   if (!rows.length) {
     return { content: 'No ranked profiles yet. Link an RSN and use `!clog total` once, or wait a minute and try again.' };
@@ -265,8 +272,7 @@ async function leaderboardPayload() {
 async function handleLeaderboardCommand(message) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  noteUse(message.author.id);
-  await message.reply(await leaderboardPayload()).catch(() => {});
+  await message.reply(await leaderboardPayload(message.author.id)).catch(() => {});
 }
 
 // ---- slash commands (same payloads as the !-commands) --------------------
@@ -291,12 +297,11 @@ async function slashReply(interaction, payloadPromise) {
 }
 
 // Returns true when the interaction was answered with a cooldown notice.
+// Check only: the cooldown starts inside the payload builders, when the
+// lookup actually fires.
 async function slashCooldown(interaction) {
   const cd = checkCooldown(interaction.user.id);
-  if (!cd.wait) {
-    noteUse(interaction.user.id);
-    return false;
-  }
+  if (!cd.wait) return false;
   await interaction.reply({ content: cooldownText(cd.wait), ephemeral: true }).catch(() => {});
   return true;
 }
@@ -318,7 +323,7 @@ const commands = [
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn));
+      await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
   {
@@ -331,7 +336,7 @@ const commands = [
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn));
+      await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
   {
@@ -343,7 +348,7 @@ const commands = [
       const { rsn, error } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, profilePayload(rsn));
+      await slashReply(interaction, profilePayload(rsn, interaction.user.id));
     },
   },
   {
@@ -352,7 +357,7 @@ const commands = [
       .setDescription('Collection log leaderboard for linked clan members'),
     run: async (interaction) => {
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, leaderboardPayload());
+      await slashReply(interaction, leaderboardPayload(interaction.user.id));
     },
   },
 ];
