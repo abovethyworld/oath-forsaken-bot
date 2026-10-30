@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 
-const { ZAMORAK_RED, safeFetch } = require('./utils');
+const { ZAMORAK_RED, safeFetch, clampDesc } = require('./utils');
 const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId; // #event-calendar
 const BOT_COMMANDS_CHANNEL_ID = config.eventCalendar?.botCommandsChannelId; // #bot-commands
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
@@ -61,10 +61,13 @@ function publicCalendarUrl() {
   return `https://calendar.google.com/calendar/embed?src=${encodeURIComponent(CALENDAR_ID)}`;
 }
 
+// Returns the events array on success (possibly empty). Returns null when
+// the fetch itself failed (missing config, HTTP error, network error) so
+// callers can leave the live agenda untouched instead of wiping it.
 async function fetchEvents() {
   if (!CALENDAR_ID || !API_KEY) {
     console.error('Calendar: GCAL_CALENDAR_ID or GCAL_API_KEY not set');
-    return [];
+    return null;
   }
   const now = new Date();
   const twoWeeks = new Date(now.getTime() + 14 * 24 * 3600 * 1000);
@@ -79,13 +82,13 @@ async function fetchEvents() {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) {
       console.error('Calendar fetch failed:', res.status);
-      return [];
+      return null;
     }
     const data = await res.json();
     return data.items || [];
   } catch (err) {
     console.error('Calendar fetch error:', err.message);
-    return [];
+    return null;
   } finally {
     clearTimeout(timer);
   }
@@ -115,7 +118,16 @@ function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL
     return { embed, components: [viewCalendarButton()] };
   }
 
-  const sections = events.slice(0, 10).map((ev, idx) => {
+  // Discord caps an embed description at 4096 characters and rejects the
+  // whole payload past that, which silently stops the sync. Budget the
+  // sections: add them one at a time and stop once the next one would push
+  // the assembled description (header + separators + sections) over the cap.
+  const header = '*Upcoming Events over the next 2 weeks*';
+  const separator = '\n\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n\n';
+  const DESCRIPTION_MAX = 4096;
+  const sections = [];
+  let totalLength = header.length;
+  for (const ev of events.slice(0, 10)) {
     const name = ev.summary || 'Untitled event';
     const startTs = discordTimestamp(ev.start?.dateTime || ev.start?.date);
     const endTs = discordTimestamp(ev.end?.dateTime || ev.end?.date);
@@ -129,13 +141,15 @@ function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL
     }
 
     const desc = ev.description ? `\n\n${ev.description.slice(0, 300)}` : '';
-    return `## ⛧ *${name}*\n\n${timeLine}${desc}`;
-  });
+    const section = `## ⛧ *${name}*\n\n${timeLine}${desc}`;
+    // First section is joined to the header with '\n\n'; later ones with the separator.
+    const addedLength = (sections.length === 0 ? 2 : separator.length) + section.length;
+    if (totalLength + addedLength > DESCRIPTION_MAX) break;
+    sections.push(section);
+    totalLength += addedLength;
+  }
 
-  embed.setDescription(
-    '*Upcoming Events over the next 2 weeks*\n\n' +
-      sections.join('\n\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n\n')
-  );
+  embed.setDescription(clampDesc(header + '\n\n' + sections.join(separator)));
 
   return { embed, components: [viewCalendarButton()] };
 }
@@ -158,6 +172,12 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
     return;
   }
   const events = await fetchEvents();
+  if (!events) {
+    // Fetch failed (Google outage, missing config, network) — leave the
+    // existing agenda in place rather than replacing it with "no events".
+    console.error('Calendar: fetch failed, leaving the existing embed untouched');
+    return;
+  }
   // Resolve fresh signed image URLs so embeds never break on expiry.
   const thumbnailUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, THUMBNAIL_MSG_ID, THUMBNAIL_URL, 'thumbnail');
   const bannerUrl = await resolveImageUrl(client, BOT_COMMANDS_CHANNEL_ID, BANNER_MSG_ID, BANNER_URL, 'banner');

@@ -153,7 +153,9 @@ async function refreshChecklist(guild) {
   const channel = guild.channels.cache.get(CC_THREAD_ID);
   if (!channel) return;
 
-  const page = data.page || 0;
+  // Clamp the saved page into range so a stale page value cannot render a blank embed
+  const totalPages = Math.ceil(data.entries.length / PER_PAGE);
+  const page = Math.min(Math.max(0, data.page || 0), Math.max(0, totalPages - 1));
   const embed = buildEmbed(data.entries, page);
   const components = buildButtons(data.entries, page);
 
@@ -167,8 +169,10 @@ async function refreshChecklist(guild) {
     }
     // No existing message, post a new one
     const msg = await channel.send({ embeds: [embed], components });
-    data.messageId = msg.id;
-    save(data);
+    // Reload before saving so entry changes made during the send are not clobbered
+    const fresh = load();
+    fresh.messageId = msg.id;
+    save(fresh);
   } catch (err) {
     console.error('CC checklist refresh failed:', err.message);
   }
@@ -298,7 +302,7 @@ async function handleCcButton(interaction) {
     const removed = data.entries.splice(idx, 1)[0];
     // Adjust page if we removed the last entry on the last page
     const totalPages = Math.ceil(data.entries.length / PER_PAGE);
-    if (data.page >= totalPages && data.page > 0) data.page = totalPages - 1;
+    if (data.page >= totalPages && data.page > 0) data.page = Math.max(0, totalPages - 1);
     save(data);
     await refreshChecklist(interaction.guild);
     // Delete the ping message for this entry

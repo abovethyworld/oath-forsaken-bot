@@ -36,6 +36,16 @@ function saveState(state) {
   atomicWrite(STATE_FILE, state);
 }
 
+// Serializes state mutations (same pattern as teams' mutateTeams): one
+// load-mutate-save cycle runs to completion before the next starts, so two
+// handlers can never load the same state and save over each other's changes.
+let stateQueue = Promise.resolve();
+function mutateBounty(fn) {
+  const run = stateQueue.then(() => fn());
+  stateQueue = run.catch(() => {});
+  return run;
+}
+
 function bountyConfig() {
   return config.bounty || {};
 }
@@ -115,76 +125,85 @@ async function postCommand(interaction) {
 
   await interaction.deferReply({ ephemeral: true });
 
-  const state = loadState();
-  // Retire any currently active bounty.
-  for (const [id, b] of Object.entries(state.bounties)) {
-    if (b.active) {
-      b.active = false;
-      try {
-        const oldMsg = await channel.messages.fetch(id);
-        const oldEmbed = EmbedBuilder.from(oldMsg.embeds[0]).setFooter({ text: 'Contract closed.' });
-        await oldMsg.edit({ embeds: [oldEmbed], components: [] });
-      } catch (err) {
-        console.warn('Bounty retire edit failed:', err.message);
+  return mutateBounty(async () => {
+    const state = loadState();
+    // Retire any currently active bounty.
+    for (const [id, b] of Object.entries(state.bounties)) {
+      if (b.active) {
+        b.active = false;
+        try {
+          const oldMsg = await channel.messages.fetch(id);
+          const oldEmbed = EmbedBuilder.from(oldMsg.embeds[0]).setFooter({ text: 'Contract closed.' });
+          await oldMsg.edit({ embeds: [oldEmbed], components: [] });
+        } catch (err) {
+          console.warn('Bounty retire edit failed:', err.message);
+        }
       }
     }
-  }
 
-  const wikiUrl = wiki || `https://runescape.wiki/w/${encodeURIComponent(target.replace(/ /g, '_'))}`;
-  const embed = bountyEmbed({
-    target,
-    location,
-    threat,
-    days,
-    image,
-    rewardMention: `<@&${role.id}>`,
-  });
-  // Stash wiki for the link button (per-bounty).
-  const msg = await channel.send({
-    embeds: [embed],
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('bounty:claim:pending')
-          .setLabel('Claim Bounty')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('⚔️'),
-        new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
-      ),
-    ],
-  });
-  // Patch the claim button with the real bounty id now that we have it.
-  await msg
-    .edit({
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId(`bounty:claim:${msg.id}`)
-            .setLabel('Claim Bounty')
-            .setStyle(ButtonStyle.Success)
-            .setEmoji('⚔️'),
-          new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
-        ),
-      ],
-    })
-    .catch((err) => console.warn('Bounty button patch failed:', err.message));
+    const wikiUrl = wiki || `https://runescape.wiki/w/${encodeURIComponent(target.replace(/ /g, '_'))}`;
+    const embed = bountyEmbed({
+      target,
+      location,
+      threat,
+      days,
+      image,
+      rewardMention: `<@&${role.id}>`,
+    });
+    // Stash wiki for the link button (per-bounty).
+    let msg;
+    try {
+      msg = await channel.send({
+        embeds: [embed],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('bounty:claim:pending')
+              .setLabel('Claim Bounty')
+              .setStyle(ButtonStyle.Success)
+              .setEmoji('⚔️'),
+            new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
+          ),
+        ],
+      });
+    } catch (err) {
+      console.error('Bounty post failed:', err.message);
+      await interaction.editReply({ content: 'Could not post the bounty.' }).catch(() => {});
+      return;
+    }
+    // Patch the claim button with the real bounty id now that we have it.
+    await msg
+      .edit({
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`bounty:claim:${msg.id}`)
+              .setLabel('Claim Bounty')
+              .setStyle(ButtonStyle.Success)
+              .setEmoji('⚔️'),
+            new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
+          ),
+        ],
+      })
+      .catch((err) => console.warn('Bounty button patch failed:', err.message));
 
-  state.bounties[msg.id] = {
-    channelId: channel.id,
-    target,
-    location,
-    threat,
-    days,
-    wiki: wikiUrl,
-    image: image || null,
-    active: true,
-    winnerId: null,
-    createdAt: Date.now(),
-    expiresAt: Date.now() + days * DAY_MS,
-    createdBy: interaction.user.id,
-  };
-  saveState(state);
-  await interaction.editReply({ content: `Bounty posted: ${target}` }).catch(() => {});
+    state.bounties[msg.id] = {
+      channelId: channel.id,
+      target,
+      location,
+      threat,
+      days,
+      wiki: wikiUrl,
+      image: image || null,
+      active: true,
+      winnerId: null,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + days * DAY_MS,
+      createdBy: interaction.user.id,
+    };
+    saveState(state);
+    await interaction.editReply({ content: `Bounty posted: ${target}` }).catch(() => {});
+  });
 }
 
 async function handleClaim(interaction, bountyId) {
@@ -209,36 +228,65 @@ async function handleClaim(interaction, bountyId) {
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
-  const parentMsg = await interaction.channel.messages.fetch(bountyId).catch(() => null);
-  if (!parentMsg) {
-    await interaction.editReply({ content: 'Could not find the bounty post.' }).catch(() => {});
-    return;
-  }
-  const name = `Bounty Claim - ${interaction.user.displayName}`.slice(0, 100);
-  let thread;
-  try {
-    thread = await parentMsg.startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN, type: ChannelType.PrivateThread });
-  } catch {
-    thread = await parentMsg
-      .startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN })
-      .catch(() => null);
-  }
-  if (!thread) {
-    await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
-    return;
-  }
-  await thread.members.add(interaction.user.id).catch(() => {});
-  await thread.send({
-    content:
-      `<@${interaction.user.id}> would like to claim the bounty!\n` +
-      `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.`,
-    components: reviewButtons(thread.id),
-  });
+  // The checks above are a fast path only. The authoritative checks run
+  // inside the queue on a fresh load: two fast taps both pass the early
+  // pending check before either saves, so without this the second tap
+  // would open a duplicate claim thread.
+  return mutateBounty(async () => {
+    const state = loadState();
+    const bounty = state.bounties[bountyId];
+    if (!bounty || !bounty.active) {
+      await interaction.reply({ content: 'This bounty is no longer active.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    const dup = Object.values(state.claims).some(
+      (c) => c.bountyId === bountyId && c.claimerId === interaction.user.id && c.status === 'pending'
+    );
+    if (dup) {
+      await interaction
+        .reply({ content: 'You already have an open claim. Post your proof in your thread.', ephemeral: true })
+        .catch(() => {});
+      return;
+    }
 
-  state.claims[thread.id] = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
-  saveState(state);
-  await interaction.editReply({ content: `Claim opened: ${thread.url}` }).catch(() => {});
+    await interaction.deferReply({ ephemeral: true });
+    const parentMsg = await interaction.channel.messages.fetch(bountyId).catch(() => null);
+    if (!parentMsg) {
+      await interaction.editReply({ content: 'Could not find the bounty post.' }).catch(() => {});
+      return;
+    }
+    const name = `Bounty Claim - ${interaction.user.displayName}`.slice(0, 100);
+    let thread;
+    try {
+      thread = await parentMsg.startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN, type: ChannelType.PrivateThread });
+    } catch {
+      thread = await parentMsg
+        .startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN })
+        .catch(() => null);
+    }
+    if (!thread) {
+      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
+      return;
+    }
+    await thread.members.add(interaction.user.id).catch(() => {});
+
+    state.claims[thread.id] = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
+    saveState(state);
+    try {
+      await thread.send({
+        content:
+          `<@${interaction.user.id}> would like to claim the bounty!\n` +
+          `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.`,
+        components: reviewButtons(thread.id),
+      });
+    } catch {
+      delete state.claims[thread.id];
+      saveState(state);
+      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
+      return;
+    }
+    await interaction.editReply({ content: `Claim opened: ${thread.url}` }).catch(() => {});
+  });
 }
 
 async function handleGrant(interaction, threadId) {
@@ -246,82 +294,92 @@ async function handleGrant(interaction, threadId) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
-  const state = loadState();
-  const claim = state.claims[threadId];
-  if (!claim || claim.status !== 'pending') {
-    await interaction.reply({ content: 'Nothing to grant here.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  const guild = interaction.guild;
-  const role = championRole(guild);
-  if (!role) {
-    await interaction.reply({ content: 'Champion role is not set up.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  await interaction.deferReply({ ephemeral: true });
-
-  // Strip the previous holder(s). The title belongs to one champion.
-  const prevHolders = [...role.members.values()].filter((m) => m.id !== claim.claimerId);
-  for (const m of prevHolders) {
-    await m.roles.remove(role).catch((err) => console.warn('Bounty strip failed:', err.message));
-  }
-  const winner = await guild.members.fetch(claim.claimerId).catch(() => null);
-  if (!winner) {
-    await interaction.editReply({ content: 'Winner is no longer in the server.' }).catch(() => {});
-    return;
-  }
-  const retained = winner.roles.cache.has(role.id);
-  if (!retained) {
-    try {
-      await winner.roles.add(role);
-    } catch (err) {
-      console.error('Bounty grant failed:', err.message);
-      await interaction.editReply({ content: 'Could not grant the role. Check my permissions.' }).catch(() => {});
+  return mutateBounty(async () => {
+    const state = loadState();
+    const claim = state.claims[threadId];
+    if (!claim || claim.status !== 'pending') {
+      await interaction.reply({ content: 'Nothing to grant here.', ephemeral: true }).catch(() => {});
       return;
     }
-  }
-
-  claim.status = 'granted';
-  const bounty = state.bounties[claim.bountyId];
-  if (bounty) {
-    bounty.active = false;
-    bounty.winnerId = claim.claimerId;
-    try {
-      const chan = await guild.channels.fetch(bounty.channelId).catch(() => null);
-      const msg = chan ? await chan.messages.fetch(claim.bountyId).catch(() => null) : null;
-      if (msg && msg.embeds[0]) {
-        const done = EmbedBuilder.from(msg.embeds[0]).setFooter({
-          text: `Claimed by ${winner.displayName}`,
-        });
-        await msg.edit({ embeds: [done], components: [] });
-      }
-      if (chan && chan.isTextBased()) {
-        await chan
-          .send(
-            `🩸 Contract claimed. **${bounty.target}** falls to <@${winner.id}>. ` +
-              `A new contract will be nailed to the board soon.`
-          )
-          .catch(() => {});
-      }
-    } catch (err) {
-      console.warn('Bounty close edit failed:', err.message);
+    const bounty = state.bounties[claim.bountyId];
+    if (!bounty || !bounty.active) {
+      await interaction.reply({ content: 'This bounty is no longer active.', ephemeral: true }).catch(() => {});
+      return;
     }
-  }
-  saveState(state);
+    const guild = interaction.guild;
+    const role = championRole(guild);
+    if (!role) {
+      await interaction.reply({ content: 'Champion role is not set up.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    await interaction.deferReply({ ephemeral: true });
 
-  const thread = await guild.channels.fetch(threadId).catch(() => null);
-  if (thread && thread.isThread()) {
-    await thread
-      .send(
-        retained
-          ? `👑 Bounty Confirmed! <@${winner.id}> retains the title ${role.name}.`
-          : `👑 Bounty Confirmed! <@${winner.id}> has been granted the title ${role.name}.`
-      )
-      .catch(() => {});
-    await thread.setLocked(true).catch(() => {});
-    await thread.setArchived(true).catch(() => {});
-  }
-  await interaction.editReply({ content: `Granted to ${winner.displayName}.` }).catch(() => {});
+    // Confirm the winner can receive the title before stripping the old one.
+    const winner = await guild.members.fetch(claim.claimerId).catch(() => null);
+    if (!winner) {
+      await interaction.editReply({ content: 'Winner is no longer in the server.' }).catch(() => {});
+      return;
+    }
+    const retained = winner.roles.cache.has(role.id);
+    if (!retained) {
+      try {
+        await winner.roles.add(role);
+      } catch (err) {
+        console.error('Bounty grant failed:', err.message);
+        await interaction.editReply({ content: 'Could not grant the role. Check my permissions.' }).catch(() => {});
+        return;
+      }
+    }
+    // Strip the previous holder(s). The title belongs to one champion.
+    const prevHolders = [...role.members.values()].filter((m) => m.id !== claim.claimerId);
+    for (const m of prevHolders) {
+      await m.roles.remove(role).catch((err) => console.warn('Bounty strip failed:', err.message));
+    }
+
+    claim.status = 'granted';
+    for (const c of Object.values(state.claims)) {
+      if (c !== claim && c.bountyId === claim.bountyId && c.status === 'pending') c.status = 'superseded';
+    }
+    if (bounty) {
+      bounty.active = false;
+      bounty.winnerId = claim.claimerId;
+      try {
+        const chan = await guild.channels.fetch(bounty.channelId).catch(() => null);
+        const msg = chan ? await chan.messages.fetch(claim.bountyId).catch(() => null) : null;
+        if (msg && msg.embeds[0]) {
+          const done = EmbedBuilder.from(msg.embeds[0]).setFooter({
+            text: `Claimed by ${winner.displayName}`,
+          });
+          await msg.edit({ embeds: [done], components: [] });
+        }
+        if (chan && chan.isTextBased()) {
+          await chan
+            .send(
+              `🩸 Contract claimed. **${bounty.target}** falls to <@${winner.id}>. ` +
+                `A new contract will be nailed to the board soon.`
+            )
+            .catch(() => {});
+        }
+      } catch (err) {
+        console.warn('Bounty close edit failed:', err.message);
+      }
+    }
+    saveState(state);
+
+    const thread = await guild.channels.fetch(threadId).catch(() => null);
+    if (thread && thread.isThread()) {
+      await thread
+        .send(
+          retained
+            ? `👑 Bounty Confirmed! <@${winner.id}> retains the title ${role.name}.`
+            : `👑 Bounty Confirmed! <@${winner.id}> has been granted the title ${role.name}.`
+        )
+        .catch(() => {});
+      await thread.setLocked(true).catch(() => {});
+      await thread.setArchived(true).catch(() => {});
+    }
+    await interaction.editReply({ content: `Granted to ${winner.displayName}.` }).catch(() => {});
+  });
 }
 
 async function handleReject(interaction, threadId) {
@@ -329,19 +387,21 @@ async function handleReject(interaction, threadId) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
-  const state = loadState();
-  const claim = state.claims[threadId];
-  if (!claim || claim.status !== 'pending') {
-    await interaction.reply({ content: 'Nothing to reject here.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  claim.status = 'rejected';
-  saveState(state);
-  const thread = await interaction.guild.channels.fetch(threadId).catch(() => null);
-  if (thread && thread.isThread()) {
-    await thread.send('Claim rejected. Post better proof if you have it.').catch(() => {});
-  }
-  await interaction.reply({ content: 'Claim rejected.', ephemeral: true }).catch(() => {});
+  return mutateBounty(async () => {
+    const state = loadState();
+    const claim = state.claims[threadId];
+    if (!claim || claim.status !== 'pending') {
+      await interaction.reply({ content: 'Nothing to reject here.', ephemeral: true }).catch(() => {});
+      return;
+    }
+    claim.status = 'rejected';
+    saveState(state);
+    const thread = await interaction.guild.channels.fetch(threadId).catch(() => null);
+    if (thread && thread.isThread()) {
+      await thread.send('Claim rejected. Post better proof if you have it.').catch(() => {});
+    }
+    await interaction.reply({ content: 'Claim rejected.', ephemeral: true }).catch(() => {});
+  });
 }
 
 async function handleLock(interaction, threadId) {
@@ -361,34 +421,39 @@ async function handleLock(interaction, threadId) {
 // closes the contract embed, and posts an expiry notice to the board so
 // staff knows a new contract is needed. Idempotent across restarts.
 async function sweepExpiredBounties(client) {
-  const state = loadState();
-  const now = Date.now();
-  let changed = false;
-  for (const [id, b] of Object.entries(state.bounties)) {
-    if (!b.active) continue;
-    const expiresAt = b.expiresAt || (b.createdAt || 0) + (b.days || 14) * DAY_MS;
-    if (expiresAt > now) continue;
-    b.active = false;
-    changed = true;
-    try {
-      const chan = await client.channels.fetch(b.channelId).catch(() => null);
-      if (!chan || !chan.isTextBased()) continue;
-      const msg = await chan.messages.fetch(id).catch(() => null);
-      if (msg && msg.embeds[0]) {
-        const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
-        await msg.edit({ embeds: [expired], components: [] });
+  return mutateBounty(async () => {
+    const state = loadState();
+    const now = Date.now();
+    let changed = false;
+    for (const [id, b] of Object.entries(state.bounties)) {
+      if (!b.active) continue;
+      const expiresAt = b.expiresAt || (b.createdAt || 0) + (b.days || 14) * DAY_MS;
+      if (expiresAt > now) continue;
+      b.active = false;
+      changed = true;
+      for (const c of Object.values(state.claims)) {
+        if (c.bountyId === id && c.status === 'pending') c.status = 'expired';
       }
-      await chan
-        .send(
-          `⌛ The contract on **${b.target}** expired with no claim. ` +
-            `A new contract will be nailed to the board soon.`
-        )
-        .catch(() => {});
-    } catch (err) {
-      console.warn('Bounty expiry sweep failed:', err.message);
+      try {
+        const chan = await client.channels.fetch(b.channelId).catch(() => null);
+        if (!chan || !chan.isTextBased()) continue;
+        const msg = await chan.messages.fetch(id).catch(() => null);
+        if (msg && msg.embeds[0]) {
+          const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
+          await msg.edit({ embeds: [expired], components: [] });
+        }
+        await chan
+          .send(
+            `⌛ The contract on **${b.target}** expired with no claim. ` +
+              `A new contract will be nailed to the board soon.`
+          )
+          .catch(() => {});
+      } catch (err) {
+        console.warn('Bounty expiry sweep failed:', err.message);
+      }
     }
-  }
-  if (changed) saveState(state);
+    if (changed) saveState(state);
+  });
 }
 
 async function handleBountyButton(interaction) {

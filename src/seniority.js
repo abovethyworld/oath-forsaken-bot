@@ -124,6 +124,13 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     const members = await getMembers(guild);
     if (!members) return changes;
 
+    // Fail closed: without both member role IDs configured there is no way
+    // to tell clan members from guests, so abort before any role changes.
+    if (!IRON_ROLE_ID || !MAIN_ROLE_ID) {
+      console.error('[seniority] config.seniority.ironRoleId and config.seniority.mainRoleId must both be set. Aborting seniority sync.');
+      return changes;
+    }
+
     const now = Date.now();
     const rankUps = []; // stories to send after all role changes (batched, not interleaved)
 
@@ -138,7 +145,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
       const memberRoleIds = [IRON_ROLE_ID, MAIN_ROLE_ID].filter(Boolean);
-      const isMember = memberRoleIds.length === 0 || memberRoleIds.some((id) => m.roles.cache.has(id));
+      const isMember = memberRoleIds.some((id) => m.roles.cache.has(id));
       if (!isMember) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {

@@ -192,6 +192,10 @@ async function handleTicketButton(interaction) {
 async function showMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const member = interaction.member;
+  if (!types.guest?.roleId) {
+    await interaction.reply({ content: 'The guest role is not set up. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
   if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
     await interaction.reply({ content: 'You are already a member of the clan.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
@@ -225,6 +229,10 @@ async function handleMemberSelect(interaction) {
     return;
   }
   const member = interaction.member;
+  if (!types.guest?.roleId) {
+    await interaction.reply({ content: 'The guest role is not set up. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
   // Re-verify guest status: they may have been approved via normal application
   // between opening the menu and picking. Prevents double promotion.
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
