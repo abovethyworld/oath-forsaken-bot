@@ -195,11 +195,11 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // Queue the story — sent after all role changes to avoid interleaved rate limits
       if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
       // First-ever assignment: no story, but staff still need the in-game CC
-      // rank set, so it gets a checklist entry below. Initiate included:
-      // every member is on the same ladder (Gavin's call, 2026-10-29). In
-      // practice the approval flow grants Initiate before the sync runs, so
-      // this only fires when that step was missed or roles were restored.
-      else firstRanks.push({ member: m, newRankName });
+      // rank set, so it gets a checklist entry below. Initiate excluded: a
+      // new member carries the default icon in the clan chat anyway, so
+      // there is nothing for staff to set until the first real rank-up
+      // (Gavin's call, 2026-10-29).
+      else if (newRankName !== 'Initiate') firstRanks.push({ member: m, newRankName });
     }
 
     // Second pass: stories + CC checklist entries, paced
