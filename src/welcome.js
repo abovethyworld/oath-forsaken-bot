@@ -5,6 +5,10 @@ const config = require('./config');
 
 async function handleWelcome(member) {
   const w = config.welcome;
+  if (!w) {
+    console.error('Welcome config not found. Check config.welcome.');
+    return;
+  }
   const channel = member.guild.channels.cache.get(config.channels.welcome);
   if (!channel) {
     console.error('Welcome channel not found. Check config.channels.welcome.');

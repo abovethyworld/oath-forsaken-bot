@@ -67,16 +67,21 @@ async function authedCalendar() {
 async function createEvent({ summary, description, start, end, timeZone, calendarId }) {
   const calendar = await authedCalendar();
   if (!calendar) return null;
-  const res = await calendar.events.insert({
-    calendarId: calendarId || 'primary',
-    requestBody: {
-      summary,
-      description: description || '',
-      start: { dateTime: start.toISOString(), timeZone },
-      end: { dateTime: end.toISOString(), timeZone },
-    },
-  });
-  return res.data.htmlLink || null;
+  try {
+    const res = await calendar.events.insert({
+      calendarId: calendarId || 'primary',
+      requestBody: {
+        summary,
+        description: description || '',
+        start: { dateTime: start.toISOString(), timeZone },
+        end: { dateTime: end.toISOString(), timeZone },
+      },
+    });
+    return res.data.htmlLink || null;
+  } catch (err) {
+    console.error('[gcal.js] createEvent insert failed:', err.message);
+    return null;
+  }
 }
 
 module.exports = { isConfigured, getAuthUrl, exchangeCode, createEvent, REDIRECT_URI };

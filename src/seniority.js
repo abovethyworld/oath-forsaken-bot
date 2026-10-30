@@ -133,11 +133,14 @@ async function syncSeniority(client, { dryRun = false } = {}) {
 
     const now = Date.now();
     const rankUps = []; // stories to send after all role changes (batched, not interleaved)
+    let updatedCount = 0; // role changes actually made (non-dry-run log total)
+    // Load holds once: the per-member store lookup re-read the file every time
+    const seniorityHolds = store.getSeniorityHolds(guild.id);
 
     for (const m of members.values()) {
       if (m.user.bot) continue;
       // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
-      if (store.isSeniorityHeld(guild.id, m.id)) continue;
+      if (seniorityHolds.has(m.id)) continue;
       // Only clan members (Iron Sworn or Unbound) get seniority roles.
       // Guests, Friends of the Clan, and joiners who have not applied yet
       // hold neither role: strip any seniority rank they hold, then skip.
@@ -153,6 +156,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
             changes.push(`${m.user.tag}: strip seniority (not a clan member)`);
           } else {
             await m.roles.remove(rankIds, 'Seniority sync: only clan members (Iron Sworn/Unbound) hold seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+            updatedCount++;
           }
         }
         continue;
@@ -186,6 +190,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       const remove = rankIds.filter((id) => id !== want.roleId);
       if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+      updatedCount++;
       // Queue the story — sent after all role changes to avoid interleaved rate limits
       if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
     }
@@ -197,8 +202,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       await new Promise((r) => setTimeout(r, 2000));
     }
 
-    const totalChanged = changes.length + rankUps.length;
-    if (totalChanged && !dryRun) console.log(`Seniority sync: updated ${totalChanged} member(s).`);
+    if (updatedCount && !dryRun) console.log(`Seniority sync: updated ${updatedCount} member(s).`);
     return changes;
   } catch (err) {
     console.error('Seniority sync failed:', err.message);

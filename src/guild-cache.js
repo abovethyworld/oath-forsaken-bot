@@ -8,6 +8,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 let membersCache = { data: null, at: 0, guildId: null };
 let channelsCache = { data: null, at: 0, guildId: null };
+let membersFetch = null; // in-flight member fetch, shared by concurrent callers
 
 async function getMembers(guild, forceRefresh = false) {
   const now = Date.now();
@@ -19,11 +20,31 @@ async function getMembers(guild, forceRefresh = false) {
   ) {
     return membersCache.data;
   }
-  const members = await safeFetch(guild.members.fetch(), 'guild members fetch');
-  if (members) {
-    membersCache = { data: members, at: now, guildId: guild.id };
+  if (!membersFetch) {
+    membersFetch = (async () => {
+      try {
+        const members = await safeFetch(guild.members.fetch(), 'guild members fetch');
+        if (members) {
+          membersCache = { data: members, at: Date.now(), guildId: guild.id };
+          return members;
+        }
+        // Fetch failed: serve the stale copy only while it is within 2x TTL.
+        // Beyond that, return null so callers skip instead of acting on
+        // membership that may be badly out of date.
+        if (
+          membersCache.data &&
+          membersCache.guildId === guild.id &&
+          Date.now() - membersCache.at < CACHE_TTL_MS * 2
+        ) {
+          return membersCache.data;
+        }
+        return null;
+      } finally {
+        membersFetch = null;
+      }
+    })();
   }
-  return membersCache.data;
+  return membersFetch;
 }
 
 async function getChannels(guild, forceRefresh = false) {
@@ -44,6 +65,7 @@ async function getChannels(guild, forceRefresh = false) {
 function invalidateCache() {
   membersCache = { data: null, at: 0, guildId: null };
   channelsCache = { data: null, at: 0, guildId: null };
+  membersFetch = null;
 }
 
 module.exports = { getMembers, getChannels, invalidateCache, CACHE_TTL_MS };

@@ -129,13 +129,23 @@ async function handleGate(interaction, pollId, action) {
       await interaction.reply({ content: 'That channel is gone. The poll has nowhere to post.', ephemeral: true });
       return;
     }
+    // Claim the draft synchronously before the send, so two staff clicking
+    // Post in the same moment can't both pass the pending check and post it.
+    poll.pending = false;
+    store.savePoll(poll);
     const msg = await channel.send({
       embeds: [pollEmbed(poll)],
       components: pollRows(pollId, poll.options),
       allowedMentions: { parse: [] },
-    });
+    }).catch(() => null);
+    if (!msg) {
+      // Send failed: hand the draft back so staff can approve it again.
+      poll.pending = true;
+      store.savePoll(poll);
+      await interaction.reply({ content: 'Could not post that poll. It is still waiting for approval.', ephemeral: true });
+      return;
+    }
     poll.messageId = msg.id;
-    poll.pending = false;
     store.savePoll(poll);
     await interaction.update({
       content: `Posted in <#${poll.channelId}> by ${interaction.user.tag}.`,

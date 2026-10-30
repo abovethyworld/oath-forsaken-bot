@@ -67,7 +67,7 @@ function rosterButtons(rosterId) {
 async function postRoster(channel, eventName, eventId) {
   const rosterId = eventId || crypto.randomBytes(8).toString('hex');
   const roster = {};
-  store.saveRoster(rosterId, { eventName, roster, channelId: channel.id, messageId: null });
+  store.saveRoster(rosterId, { eventName, roster, channelId: channel.id, messageId: null, createdAt: Date.now() });
   const msg = await channel.send({
     embeds: [rosterEmbed(eventName, roster)],
     components: rosterButtons(rosterId),

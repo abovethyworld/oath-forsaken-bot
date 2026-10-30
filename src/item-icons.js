@@ -31,6 +31,13 @@ async function tryFetch(url) {
   }
 }
 
+// A miss on every source usually means the icon does not exist yet
+// (brand-new item RuneLite has not cached, or a name mismatch on both
+// wiki forms). Remember it in memory for a while so every card that
+// includes the item does not re-run all the fetches.
+const MISS_TTL_MS = 60 * 60 * 1000;
+const iconMisses = new Map();
+
 async function fetchIcon(id, name) {
   const urls = [`https://static.runelite.net/cache/item/icon/${encodeURIComponent(String(id))}.png`];
   // Wiki fallback by name; stacked items live at <name>_1.png there
@@ -44,9 +51,15 @@ async function fetchIcon(id, name) {
     const buf = await tryFetch(url);
     if (!buf) continue;
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(iconPath(id), buf);
+    // Temp file + rename, so a crash mid-write cannot leave a truncated
+    // PNG at the real path that existsSync would treat as cached forever.
+    const tmp = `${iconPath(id)}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, buf);
+    fs.renameSync(tmp, iconPath(id));
+    iconMisses.delete(id);
     return iconPath(id);
   }
+  iconMisses.set(id, Date.now());
   return null;
 }
 
@@ -71,6 +84,8 @@ async function getItemIcon(id, name) {
   if (!Number.isInteger(id) || id <= 0) return null;
   const p = iconPath(id);
   if (fs.existsSync(p)) return p;
+  const missedAt = iconMisses.get(id);
+  if (missedAt && Date.now() - missedAt < MISS_TTL_MS) return null;
   return pacedFetchIcon(id, name);
 }
 
