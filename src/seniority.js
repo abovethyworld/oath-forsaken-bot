@@ -133,6 +133,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
 
     const now = Date.now();
     const rankUps = []; // stories to send after all role changes (batched, not interleaved)
+    const firstRanks = []; // first-ever assignments: CC checklist entry only, no story
     let updatedCount = 0; // role changes actually made (non-dry-run log total)
     // Load holds once: the per-member store lookup re-read the file every time
     const seniorityHolds = store.getSeniorityHolds(guild.id);
@@ -193,12 +194,23 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       updatedCount++;
       // Queue the story — sent after all role changes to avoid interleaved rate limits
       if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
+      // First-ever assignment: no story, but staff still need the in-game CC
+      // rank set, so it gets a checklist entry below. Initiate is the one
+      // exception: brand-new members are set during onboarding (2026-10-14).
+      else if (newRankName !== 'Initiate') firstRanks.push({ member: m, newRankName });
     }
 
     // Second pass: stories + CC checklist entries, paced
     for (const { member, rankName, oldRankName, newRankName } of rankUps) {
       await postRankUpStory(guild, member, rankName);
       await addCcEntry(guild, member.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
+    // First assignments get their checklist entry (old rank None), paced the
+    // same way; addEntry dedupes, so a re-assignment never double-lists.
+    for (const { member, newRankName } of firstRanks) {
+      await addCcEntry(guild, member.id, 'None', newRankName).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       await new Promise((r) => setTimeout(r, 2000));
     }
 
