@@ -24,6 +24,7 @@ const lore = require('./lore');
 const bounty = require('./bounty');
 const teams = require('./teams');
 const showoff = require('./showoff');
+const pluginConnect = require('./plugin-connect');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -291,6 +292,7 @@ const commands = [
   ...showoff.commands,
   ...roster.commands,
   ...lore.commands,
+  ...pluginConnect.commands,
 ];
 
 async function handleCommand(interaction) {
