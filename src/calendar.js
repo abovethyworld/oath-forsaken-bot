@@ -311,8 +311,10 @@ async function syncReminders(client) {
       if (minsLeft <= 0) continue;
       for (const r of config.calendar.reminders || [60, 15]) {
         if (minsLeft <= r && !store.wasReminded(e.id, r)) {
-          store.markReminded(e.id, r);
-          await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
+          const sent = await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
+          // Only mark as reminded once the ping actually went out — marking
+          // first would permanently eat the reminder if the send failed.
+          if (sent) store.markReminded(e.id, r);
         }
       }
     }

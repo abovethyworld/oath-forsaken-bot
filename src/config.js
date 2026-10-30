@@ -45,6 +45,13 @@ for (const [name, id] of Object.entries({
   if (looksPlaceholder(id)) problems.push(`config.calendar.${name} is not set`);
 }
 if (!cal.timezone) problems.push('config.calendar.timezone is not set');
+const sen = config.seniority || {};
+for (const [name, id] of Object.entries({
+  ironRoleId: sen.ironRoleId,
+  mainRoleId: sen.mainRoleId,
+})) {
+  if (looksPlaceholder(id)) problems.push(`config.seniority.${name} is not set`);
+}
 
 // Validate seniority rank brackets: must be sorted, non-overlapping, no gaps at start
 const ranks = [...(config.seniorityRanks || [])].sort((a, b) => a.minMonths - b.minMonths);

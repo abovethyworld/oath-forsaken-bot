@@ -10,6 +10,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const DATA_FILE = path.join(DATA_DIR, 'join-dates.json');
 
 let cache = null;
+let recoveredFromCorrupt = false;
 
 function load() {
   if (cache) return cache;
@@ -19,7 +20,12 @@ function load() {
     } else {
       cache = {};
     }
-  } catch {
+  } catch (err) {
+    console.error(`Join dates: failed to parse ${DATA_FILE} (${err.message}); moving it aside and starting empty`);
+    recoveredFromCorrupt = true;
+    try {
+      fs.renameSync(DATA_FILE, `${DATA_FILE}.corrupt-${Date.now()}`);
+    } catch {}
     cache = {};
   }
   return cache;
@@ -55,6 +61,10 @@ function getOriginalJoinDate(userId) {
 // Accepts pre-fetched members to avoid redundant API calls.
 async function backfill(guild, preFetchedMembers = null) {
   const dates = load();
+  if (recoveredFromCorrupt) {
+    console.error('Join dates: skipping backfill because the stored file was corrupt; backfilling from current join dates would reset seniority for members who left and rejoined.');
+    return 0;
+  }
   let added = 0;
   try {
     const members = preFetchedMembers || await guild.members.fetch().catch(() => null);

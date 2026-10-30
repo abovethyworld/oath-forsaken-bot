@@ -17,7 +17,12 @@ const STRIKE_EXPIRY_DAYS = 90;
 function load() {
   try {
     return JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  } catch {
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    console.error(`store: failed to parse ${FILE} (${err.message}); moving it aside and starting empty`);
+    try {
+      fs.renameSync(FILE, `${FILE}.corrupt-${Date.now()}`);
+    } catch {}
     return {};
   }
 }
@@ -37,7 +42,12 @@ function save(data) {
 function loadJson(file) {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
+  } catch (err) {
+    if (err.code === 'ENOENT') return {};
+    console.error(`store: failed to parse ${file} (${err.message}); moving it aside and starting empty`);
+    try {
+      fs.renameSync(file, `${file}.corrupt-${Date.now()}`);
+    } catch {}
     return {};
   }
 }
