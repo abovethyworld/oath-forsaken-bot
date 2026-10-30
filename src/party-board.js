@@ -616,7 +616,10 @@ function renderClogLeaderboard(rows) {
   const W = 780;
   const shown = rows.slice(0, 10);
   const ROW_H = 76;
-  const H = 110 + shown.length * ROW_H + 24;
+  // Floor at one row of height: the empty state draws 'No profiles yet' at
+  // y=130 and main-atlas glyphs reach 51px below their top, so a 0-row canvas
+  // (134px tall) would push the text entirely off the bottom edge.
+  const H = 110 + Math.max(shown.length, 1) * ROW_H + 24;
   const cv = stoneCanvas(W, H);
   drawCentered(cv, W / 2, 26, 'Clan Clog Leaderboard', TINT_WHITE);
   let y = 110;

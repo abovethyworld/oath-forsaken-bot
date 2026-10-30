@@ -86,11 +86,14 @@ async function womFetch(method, endpoint, body) {
     // call re-enters the limiter after the block instead of hammering.
     limiter.noteRateLimited(retryAfter);
     const err = new Error(`WOM rate limited, retry after ${retryAfter}s`);
-    err.retryAfter = retryAfter;
+    // Retry-After can be an HTTP-date, which parses to NaN; only expose a
+    // numeric value when it is a finite positive number of seconds.
+    if (Number.isFinite(retryAfter) && retryAfter > 0) err.retryAfter = retryAfter;
     err.rateLimited = true;
     throw err;
   }
-  limiter.noteSuccess();
+  // Only a real success clears the consecutive-429 escalation; a 5xx must not.
+  if (res.ok) limiter.noteSuccess();
   return res;
 }
 

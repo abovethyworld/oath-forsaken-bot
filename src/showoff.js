@@ -175,15 +175,17 @@ async function clogPayload(key, rsn) {
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
   const obtained = (res.items || []).filter((it) => it.quantity > 0);
-  const drawn = [];
-  for (const it of obtained.slice(0, 49)) {
+  // Fetch the page's icons in parallel: item-icons serializes the actual
+  // downloads through its own paced queue, so this stays polite while a
+  // cold cache no longer stalls the render on 49 serial waits.
+  const drawn = await Promise.all(obtained.slice(0, 49).map(async (it) => {
     let icon = null;
     const p = await getItemIcon(it.id, it.name).catch(() => null);
     if (p) {
       try { icon = decodePng(fs.readFileSync(p)); } catch { icon = null; }
     }
-    drawn.push({ icon, qty: it.quantity });
-  }
+    return { icon, qty: it.quantity };
+  }));
   const buf = renderClogCard({
     title: `${rsn}: ${page[1]}`,
     obtained: res.obtained,
@@ -280,8 +282,11 @@ function resolveNameFor(userId, named) {
 }
 
 async function slashReply(interaction, payloadPromise) {
-  await interaction.deferReply();
+  const deferred = await interaction.deferReply().then(() => true).catch(() => false);
   const payload = await payloadPromise;
+  // Defer failed (usually an expired interaction): editReply would fail
+  // too, so bail instead of answering into the void.
+  if (!deferred) return;
   await interaction.editReply(payload).catch(() => {});
 }
 

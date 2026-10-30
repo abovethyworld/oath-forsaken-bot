@@ -116,7 +116,10 @@ async function handleEventButton(interaction) {
   pendingEvents.delete(pendingId);
 
   if (action === 'cancel') {
-    await interaction.update({ content: 'Event creation cancelled.', components: [] }).catch(() => {});
+    // The same button serves both flows: creation confirm ("Cancel") and the
+    // cancel-event confirm ("Keep it"), whose pending entry holds a cancelEventId.
+    const content = pending.data?.cancelEventId ? 'Event kept.' : 'Event creation cancelled.';
+    await interaction.update({ content, components: [] }).catch(() => {});
     return;
   }
 
