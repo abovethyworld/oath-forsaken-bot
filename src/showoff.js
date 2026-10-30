@@ -4,7 +4,7 @@
 const { AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
 const { getStats, combatLevel } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
-const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, teamsChannelId } = require('./teams');
+const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const fs = require('fs');
@@ -60,37 +60,22 @@ function fmtKc(n) {
 }
 
 // Unlinked users get the Link RSN button right on the reply, so they never
-// have to go hunting for it. The button lives on the Find a Team panel in
-// the teams channel, which the text names as the fallback.
-function unlinkedPayload(example, extra) {
-  const channelId = teamsChannelId();
-  const where = channelId ? `<#${channelId}>` : '#find-a-team';
-  const lines = [
-    `Link your RSN first: tap Link RSN below, or use the same button in ${where}.`,
-    `Or pass a name: \`${example}\`.`,
-  ];
-  if (extra) lines.push(extra);
-  return { content: lines.join('\n'), components: rsnLinkRow() };
-}
-
-function unlinkedSlashPayload() {
-  const channelId = teamsChannelId();
-  const where = channelId ? `<#${channelId}>` : '#find-a-team';
-  return {
-    content: `Link your RSN first: tap Link RSN below, or use the same button in ${where}.\nOr pass a name in the player option.`,
-    components: rsnLinkRow(),
-  };
+// have to go hunting for it. One line, one job: get them linked. Passing a
+// name for a one-off lookup stays supported, but the reply does not push
+// it: an unlinked user typing a showoff command wants their own stats.
+function unlinkedPayload() {
+  return { content: 'No RSN linked yet. Tap below to link yours.', components: rsnLinkRow() };
 }
 
 // Name: explicit arg wins, else the author's linked RSN.
-function resolveName(args, authorId, example, extra) {
+function resolveName(args, authorId) {
   const named = args.join(' ').trim().replace(/\s+/g, ' ');
   if (named) {
     if (!RSN_RE.test(named)) return { error: 'That name has characters RuneScape does not allow. Try again.' };
     return { rsn: named };
   }
   const linked = getRsn(authorId);
-  if (!linked) return { payload: unlinkedPayload(example, extra) };
+  if (!linked) return { payload: unlinkedPayload() };
   return { rsn: linked };
 }
 
@@ -137,8 +122,7 @@ async function handleKcCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const activity = takeActivity(args, ACTIVITIES);
-  const extra = !activity || !ACTIVITIES[activity] ? 'Usage: `!kc <activity> [name]`' : null;
-  const { rsn, error, payload } = resolveName(args, message.author.id, '!kc yama YourName', extra);
+  const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   await message.reply(await kcPayload(activity, rsn, message.author.id)).catch(() => {});
@@ -229,8 +213,7 @@ async function handleClogCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const key = takeActivity(args, CLOG_PAGES);
-  const extra = !key ? 'Usage: `!clog <activity|total> [name]`' : null;
-  const { rsn, error, payload } = resolveName(args, message.author.id, '!clog total YourName', extra);
+  const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   await message.reply(await clogPayload(key, rsn, message.author.id)).catch(() => {});
@@ -260,7 +243,7 @@ async function profilePayload(rsn, userId) {
 async function handleProfileCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  const { rsn, error, payload } = resolveName(args, message.author.id, '!profile YourName');
+  const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   await message.reply(await profilePayload(rsn, message.author.id)).catch(() => {});
@@ -311,7 +294,7 @@ function resolveNameFor(userId, named) {
     return { rsn: name };
   }
   const linked = getRsn(userId);
-  if (!linked) return { payload: unlinkedSlashPayload() };
+  if (!linked) return { payload: unlinkedPayload() };
   return { rsn: linked };
 }
 
@@ -393,4 +376,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, unlinkedSlashPayload };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload };
