@@ -296,6 +296,10 @@ function getCachedClogPage(username, tab, page) {
 }
 
 // Profile bundle: account summary + skills + combat achievements + diaries.
+// Only the account lookup gates the result: if the account itself is
+// missing, the profile is not found. A missing or failed extra (skills,
+// combat achievements, diaries) just leaves that section off the card
+// instead of hiding a real account for 24 hours (Gavin's call, 2026-10-29).
 // Returns { account, skills, ca, diaries } | { notFound: true } | null.
 async function getProfile(username) {
   const u = encodeURIComponent(String(username).trim());
@@ -307,30 +311,42 @@ async function getProfile(username) {
   ];
   const out = {};
   for (const [tag, endpoint, parse] of jobs) {
-    const key = `profile:${String(username).toLowerCase().trim()}:${tag.split(':')[1]}`;
+    const section = tag.split(':')[1];
+    const isAccount = section === 'account';
+    const key = `profile:${String(username).toLowerCase().trim()}:${section}`;
     const cached = loadCache()[key];
     if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
-      if (cached.notFound) return { notFound: true };
-      out[tag.split(':')[1]] = cached.data;
+      if (cached.notFound) {
+        if (isAccount) return { notFound: true };
+        continue; // extra known-missing: section stays off the card
+      }
+      out[section] = cached.data;
       continue;
     }
     const res = await paced(() => rpFetch(endpoint)).catch((err) => {
       console.warn(`RuneProfile ${tag} lookup failed for ${username}: ${err.message}`);
       return null;
     });
-    if (!res) return null;
+    if (!res) {
+      if (isAccount) return null;
+      continue; // extra failed to load: card renders without that section
+    }
     if (res.notFound) {
       const cache = loadCache();
       cache[key] = { fetchedAt: Date.now(), notFound: true };
       saveCache(cache);
-      return { notFound: true };
+      if (isAccount) return { notFound: true };
+      continue;
     }
     const parsed = parse(res.json);
-    if (!parsed) return null;
+    if (!parsed) {
+      if (isAccount) return null;
+      continue;
+    }
     const cache = loadCache();
     cache[key] = { fetchedAt: Date.now(), data: parsed };
     saveCache(cache);
-    out[tag.split(':')[1]] = parsed;
+    out[section] = parsed;
   }
   return { account: out.account, skills: out.skills, ca: out.ca, diaries: out.diaries };
 }
