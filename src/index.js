@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleAutocomplete } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -141,6 +141,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
       }
       await handleCommand(interaction);
+    } else if (interaction.isAutocomplete()) {
+      await handleAutocomplete(interaction);
     } else if (interaction.isButton()) {
       // Button cooldown: 2s per user (prevents button spam).
       // Team finder is a guided wizard with rapid taps — skip the cooldown there.

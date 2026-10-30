@@ -1180,8 +1180,46 @@ test('!clog command pages cover all clog activities', () => {
   const { clogPageForCommand } = require('../src/showoff');
   assert.deepStrictEqual(clogPageForCommand('cox'), ['Raids', 'Chambers of Xeric']);
   assert.deepStrictEqual(clogPageForCommand('yama'), ['Bosses', 'Yama']);
+  // RuneProfile merged the paired wildy bosses into combined pages.
+  assert.deepStrictEqual(clogPageForCommand('venenatis'), ['Bosses', 'Venenatis and Spindel']);
+  assert.deepStrictEqual(clogPageForCommand('callisto'), ['Bosses', 'Callisto and Artio']);
+  assert.deepStrictEqual(clogPageForCommand('vetion'), ['Bosses', "Vet'ion and Calvar'ion"]);
   assert.deepStrictEqual(clogPageForCommand('ba'), ['Minigames', 'Barbarian Assault']);
   assert.strictEqual(clogPageForCommand('wag'), null, 'WAG has no clog page');
+});
+
+test('kc coverage: every Wise Old Man kill-count metric is reachable', () => {
+  const { ACTIVITIES, kcColumnsForTeam } = require('../src/teams');
+  const { KC_KEYS } = require('../src/showoff');
+  // Reference list: a live Wise Old Man snapshot, 2026-10-30 (all metrics
+  // except collections_logged, which is a count, not a kill count).
+  const WOM_METRICS = ["abyssal_sire", "alchemical_hydra", "amoxliatl", "araxxor", "artio", "barrows_chests", "bounty_hunter_hunter", "bounty_hunter_rogue", "brutus", "bryophyta", "callisto", "calvarion", "cerberus", "chambers_of_xeric", "chambers_of_xeric_challenge_mode", "chaos_elemental", "chaos_fanatic", "clue_scrolls_all", "clue_scrolls_beginner", "clue_scrolls_easy", "clue_scrolls_elite", "clue_scrolls_hard", "clue_scrolls_master", "clue_scrolls_medium", "colosseum_glory", "commander_zilyana", "corporeal_beast", "crazy_archaeologist", "dagannoth_prime", "dagannoth_rex", "dagannoth_supreme", "deranged_archaeologist", "doom_of_mokhaiotl", "duke_sucellus", "general_graardor", "giant_mole", "grotesque_guardians", "guardians_of_the_rift", "hespori", "kalphite_queen", "king_black_dragon", "kraken", "kreearra", "kril_tsutsaroth", "last_man_standing", "lunar_chests", "mad_angel", "maggot_king", "mimic", "nex", "nightmare", "obor", "phantom_muspah", "phosanis_nightmare", "pvp_arena", "sarachnis", "scorpia", "scurrius", "shellbane_gryphon", "skotizo", "sol_heredit", "soul_wars_zeal", "spindel", "tempoross", "the_corrupted_gauntlet", "the_fractured_archive", "the_gauntlet", "the_hueycoatl", "the_leviathan", "the_royal_titans", "the_whisperer", "theatre_of_blood", "theatre_of_blood_hard_mode", "thermonuclear_smoke_devil", "tombs_of_amascut", "tombs_of_amascut_expert", "tzkal_zuk", "tztok_jad", "vardorvis", "venenatis", "vetion", "vorkath", "wintertodt", "yama", "zalcano", "zulrah"];
+  const covered = new Set();
+  for (const key of Object.keys(KC_KEYS)) {
+    const cols = ACTIVITIES[key] ? kcColumnsForTeam({ activity: key }) : KC_KEYS[key].cols;
+    for (const c of cols) covered.add(c.metric);
+  }
+  const missing = WOM_METRICS.filter((m) => !covered.has(m));
+  assert.deepStrictEqual(missing, [], 'metrics with no !kc command');
+});
+
+test('clog coverage: every RuneProfile collection log page is reachable', () => {
+  const { CLOG_PAGES } = require('../src/showoff');
+  // Reference list: the live RuneProfile collection-log index, 2026-10-30.
+  const RP_PAGES = ["Bosses :: Abyssal Sire", "Bosses :: Alchemical Hydra", "Bosses :: Amoxliatl", "Bosses :: Araxxor", "Bosses :: Barrows Chests", "Bosses :: Brutus", "Bosses :: Bryophyta", "Bosses :: Callisto and Artio", "Bosses :: Cerberus", "Bosses :: Chaos Elemental", "Bosses :: Chaos Fanatic", "Bosses :: Commander Zilyana", "Bosses :: Corporeal Beast", "Bosses :: Crazy Archaeologist", "Bosses :: Dagannoth Kings", "Bosses :: Deranged Archaeologist", "Bosses :: Doom of Mokhaiotl", "Bosses :: Duke Sucellus", "Bosses :: The Fight Caves", "Bosses :: Fortis Colosseum", "Bosses :: The Gauntlet", "Bosses :: General Graardor", "Bosses :: Giant Mole", "Bosses :: Grotesque Guardians", "Bosses :: Hespori", "Bosses :: The Hueycoatl", "Bosses :: The Inferno", "Bosses :: Kalphite Queen", "Bosses :: King Black Dragon", "Bosses :: Kraken", "Bosses :: Kree'arra", "Bosses :: K'ril Tsutsaroth", "Bosses :: The Leviathan", "Bosses :: The Mad Angel", "Bosses :: Maggot King", "Bosses :: Moons of Peril", "Bosses :: Nex", "Bosses :: The Nightmare", "Bosses :: Obor", "Bosses :: Phantom Muspah", "Bosses :: Royal Titans", "Bosses :: Sarachnis", "Bosses :: Scorpia", "Bosses :: Scurrius", "Bosses :: Shellbane Gryphon", "Bosses :: Skotizo", "Bosses :: Tempoross", "Bosses :: Thermonuclear Smoke Devil", "Bosses :: Vardorvis", "Bosses :: Venenatis and Spindel", "Bosses :: Vet'ion and Calvar'ion", "Bosses :: Vorkath", "Bosses :: The Whisperer", "Bosses :: Wintertodt", "Bosses :: Yama", "Bosses :: Zalcano", "Bosses :: Zulrah", "Raids :: Chambers of Xeric", "Raids :: The Fractured Archive", "Raids :: Theatre of Blood", "Raids :: Tombs of Amascut", "Clues :: Beginner Treasure Trails", "Clues :: Easy Treasure Trails", "Clues :: Medium Treasure Trails", "Clues :: Hard Treasure Trails", "Clues :: Elite Treasure Trails", "Clues :: Master Treasure Trails", "Clues :: Hard Treasure Trails (Rare)", "Clues :: Elite Treasure Trails (Rare)", "Clues :: Master Treasure Trails (Rare)", "Clues :: Shared Treasure Trail Rewards", "Clues :: Scroll Cases", "Minigames :: Barbarian Assault", "Minigames :: Barracuda Trials", "Minigames :: Brimhaven Agility Arena", "Minigames :: Castle Wars", "Minigames :: Fishing Trawler", "Minigames :: Giants' Foundry", "Minigames :: Gnome Restaurant", "Minigames :: Guardians of the Rift", "Minigames :: Hallowed Sepulchre", "Minigames :: Last Man Standing", "Minigames :: Magic Training Arena", "Minigames :: Mahogany Homes", "Minigames :: Mastering Mixology", "Minigames :: Pest Control", "Minigames :: Rogues' Den", "Minigames :: Shades of Mort'ton", "Minigames :: Soul Wars", "Minigames :: Temple Trekking", "Minigames :: Tithe Farm", "Minigames :: Trouble Brewing", "Minigames :: Vale Totems", "Minigames :: Volcanic Mine", "Other :: Aerial Fishing", "Other :: All Pets", "Other :: Boat Paints", "Other :: Camdozaal", "Other :: Champion's Challenge", "Other :: Chompy Bird Hunting", "Other :: Colossal Wyrm Agility", "Other :: Creature Creation", "Other :: Cyclopes", "Other :: Elder Chaos Druids", "Other :: Forestry", "Other :: Fossil Island Notes", "Other :: Glough's Experiments", "Other :: Hunter Guild", "Other :: Lost Schematics", "Other :: Monkey Backpacks", "Other :: Motherlode Mine", "Other :: My Notes", "Other :: Ocean Encounters", "Other :: Random Events", "Other :: Revenants", "Other :: Rooftop Agility", "Other :: Sailing Miscellaneous", "Other :: Sea Treasures", "Other :: Shayzien Armour", "Other :: Shooting Stars", "Other :: Skilling Pets", "Other :: Slayer", "Other :: Tormented Demons", "Other :: TzHaar", "Other :: Miscellaneous"];
+  const have = new Set(Object.values(CLOG_PAGES).map((p) => p[0] + ' :: ' + p[1]));
+  const missing = RP_PAGES.filter((p) => !have.has(p));
+  assert.deepStrictEqual(missing, [], 'pages with no !clog command');
+  const invalid = [...have].filter((p) => !RP_PAGES.includes(p));
+  assert.deepStrictEqual(invalid, [], 'page names RuneProfile does not have');
+});
+
+test('slash autocomplete filters kc and clog choices', () => {
+  const { kcAutocompleteChoices, clogAutocompleteChoices } = require('../src/showoff');
+  assert.deepStrictEqual(kcAutocompleteChoices('zulrah'), [{ name: 'Zulrah', value: 'zulrah' }]);
+  assert.ok(kcAutocompleteChoices('').length <= 25, 'kc autocomplete respects the 25 cap');
+  assert.deepStrictEqual(clogAutocompleteChoices('venenatis'), [{ name: 'Venenatis and Spindel', value: 'venenatis' }]);
+  assert.ok(clogAutocompleteChoices('').length <= 25, 'clog autocomplete respects the 25 cap');
 });
 
 test('RuneProfile parsers: skills, CA, diaries, clog items', () => {
