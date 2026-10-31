@@ -272,10 +272,61 @@ async function bossClogLuck(rsn, key, metric, kc) {
       },
       luck: luckForPage(kc, metric,
         (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }))),
+      pageItems: res.items || [],
     };
   } catch {
     return { clog: null, luck: null };
   }
+}
+
+// Pets in compare (Gavin, Oct 31, 2026): the All Pets page is the
+// source of truth for which clog items are pets. A boss card
+// attaches the pet(s) on that boss's own page; a skill card
+// attaches the skill's pet(s).
+const SKILL_PETS = {
+  agility: ['Giant Squirrel'],
+  fishing: ['Heron'],
+  woodcutting: ['Beaver'],
+  thieving: ['Rocky'],
+  farming: ['Tangleroot'],
+  runecraft: ['Rift guardian'],
+  hunter: ['Herbi', 'Baby chinchompa'],
+  mining: ['Rock golem'],
+  firemaking: ['Phoenix'],
+};
+
+async function allPetsItems(rsn) {
+  try {
+    const res = await getClogPageWithItems(rsn, 'Other', 'All Pets');
+    if (!res || res.notFound || !Array.isArray(res.items)) return null;
+    return res.items;
+  } catch { return null; }
+}
+
+async function petIconB64(id, name) {
+  const p = await getItemIcon(id, name).catch(() => null);
+  if (!p) return null;
+  try { return fs.readFileSync(p).toString('base64'); } catch { return null; }
+}
+
+async function petIdSet(aName, bName) {
+  const ids = new Set();
+  for (const rsn of [aName, bName]) {
+    const items = await allPetsItems(rsn);
+    if (items) for (const it of items) ids.add(it.id);
+  }
+  return ids;
+}
+
+async function petsForSide(pageItems, petIds) {
+  if (!Array.isArray(pageItems) || !petIds || !petIds.size) return null;
+  const found = pageItems.filter((it) => petIds.has(it.id));
+  if (!found.length) return null;
+  return Promise.all(found.map(async (it) => ({
+    name: it.name,
+    has: (it.quantity || 0) > 0,
+    icon: await petIconB64(it.id, it.name),
+  })));
 }
 
 async function kcPayload(activity, rsn, userId) {
@@ -1042,6 +1093,27 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
         ? `${leadName} leads by ${Math.abs(ai.level - bi.level)} level${Math.abs(ai.level - bi.level) === 1 ? '' : 's'}`
         : `${leadName} leads on XP`;
     const noMap = !(picked in SKILL_CLOG_PAGES);
+    let skillPets = null;
+    const petNames = SKILL_PETS[picked] || [];
+    if (petNames.length) {
+      const [petItemsA, petItemsB] = await Promise.all([
+        allPetsItems(aName), allPetsItems(bName),
+      ]);
+      const list = [];
+      for (const name of petNames) {
+        const ia = (petItemsA || []).find((it) => it.name === name);
+        const ib = (petItemsB || []).find((it) => it.name === name);
+        if (!ia && !ib) continue;
+        const ref = ia || ib;
+        list.push({
+          name,
+          aHas: !!(ia && (ia.quantity || 0) > 0),
+          bHas: !!(ib && (ib.quantity || 0) > 0),
+          icon: await petIconB64(ref.id, ref.name),
+        });
+      }
+      if (list.length) skillPets = list;
+    }
     const card = await fetchCard('/compare-skill', {
       skillKey: picked, skillName: ai ? ai.name : picked,
       a: {
@@ -1052,7 +1124,7 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
         rsn: bName, level: bi ? bi.level : null, xp: bi ? bi.xp : null,
         sections: secB, noSections: noMap,
       },
-      leader, note,
+      leader, note, pets: skillPets,
     });
     const components = await compareComponents('skills', aName, bName,
       ui.bossKey || null, ownerId ?? userId, ui);
@@ -1119,11 +1191,15 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
     bossClogLuck(aName, key, cols[0].metric, kcA),
     bossClogLuck(bName, key, cols[0].metric, kcB),
   ]);
+  const petIds = await petIdSet(aName, bName);
+  const [petsA, petsB] = await Promise.all([
+    petsForSide(ca.pageItems, petIds), petsForSide(cb.pageItems, petIds),
+  ]);
   const sideCols = (stats) => cols.map((c) => ({ label: c.label, kc: kcOf(stats, c.metric) }));
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric: cols[0].metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null },
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null, pets: petsA },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: petsB },
     leader, note: parts.join(' · '),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: 'raids', catPage: 0 }) };
@@ -1170,10 +1246,14 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   const [ca, cb] = await Promise.all([
     bossClogLuck(aName, key, metric, kcA), bossClogLuck(bName, key, metric, kcB),
   ]);
+  const petIds = await petIdSet(aName, bName);
+  const [petsA, petsB] = await Promise.all([
+    petsForSide(ca.pageItems, petIds), petsForSide(cb.pageItems, petIds),
+  ]);
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck },
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck, pets: petsA },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: petsB },
     leader, note,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 }) };
@@ -1462,6 +1542,17 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     .reduce((s, p) => ({ got: s.got + (p.obtained || 0), total: s.total + (p.total || 0) }), { got: 0, total: 0 });
   const ta = totalOf(pa);
   const tb = totalOf(pb);
+  // Headline uses the official log totals (Gavin, Oct 31, 2026):
+  // page sums double-count pages that repeat items (All Pets,
+  // Slayer), so they overstate the real total.
+  const [sumA, sumB] = await Promise.all([
+    getClogSummary(aName).catch(() => null),
+    getClogSummary(bName).catch(() => null),
+  ]);
+  const headA = sumA && typeof sumA.obtained === 'number'
+    ? { got: sumA.obtained, total: sumA.total } : ta;
+  const headB = sumB && typeof sumB.obtained === 'number'
+    ? { got: sumB.obtained, total: sumB.total } : tb;
   const bossA = sumGot(pa, bossTitles);
   const bossB = sumGot(pb, bossTitles);
   const raidA = sumGot(pa, raidTitles);
@@ -1475,16 +1566,16 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   const rows = [
     {
       label: 'Collection Log',
-      aText: `${num(ta.got)} / ${num(ta.total)}`,
-      bText: `${num(tb.got)} / ${num(tb.total)}`,
-      winner: ta.got === tb.got ? 'tie' : (ta.got > tb.got ? 'a' : 'b'),
+      aText: `${num(headA.got)} / ${num(headA.total)}`,
+      bText: `${num(headB.got)} / ${num(headB.total)}`,
+      winner: headA.got === headB.got ? 'tie' : (headA.got > headB.got ? 'a' : 'b'),
     },
     row('Bosses', bossA, bossB),
     row('Raids', raidA, raidB),
     row('Pets', petsA, petsB),
-    row('Everything Else', ta.got - bossA - raidA, tb.got - bossB - raidB),
+    row('Everything Else', headA.got - bossA - raidA, headB.got - bossB - raidB),
   ];
-  const diff = ta.got - tb.got;
+  const diff = headA.got - headB.got;
   const tally = diff === 0
     ? 'TIED ON THE COLLECTION LOG'
     : `${(diff > 0 ? aName : bName).toUpperCase()} LEADS BY ${num(Math.abs(diff))} ITEMS`;
