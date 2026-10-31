@@ -821,7 +821,7 @@ async function skillsPayload(rsn, userId) {
     ['zalcano', 'Zalcano'],
   ];
   const skillingBosses = SKILLING_BOSSES
-    .map(([metric, name]) => ({ name, kc: st.kc ? st.kc[metric] : null }))
+    .map(([metric, name]) => ({ key: metric, name, kc: st.kc ? st.kc[metric] : null }))
     .filter((b) => typeof b.kc === 'number' && b.kc > 0);
   const card = await fetchCard('/skills', {
     rsn, combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
