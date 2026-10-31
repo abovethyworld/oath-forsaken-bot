@@ -345,6 +345,21 @@ function addRsn(userId, rsn) {
   });
 }
 
+// Append an RSN without moving the active name, for when another system
+// (plugin connect codes) has already established the name is this member's:
+// the link list catches up, the clan name stays put. Returns true when the
+// name was newly linked.
+function linkRsnQuiet(userId, rsn) {
+  return mutateRsnLinks((links) => {
+    const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null };
+    if (entry.rsns.includes(rsn)) return false;
+    entry.rsns.push(rsn);
+    if (!entry.active) entry.active = rsn;
+    links[userId] = entry;
+    return true;
+  });
+}
+
 function setActiveRsn(userId, rsn) {
   const links = loadRsnLinks();
   const entry = normalizeRsnEntry(links[userId]);
@@ -3372,6 +3387,7 @@ module.exports = {
   normalizeRsnEntry,
   getRsnEntry,
   addRsn,
+  linkRsnQuiet,
   setActiveRsn,
   handleTeamButton,
   handleTeamSelect,
