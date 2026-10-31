@@ -244,4 +244,35 @@ async function getGroupMembers(groupId) {
   });
 }
 
-module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, getGroupMembers, CACHE_MS, NOTFOUND_MS };
+// The group's competitions (staff create them on Wise Old Man). Returns
+// the raw list, or null on failure so callers keep their last good data.
+async function getGroupCompetitions(groupId) {
+  if (!groupId) return null;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/groups/${encodeURIComponent(groupId)}/competitions`);
+      if (!res.ok) return null;
+      const list = await res.json();
+      return Array.isArray(list) ? list : null;
+    } catch (err) {
+      console.warn('WOM group competitions lookup failed:', err.message);
+      return null;
+    }
+  });
+}
+
+async function getCompetition(competitionId) {
+  if (competitionId == null) return null;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/competitions/${encodeURIComponent(competitionId)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn('WOM competition lookup failed:', err.message);
+      return null;
+    }
+  });
+}
+
+module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, CACHE_MS, NOTFOUND_MS };

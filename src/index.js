@@ -36,6 +36,7 @@ const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
 const { reconcileCodeLinks } = require('./plugin-connect');
 const { syncFriends, syncWomGroup } = require('./friends');
+const { syncChampions } = require('./champions');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -117,6 +118,10 @@ client.once(Events.ClientReady, async (c) => {
 
       // Publish the WOM group membership: the website's members list.
       await syncWomGroup();
+
+      // Archive any finished WOM competitions for the hall of champions.
+      const newChamps = await syncChampions();
+      if (newChamps) console.log(`Champions: archived ${newChamps} finished competition(s).`);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -127,6 +132,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setInterval(() => syncFriends(client), 24 * 3600 * 1000);
   setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
+  setInterval(() => syncChampions(), 24 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
