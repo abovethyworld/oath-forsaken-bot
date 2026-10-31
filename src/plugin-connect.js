@@ -7,6 +7,7 @@ const path = require('path');
 const { SlashCommandBuilder } = require('discord.js');
 const { atomicWrite } = require('./store');
 const { getRsnEntry, rsnLinkRow, linkRsnQuiet } = require('./teams');
+const { getStats } = require('./wom');
 
 const CODES_FILE = path.join(__dirname, '..', 'data', 'plugin-sync', 'codes.json');
 
@@ -84,6 +85,25 @@ async function connect(interaction) {
   const wanted = interaction.options.getString('rsn');
   let justLinked = null;
   if (wanted && !entry.rsns.includes(wanted)) {
+    // Validate before linking: a typo must not get saved. The
+    // team link forms check the name against Wise Old Man the
+    // same way; an already-linked name skips the check.
+    let st = null;
+    try { st = await getStats(wanted); } catch { st = null; }
+    if (!st) {
+      await interaction.reply({
+        content: 'Could not check that name right now. Try again in a bit.',
+        ephemeral: true,
+      });
+      return;
+    }
+    if (st.notFound) {
+      await interaction.reply({
+        content: `Could not find the RuneScape name **${wanted}**. Check the spelling and try again.`,
+        ephemeral: true,
+      });
+      return;
+    }
     linkRsnQuiet(interaction.user.id, wanted);
     justLinked = wanted;
   }
