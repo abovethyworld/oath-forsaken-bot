@@ -1172,6 +1172,7 @@ function bossMenuOptions() {
     const col = entry.cols.length > 1 && variantKey
       ? entry.cols[entry.cols.length - 1] : entry.cols[0];
     if (byMetric.has(col.metric)) continue;
+    if (typeof NON_KC_SCORES !== 'undefined' && NON_KC_SCORES.has(col.metric)) continue;
     let total = 0;
     try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
     byMetric.set(col.metric, { key, name: entry.name, total });
