@@ -2,7 +2,7 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
-const { getStats, combatLevel } = require('./wom');
+const { getStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
@@ -199,6 +199,32 @@ async function kcPayload(activity, rsn, userId) {
     label: c.label || prettyMetric(c.metric),
     value: fmtKc(st.kc ? st.kc[c.metric] : null),
   }));
+  // Website card first: same numbers, share-card style, plus the
+  // player's standing on this boss across the tracked cache.
+  const primary = entry.cols[0];
+  const myKc = st.kc ? st.kc[primary.metric] : null;
+  const standings = kcStandings(primary.metric);
+  const rankIdx = typeof myKc === 'number'
+    ? standings.findIndex((r) => r.name === rsn.toLowerCase())
+    : -1;
+  const card = await fetchCard('/kc', {
+    rsn,
+    boss: entry.name,
+    metric: primary.metric,
+    entries: entry.cols.map((c) => {
+      const n = st.kc ? st.kc[c.metric] : null;
+      return {
+        label: c.label || (entry.cols.length === 1 ? 'Kill count' : prettyMetric(c.metric)),
+        value: typeof n === 'number' ? n.toLocaleString('en-US') : '-',
+      };
+    }),
+    kcValue: typeof myKc === 'number' ? myKc : null,
+    rank: rankIdx >= 0 ? rankIdx + 1 : null,
+    rankOf: standings.length,
+    clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
+    members: standings.length,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
 }
@@ -422,6 +448,10 @@ async function clogPayload(key, rsn, userId) {
     const res = await getClogSummary(rsn).catch(() => null);
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
+    const card = await fetchCard('/clog-total', {
+      rsn, obtained: res.obtained, total: res.total, tabs: res.tabs,
+    });
+    if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
     const buf = renderClogSummaryCard({ name: rsn, obtained: res.obtained, total: res.total, tabs: res.tabs });
     return { files: [new AttachmentBuilder(buf, { name: 'clog.png' })] };
   }
@@ -442,12 +472,25 @@ async function clogPayload(key, rsn, userId) {
   // cold cache no longer stalls the render on 49 serial waits.
   const drawn = await Promise.all(obtained.slice(0, 49).map(async (it) => {
     let icon = null;
+    let iconB64 = null;
     const p = await getItemIcon(it.id, it.name).catch(() => null);
     if (p) {
-      try { icon = decodePng(fs.readFileSync(p)); } catch { icon = null; }
+      try {
+        const raw = fs.readFileSync(p);
+        icon = decodePng(raw);
+        iconB64 = raw.toString('base64');
+      } catch { icon = null; }
     }
-    return { icon, qty: it.quantity };
+    return { icon, qty: it.quantity, iconB64 };
   }));
+  const card = await fetchCard('/clog-page', {
+    rsn,
+    page: page[1],
+    obtained: res.obtained,
+    total: res.total,
+    items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
   const buf = renderClogCard({
     title: `${rsn}: ${page[1]}`,
     obtained: res.obtained,
@@ -468,6 +511,30 @@ async function handleClogCommand(message, args) {
 }
 
 const SITE_BASE = 'https://oathforsaken.cc';
+const CARD_API = 'https://oathforsaken.cc/api/cards';
+
+// The website renders the kc / clog / leaderboard cards in the same
+// share-card style as the profile card. The bot POSTs the numbers it
+// already computed and posts the PNG that comes back. Any failure
+// returns null and the caller falls back to the in-bot renderers, so
+// a card outage never kills a command.
+async function fetchCard(path, body) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(CARD_API + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
 
 // The website builds a share card for every tracked member: the same
 // numbers as the RuneProfile card below, in house style, with clan
@@ -561,6 +628,8 @@ async function leaderboardPayload(userId) {
   if (!rows.length) {
     return { content: 'No ranked profiles yet. Link an RSN and use `!clog total` once, or wait a minute and try again.' };
   }
+  const card = await fetchCard('/leaderboard', { rows });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })] };
   const buf = renderClogLeaderboard(rows);
   return { files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] };
 }
