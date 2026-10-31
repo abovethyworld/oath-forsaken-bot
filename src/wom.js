@@ -210,4 +210,26 @@ async function getStats(rsn) {
   });
 }
 
-module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, CACHE_MS, NOTFOUND_MS };
+// The clan's WOM group membership, as display names. One paced, limiter-
+// gated GET; returns null on any failure so callers keep their last list.
+async function getGroupMembers(groupId) {
+  if (!groupId) return null;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/groups/${encodeURIComponent(groupId)}`);
+      if (!res.ok) return null;
+      const group = await res.json();
+      const names = [];
+      for (const m of group.memberships || []) {
+        const name = m.player && (m.player.displayName || m.player.username);
+        if (name) names.push(name);
+      }
+      return names;
+    } catch (err) {
+      console.warn('WOM group lookup failed:', err.message);
+      return null;
+    }
+  });
+}
+
+module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, getGroupMembers, CACHE_MS, NOTFOUND_MS };
