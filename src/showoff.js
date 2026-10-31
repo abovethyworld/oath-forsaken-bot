@@ -968,7 +968,15 @@ async function compareBossPayload(key, aName, bName, userId) {
   const [sa, sb] = await Promise.all([
     getStats(aName).catch(() => null), getStats(bName).catch(() => null),
   ]);
-  const metric = entry.cols[0].metric;
+  // Multi-column activities (raids, the Gauntlet) list the base
+  // metric first and the variant second for BOTH keys, so pick the
+  // column the requested key actually means: toa_expert is the
+  // expert metric, cg is the corrupted column, and so on.
+  const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
+  const col = entry.cols.length > 1 && variantKey
+    ? entry.cols[entry.cols.length - 1] : entry.cols[0];
+  const metric = col.metric;
+  const bossName = key === 'cg' ? 'The Corrupted Gauntlet' : entry.name;
   let standings = null;
   try { standings = kcStandings(metric); } catch { standings = null; }
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
@@ -986,13 +994,13 @@ async function compareBossPayload(key, aName, bName, userId) {
     ? `${leader === 'a' ? aName : bName} leads by ${fmt(Math.abs(kcA - kcB))}`
     : kcA != null && kcA === kcB ? 'Dead level.' : '';
   const card = await fetchCard('/compare-boss', {
-    boss: entry.name,
+    boss: bossName, metric,
     a: { rsn: aName, kc: kcA, rank: rankOf(aName) },
     b: { rsn: bName, kc: kcB, rank: rankOf(bName) },
     leader, note,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })] };
-  return { content: `**${entry.name}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
+  return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
 }
 
 // Splits the text-command tail into the two players. A name on its
