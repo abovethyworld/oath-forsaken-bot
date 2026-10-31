@@ -1902,8 +1902,8 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('compare')
       .setDescription('Compare two players overall')
-      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
-      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player_a').setDescription('First player (blank = you)'))
+      .addStringOption((o) => o.setName('player_b').setDescription('Second player (blank = you)')),
     run: async (interaction) => {
       const pair = await resolveComparePair(interaction);
       if (!pair) return;
