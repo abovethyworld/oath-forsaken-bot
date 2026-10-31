@@ -14,6 +14,7 @@ const limiter = createLimiter();
 const BASE = 'https://api.wiseoldman.net/v2';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'wom-cache-v3.json');
+const VAULT_FILE = path.join(__dirname, '..', 'data', 'player-vault.json');
 const CACHE_MS = 24 * 3600 * 1000;
 const NOTFOUND_MS = 6 * 3600 * 1000; // unknown names re-check after 6h, not 24h
 const MIN_GAP_MS = 1200; // min time between WOM requests
@@ -38,6 +39,50 @@ function saveCache(cache) {
   }
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
   atomicWrite(CACHE_FILE, cache);
+}
+
+// The vault is the permanent record next to the cache: every verified
+// player ever looked up, never pruned. The cache decides when stats
+// are fresh enough to serve without a fetch; the vault is what the
+// clan remembers. Entries refresh only when a real lookup fetches
+// fresh stats - the vault never polls on its own.
+function loadVault() {
+  try {
+    return JSON.parse(fs.readFileSync(VAULT_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function saveVault(vault) {
+  fs.mkdirSync(path.dirname(VAULT_FILE), { recursive: true });
+  atomicWrite(VAULT_FILE, vault);
+}
+
+function vaultUpsert(key, stats, fetchedAt) {
+  if (!key || !stats || stats.notFound || typeof fetchedAt !== 'number') return;
+  try {
+    const vault = loadVault();
+    const held = vault[key];
+    if (held && typeof held.fetchedAt === 'number' && held.fetchedAt >= fetchedAt) return;
+    vault[key] = { fetchedAt, stats };
+    saveVault(vault);
+  } catch (err) {
+    console.warn('Vault write failed:', err.message);
+  }
+}
+
+// Every known player: per name, the fresher of the cache and vault
+// entries. Standings read this, so a searched player stays counted
+// after their cache entry ages out.
+function mergedPlayers() {
+  const merged = { ...loadVault() };
+  for (const [key, entry] of Object.entries(loadCache())) {
+    if (!entry || !entry.stats || entry.stats.notFound) continue;
+    const held = merged[key];
+    if (!held || (entry.fetchedAt || 0) >= (held.fetchedAt || 0)) merged[key] = entry;
+  }
+  return merged;
 }
 
 // Serialized, paced request queue. All WOM traffic goes through here.
@@ -184,7 +229,7 @@ function getCachedStats(rsn) {
 // [{ name, kc }] with name in cache-key (lowercase) form. Cache-only:
 // standings never fire a network lookup.
 function kcStandings(metric) {
-  const cache = loadCache();
+  const cache = mergedPlayers();
   const rows = [];
   for (const [name, entry] of Object.entries(cache)) {
     const kc = entry && entry.stats && entry.stats.kc ? entry.stats.kc[metric] : null;
@@ -202,7 +247,10 @@ async function getStats(rsn) {
   const cache = loadCache();
   const hit = cache[key];
   const ttl = hit && hit.stats && hit.stats.notFound ? NOTFOUND_MS : CACHE_MS;
-  if (hit && Date.now() - hit.fetchedAt < ttl) return hit.stats;
+  if (hit && Date.now() - hit.fetchedAt < ttl) {
+    vaultUpsert(key, hit.stats, hit.fetchedAt);
+    return hit.stats;
+  }
 
   // Cache unknown names too (shorter TTL): repeat lookups of a garbage
   // name must not re-run the GET/POST/GET track flow and burn quota.
@@ -228,6 +276,7 @@ async function getStats(rsn) {
       const fresh = loadCache();
       fresh[key] = { fetchedAt: Date.now(), stats };
       saveCache(fresh);
+      vaultUpsert(key, stats, fresh[key].fetchedAt);
       return stats;
     } catch (err) {
       console.warn('WOM lookup failed:', err.message);
@@ -289,4 +338,4 @@ async function getCompetition(competitionId) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, CACHE_MS, NOTFOUND_MS };
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, CACHE_MS, NOTFOUND_MS };
