@@ -800,6 +800,7 @@ async function skillsPayload(rsn, userId) {
   const skills = SKILL_ORDER.map((key) => {
     const entry = skillsMap[key] || skillsMap[SKILL_DATA_KEYS[key]];
     return {
+      key,
       name: key.charAt(0).toUpperCase() + key.slice(1),
       level: entry && typeof entry.level === 'number' ? entry.level : null,
       xp: entry && typeof entry.xp === 'number' ? entry.xp : null,
@@ -836,6 +837,194 @@ async function handleSkillsCommand(message, args) {
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   await message.reply(await skillsPayload(rsn, message.author.id)).catch(() => {});
+}
+
+// ---- Compare (added Oct 31, 2026) -----------------------------------
+// !compare in three shapes: overall versus, skills diff, and boss
+// head-to-head. Everything reads the same cached WOM + RuneProfile
+// data as the other commands.
+
+async function compareSnapshot(rsn) {
+  const st = await getStats(rsn);
+  if (!st || st.notFound) return { st };
+  const skillsMap = st.skills || {};
+  const SKILL_DATA_KEYS = { runecraft: 'runecrafting' };
+  const skills = SKILL_ORDER.map((key) => {
+    const entry = skillsMap[key] || skillsMap[SKILL_DATA_KEYS[key]];
+    return {
+      key,
+      name: key.charAt(0).toUpperCase() + key.slice(1),
+      level: entry && typeof entry.level === 'number' ? entry.level : null,
+      xp: entry && typeof entry.xp === 'number' ? entry.xp : null,
+    };
+  });
+  const overall = skillsMap.overall;
+  const totalLevel = overall && typeof overall.level === 'number'
+    ? overall.level : skills.reduce((s, sk) => s + (sk.level || 0), 0);
+  const totalXp = overall && typeof overall.xp === 'number'
+    ? overall.xp : skills.reduce((s, sk) => s + (sk.xp || 0), 0);
+  const totalKc = Object.values(st.kc || {}).reduce(
+    (s, v) => s + (typeof v === 'number' ? v : 0), 0);
+  return { st, skills, totalLevel, totalXp, totalKc, combat: st.combat };
+}
+
+function skillsLed(aSkills, bSkills) {
+  let a = 0, b = 0;
+  const cells = aSkills.map((sk, i) => {
+    const o = bSkills[i];
+    let winner = 'tie';
+    if (sk.level != null && o.level != null) {
+      if (sk.level !== o.level) winner = sk.level > o.level ? 'a' : 'b';
+      else if ((sk.xp || 0) !== (o.xp || 0)) winner = (sk.xp || 0) > (o.xp || 0) ? 'a' : 'b';
+    }
+    if (winner === 'a') a += 1;
+    if (winner === 'b') b += 1;
+    let gap = '';
+    if (winner !== 'tie') {
+      const lead = winner === 'a' ? sk : o;
+      const trail = winner === 'a' ? o : sk;
+      if (lead.level !== trail.level) gap = `+${Math.abs(lead.level - trail.level)} lvl`;
+      else gap = `+${abbrXp(Math.abs((lead.xp || 0) - (trail.xp || 0)))} xp`;
+    } else if (sk.level != null) gap = 'tied';
+    return { key: sk.key, name: sk.name, aLevel: sk.level, bLevel: o.level, winner, gap };
+  });
+  return { a, b, cells };
+}
+
+function abbrXp(n) {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}k`;
+  return `${n}`;
+}
+
+async function compareOverallPayload(aName, bName, userId) {
+  if (userId) noteUse(userId);
+  const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
+  if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
+  if (!sb.st) return { content: `Could not find the RuneScape name **${bName}**.` };
+  const [clogA, clogB] = await Promise.all([
+    getClogTotal(aName).catch(() => null), getClogTotal(bName).catch(() => null),
+  ]);
+  const led = skillsLed(sa.skills, sb.skills);
+  const win = (x, y) => (x == null || y == null || x === y ? 'tie' : x > y ? 'a' : 'b');
+  const rows = [
+    { label: 'Total level', aText: fmt(sa.totalLevel), bText: fmt(sb.totalLevel), winner: win(sa.totalLevel, sb.totalLevel) },
+    { label: 'Total XP', aText: fmt(sa.totalXp), bText: fmt(sb.totalXp), winner: win(sa.totalXp, sb.totalXp) },
+    { label: 'Combat', aText: fmt(sa.combat), bText: fmt(sb.combat), winner: win(sa.combat, sb.combat) },
+    {
+      label: 'Collection log',
+      aText: clogA && !clogA.notFound ? `${fmt(clogA.obtained)} / ${fmt(clogA.total)}` : '-',
+      bText: clogB && !clogB.notFound ? `${fmt(clogB.obtained)} / ${fmt(clogB.total)}` : '-',
+      winner: win(clogA && !clogA.notFound ? clogA.obtained : null, clogB && !clogB.notFound ? clogB.obtained : null),
+    },
+    { label: 'Total KC', aText: fmt(sa.totalKc), bText: fmt(sb.totalKc), winner: win(sa.totalKc, sb.totalKc) },
+    { label: 'Skills led', aText: `${led.a}`, bText: `${led.b}`, winner: win(led.a, led.b) },
+  ];
+  const wa = rows.filter((r) => r.winner === 'a').length;
+  const wb = rows.filter((r) => r.winner === 'b').length;
+  const tally = wa === wb ? `ALL SQUARE AT ${wa} - ${wb}`
+    : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${Math.max(wa, wb)} - ${Math.min(wa, wb)}`;
+  const card = await fetchCard('/compare', { a: { rsn: aName }, b: { rsn: bName }, rows, tally });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })] };
+  return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
+}
+
+async function compareSkillsPayload(aName, bName, userId) {
+  if (userId) noteUse(userId);
+  const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
+  if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
+  if (!sb.st) return { content: `Could not find the RuneScape name **${bName}**.` };
+  const led = skillsLed(sa.skills, sb.skills);
+  const tied = 24 - led.a - led.b;
+  const summary = `Skills led: ${aName} ${led.a} - ${led.b} ${bName}${tied ? ` · ${tied} tied` : ''}`;
+  const card = await fetchCard('/compare-skills', {
+    a: { rsn: aName }, b: { rsn: bName }, summary, cells: led.cells,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })] };
+  return { content: summary };
+}
+
+async function compareBossPayload(key, aName, bName, userId) {
+  if (userId) noteUse(userId);
+  const entry = kcEntry(key);
+  if (!entry) return { content: `I do not track a boss or activity called **${key}**.` };
+  const [sa, sb] = await Promise.all([
+    getStats(aName).catch(() => null), getStats(bName).catch(() => null),
+  ]);
+  let standings = null;
+  try { standings = kcStandings(entry.metric); } catch { standings = null; }
+  if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (sa.notFound) return { content: `Could not find the RuneScape name **${aName}**.` };
+  if (sb.notFound) return { content: `Could not find the RuneScape name **${bName}**.` };
+  const rankOf = (rsn) => {
+    if (!standings) return null;
+    const i = standings.rows.findIndex((r) => normName(r.rsn) === normName(rsn));
+    return i >= 0 ? i + 1 : null;
+  };
+  const kcA = sa.kc && typeof sa.kc[entry.metric] === 'number' ? sa.kc[entry.metric] : null;
+  const kcB = sb.kc && typeof sb.kc[entry.metric] === 'number' ? sb.kc[entry.metric] : null;
+  const leader = kcA != null && kcB != null && kcA !== kcB ? (kcA > kcB ? 'a' : 'b') : null;
+  const note = leader
+    ? `${leader === 'a' ? aName : bName} leads by ${fmt(Math.abs(kcA - kcB))}`
+    : kcA != null && kcA === kcB ? 'Dead level.' : '';
+  const card = await fetchCard('/compare-boss', {
+    boss: entry.name,
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName) },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName) },
+    leader, note,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })] };
+  return { content: `**${entry.name}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
+}
+
+// Splits the text-command tail into the two players. A name on its
+// own means "that player vs my linked RSN"; two names need " vs ".
+function compareNames(rest, userId) {
+  const parts = rest.split(/\s+vs\s+/i).map((s) => s.trim()).filter(Boolean);
+  const first = resolveNameFor(userId, parts[0] || null);
+  if (first.error || first.payload) return first;
+  if (parts.length > 1) {
+    const second = resolveNameFor(userId, parts[1]);
+    if (second.error || second.payload) return second;
+    return { a: first.rsn, b: second.rsn };
+  }
+  const linked = resolveNameFor(userId, null);
+  if (linked.error || linked.payload) return linked;
+  return { a: first.rsn, b: linked.rsn };
+}
+
+async function handleCompareCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const joined = args.join(' ').trim();
+  const usage = 'Usage: `!compare <name>` (vs your linked RSN), `!compare <name> vs <name>`, `!compare skills <name> vs <name>`, or `!compare <boss> <name> vs <name>`.';
+  if (!joined) { await message.reply(usage).catch(() => {}); return; }
+  const uid = message.author.id;
+  if (/^skills\s+/i.test(joined)) {
+    const names = compareNames(joined.replace(/^skills\s+/i, ''), uid);
+    if (names.error) { await message.reply(names.error).catch(() => {}); return; }
+    if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
+    if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
+    await message.reply(await compareSkillsPayload(names.a, names.b, uid)).catch(() => {});
+    return;
+  }
+  const tokens = joined.split(/\s+/);
+  const actKey = takeOptionalActivity(tokens);
+  if (actKey && tokens.length) {
+    const names = compareNames(tokens.join(' '), uid);
+    if (names.error) { await message.reply(names.error).catch(() => {}); return; }
+    if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
+    if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
+    await message.reply(await compareBossPayload(actKey, names.a, names.b, uid)).catch(() => {});
+    return;
+  }
+  const names = compareNames(joined, uid);
+  if (names.error) { await message.reply(names.error).catch(() => {}); return; }
+  if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
+  if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
+  await message.reply(await compareOverallPayload(names.a, names.b, uid)).catch(() => {});
 }
 
 async function handlePbCommand(message, args) {
@@ -919,7 +1108,7 @@ function clogAutocompleteChoices(focused) {
 
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
-  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb'
+  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb' || interaction.commandName === 'compare'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
@@ -967,6 +1156,51 @@ const commands = [
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
       await slashReply(interaction, profilePayload(rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('compare')
+      .setDescription('Compare two players: overall, skills, or one boss')
+      .addStringOption((o) => o.setName('mode').setDescription('What to compare').setRequired(true)
+        .addChoices(
+          { name: 'Overall', value: 'overall' },
+          { name: 'Skills', value: 'skills' },
+          { name: 'Boss', value: 'boss' },
+        ))
+      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
+      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)'))
+      .addStringOption((o) => o.setName('boss').setDescription('Boss or activity (Boss mode)').setAutocomplete(true)),
+    run: async (interaction) => {
+      const uid = interaction.user.id;
+      const aOpt = interaction.options.getString('player_a');
+      const bOpt = interaction.options.getString('player_b');
+      const aRes = resolveNameFor(uid, aOpt);
+      if (aRes.error) { await interaction.reply({ content: aRes.error, ephemeral: true }).catch(() => {}); return; }
+      if (aRes.payload) { await interaction.reply({ ...aRes.payload, ephemeral: true }).catch(() => {}); return; }
+      const bRes = bOpt ? resolveNameFor(uid, bOpt) : (aOpt ? resolveNameFor(uid, null) : aRes);
+      if (bRes.error) { await interaction.reply({ content: bRes.error, ephemeral: true }).catch(() => {}); return; }
+      if (bRes.payload) { await interaction.reply({ ...bRes.payload, ephemeral: true }).catch(() => {}); return; }
+      if (normName(aRes.rsn) === normName(bRes.rsn)) {
+        await interaction.reply({ content: 'Pick two different players to compare.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const mode = interaction.options.getString('mode');
+      if (mode === 'boss') {
+        const bossStr = interaction.options.getString('boss');
+        const entry = bossStr ? resolveActivity(bossStr) : null;
+        if (!entry) {
+          await interaction.reply({ content: 'Boss mode needs a boss or activity name.', ephemeral: true }).catch(() => {});
+          return;
+        }
+        if (await slashCooldown(interaction)) return;
+        await slashReply(interaction, compareBossPayload(entry.key, aRes.rsn, bRes.rsn, uid));
+        return;
+      }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, mode === 'skills'
+        ? compareSkillsPayload(aRes.rsn, bRes.rsn, uid)
+        : compareOverallPayload(aRes.rsn, bRes.rsn, uid));
     },
   },
   {
@@ -1020,4 +1254,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
