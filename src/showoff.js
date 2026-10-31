@@ -1134,12 +1134,33 @@ function clogAutocompleteChoices(focused) {
 
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
-  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb' || interaction.commandName === 'compare'
+  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb' || interaction.commandName === 'compare-boss'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
       : [];
   await interaction.respond(choices).catch(() => {});
+}
+
+// Shared name resolution for the compare commands: each name box is
+// optional and defaults to the caller's linked RSN (one filled box
+// compares that player against the caller). Returns { a, b } or null
+// after replying with the problem.
+async function resolveComparePair(interaction) {
+  const uid = interaction.user.id;
+  const aOpt = interaction.options.getString('player_a');
+  const bOpt = interaction.options.getString('player_b');
+  const aRes = resolveNameFor(uid, aOpt);
+  if (aRes.error) { await interaction.reply({ content: aRes.error, ephemeral: true }).catch(() => {}); return null; }
+  if (aRes.payload) { await interaction.reply({ ...aRes.payload, ephemeral: true }).catch(() => {}); return null; }
+  const bRes = bOpt ? resolveNameFor(uid, bOpt) : (aOpt ? resolveNameFor(uid, null) : aRes);
+  if (bRes.error) { await interaction.reply({ content: bRes.error, ephemeral: true }).catch(() => {}); return null; }
+  if (bRes.payload) { await interaction.reply({ ...bRes.payload, ephemeral: true }).catch(() => {}); return null; }
+  if (normName(aRes.rsn) === normName(bRes.rsn)) {
+    await interaction.reply({ content: 'Pick two different players to compare.', ephemeral: true }).catch(() => {});
+    return null;
+  }
+  return { a: aRes.rsn, b: bRes.rsn };
 }
 
 const commands = [
@@ -1187,46 +1208,47 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('compare')
-      .setDescription('Compare two players: overall, skills, or one boss')
-      .addStringOption((o) => o.setName('mode').setDescription('What to compare').setRequired(true)
-        .addChoices(
-          { name: 'Overall', value: 'overall' },
-          { name: 'Skills', value: 'skills' },
-          { name: 'Boss', value: 'boss' },
-        ))
+      .setDescription('Compare two players overall')
       .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
-      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)'))
-      .addStringOption((o) => o.setName('boss').setDescription('Boss or activity (Boss mode)').setAutocomplete(true)),
+      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
     run: async (interaction) => {
-      const uid = interaction.user.id;
-      const aOpt = interaction.options.getString('player_a');
-      const bOpt = interaction.options.getString('player_b');
-      const aRes = resolveNameFor(uid, aOpt);
-      if (aRes.error) { await interaction.reply({ content: aRes.error, ephemeral: true }).catch(() => {}); return; }
-      if (aRes.payload) { await interaction.reply({ ...aRes.payload, ephemeral: true }).catch(() => {}); return; }
-      const bRes = bOpt ? resolveNameFor(uid, bOpt) : (aOpt ? resolveNameFor(uid, null) : aRes);
-      if (bRes.error) { await interaction.reply({ content: bRes.error, ephemeral: true }).catch(() => {}); return; }
-      if (bRes.payload) { await interaction.reply({ ...bRes.payload, ephemeral: true }).catch(() => {}); return; }
-      if (normName(aRes.rsn) === normName(bRes.rsn)) {
-        await interaction.reply({ content: 'Pick two different players to compare.', ephemeral: true }).catch(() => {});
-        return;
-      }
-      const mode = interaction.options.getString('mode');
-      if (mode === 'boss') {
-        const bossStr = interaction.options.getString('boss');
-        const bossKey = bossStr ? bossStr.trim().toLowerCase().replace(/\s+/g, '_') : null;
-        if (!bossKey || !KC_KEYS[bossKey]) {
-          await interaction.reply({ content: 'Boss mode needs a boss or activity name.', ephemeral: true }).catch(() => {});
-          return;
-        }
-        if (await slashCooldown(interaction)) return;
-        await slashReply(interaction, compareBossPayload(bossKey, aRes.rsn, bRes.rsn, uid));
-        return;
-      }
+      const pair = await resolveComparePair(interaction);
+      if (!pair) return;
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, mode === 'skills'
-        ? compareSkillsPayload(aRes.rsn, bRes.rsn, uid)
-        : compareOverallPayload(aRes.rsn, bRes.rsn, uid));
+      await slashReply(interaction, compareOverallPayload(pair.a, pair.b, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('compare-skills')
+      .setDescription('Compare two players skill by skill')
+      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
+      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const pair = await resolveComparePair(interaction);
+      if (!pair) return;
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, compareSkillsPayload(pair.a, pair.b, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('compare-boss')
+      .setDescription('Compare two players on one boss')
+      .addStringOption((o) => o.setName('boss').setDescription('Boss or activity').setRequired(true).setAutocomplete(true))
+      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
+      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const bossStr = interaction.options.getString('boss');
+      const bossKey = bossStr ? bossStr.trim().toLowerCase().replace(/\s+/g, '_') : null;
+      if (!bossKey || !KC_KEYS[bossKey]) {
+        await interaction.reply({ content: 'Pick a boss or activity from the list.', ephemeral: true }).catch(() => {});
+        return;
+      }
+      const pair = await resolveComparePair(interaction);
+      if (!pair) return;
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, compareBossPayload(bossKey, pair.a, pair.b, interaction.user.id));
     },
   },
   {
