@@ -36,6 +36,7 @@ const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
 const { reconcileCodeLinks } = require('./plugin-connect');
 const { syncFriends, syncWomGroup } = require('./friends');
+const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 
 // Command cooldowns: userId:commandName -> timestamp
@@ -122,6 +123,10 @@ client.once(Events.ClientReady, async (c) => {
       // Archive any finished WOM competitions for the hall of champions.
       const newChamps = await syncChampions();
       if (newChamps) console.log(`Champions: archived ${newChamps} finished competition(s).`);
+
+      // Warm the RuneProfile cache for the website's tracked names, so
+      // profile pages carry quest, diary, and combat achievement data.
+      await warmProfiles();
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -133,6 +138,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncFriends(client), 24 * 3600 * 1000);
   setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
   setInterval(() => syncChampions(), 24 * 3600 * 1000);
+  setInterval(() => warmProfiles(), 24 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
