@@ -179,6 +179,77 @@ function kcEntry(key) {
   return null;
 }
 
+// The JSON body for the website KC card: the boss's numbers plus the
+// player's standing on it across the tracked cache, and (when known)
+// the collection log strip for the same boss, so !kc and !clog for one
+// boss post the same combined card.
+function kcCardBody(rsn, entry, st, clog) {
+  const primary = entry.cols[0];
+  const myKc = st.kc ? st.kc[primary.metric] : null;
+  const standings = kcStandings(primary.metric);
+  const rankIdx = typeof myKc === 'number'
+    ? standings.findIndex((r) => r.name === rsn.toLowerCase())
+    : -1;
+  return {
+    rsn,
+    boss: entry.name,
+    metric: primary.metric,
+    entries: entry.cols.map((c) => {
+      const n = st.kc ? st.kc[c.metric] : null;
+      return {
+        label: c.label || (entry.cols.length === 1 ? 'Kill count' : prettyMetric(c.metric)),
+        value: typeof n === 'number' ? n.toLocaleString('en-US') : '-',
+      };
+    }),
+    kcValue: typeof myKc === 'number' ? myKc : null,
+    rank: rankIdx >= 0 ? rankIdx + 1 : null,
+    rankOf: standings.length,
+    clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
+    members: standings.length,
+    clog: clog || null,
+  };
+}
+
+// Load a clog page's obtained items with their icons (decoded for the
+// in-bot renderer, base64 for the website card). Icons fetch in
+// parallel through the paced item-icon queue.
+async function loadClogItems(res) {
+  const obtained = (res.items || []).filter((it) => it.quantity > 0);
+  return Promise.all(obtained.slice(0, 49).map(async (it) => {
+    let icon = null;
+    let iconB64 = null;
+    const p = await getItemIcon(it.id, it.name).catch(() => null);
+    if (p) {
+      try {
+        const raw = fs.readFileSync(p);
+        icon = decodePng(raw);
+        iconB64 = raw.toString('base64');
+      } catch { icon = null; }
+    }
+    return { icon, qty: it.quantity, iconB64 };
+  }));
+}
+
+// The clog strip for a KC card, or null when the boss has no log page
+// or the player has no RuneProfile. Never throws: a missing strip
+// must not cost the KC card.
+async function clogStripFor(rsn, activity) {
+  const page = CLOG_PAGES[activity] || clogPageForActivity(activity);
+  if (!page) return null;
+  try {
+    const res = await getClogPageWithItems(rsn, page[0], page[1]);
+    if (!res || res.notFound) return null;
+    const drawn = await loadClogItems(res);
+    return {
+      obtained: res.obtained,
+      total: res.total,
+      items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function kcPayload(activity, rsn, userId) {
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
@@ -200,30 +271,9 @@ async function kcPayload(activity, rsn, userId) {
     value: fmtKc(st.kc ? st.kc[c.metric] : null),
   }));
   // Website card first: same numbers, share-card style, plus the
-  // player's standing on this boss across the tracked cache.
-  const primary = entry.cols[0];
-  const myKc = st.kc ? st.kc[primary.metric] : null;
-  const standings = kcStandings(primary.metric);
-  const rankIdx = typeof myKc === 'number'
-    ? standings.findIndex((r) => r.name === rsn.toLowerCase())
-    : -1;
-  const card = await fetchCard('/kc', {
-    rsn,
-    boss: entry.name,
-    metric: primary.metric,
-    entries: entry.cols.map((c) => {
-      const n = st.kc ? st.kc[c.metric] : null;
-      return {
-        label: c.label || (entry.cols.length === 1 ? 'Kill count' : prettyMetric(c.metric)),
-        value: typeof n === 'number' ? n.toLocaleString('en-US') : '-',
-      };
-    }),
-    kcValue: typeof myKc === 'number' ? myKc : null,
-    rank: rankIdx >= 0 ? rankIdx + 1 : null,
-    rankOf: standings.length,
-    clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
-    members: standings.length,
-  });
+  // player's standing on this boss and its collection log strip.
+  const clog = await clogStripFor(rsn, activity);
+  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, clog));
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
@@ -466,23 +516,23 @@ async function clogPayload(key, rsn, userId) {
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
-  const obtained = (res.items || []).filter((it) => it.quantity > 0);
-  // Fetch the page's icons in parallel: item-icons serializes the actual
-  // downloads through its own paced queue, so this stays polite while a
-  // cold cache no longer stalls the render on 49 serial waits.
-  const drawn = await Promise.all(obtained.slice(0, 49).map(async (it) => {
-    let icon = null;
-    let iconB64 = null;
-    const p = await getItemIcon(it.id, it.name).catch(() => null);
-    if (p) {
-      try {
-        const raw = fs.readFileSync(p);
-        icon = decodePng(raw);
-        iconB64 = raw.toString('base64');
-      } catch { icon = null; }
+  const drawn = await loadClogItems(res);
+  // A boss page and its KC are one combined card: when this page's
+  // activity has kill counts, post the KC card with this page as its
+  // clog strip, exactly what !kc posts for the same boss.
+  const kcEnt = kcEntry(key);
+  if (kcEnt && kcEnt.cols.length) {
+    const st = await getStats(rsn).catch(() => null);
+    if (st && !st.notFound) {
+      const strip = {
+        obtained: res.obtained,
+        total: res.total,
+        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+      };
+      const combined = await fetchCard('/kc', kcCardBody(rsn, kcEnt, st, strip));
+      if (combined) return { files: [new AttachmentBuilder(combined, { name: 'clog.png' })] };
     }
-    return { icon, qty: it.quantity, iconB64 };
-  }));
+  }
   const card = await fetchCard('/clog-page', {
     rsn,
     page: page[1],
