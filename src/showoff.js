@@ -1070,6 +1070,66 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
   return { content: summary };
 }
 
+// Combined raid compare (toa / cox / tob from the Raids menu):
+// total KC up top, per-variant kills on each side, the difference
+// per variant as the note, rank by combined total, and the raid's
+// one collection log strip. Raids carry no luck score.
+async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, ownerId) {
+  const raidDef = CMP_RAID_COMBINED.find((r) => r.key === key);
+  const bossName = raidDef ? raidDef.name : entry.name;
+  const cols = entry.cols.map((c) => ({ label: raidColLabel(c), metric: c.metric }));
+  const kcOf = (stats, m) => (stats && stats.kc && typeof stats.kc[m] === 'number' ? stats.kc[m] : null);
+  const totalOf = (stats) => {
+    let sum = 0;
+    let any = false;
+    for (const c of cols) {
+      const v = kcOf(stats, c.metric);
+      if (v != null) { sum += v; any = true; }
+    }
+    return any ? sum : null;
+  };
+  const kcA = totalOf(sa);
+  const kcB = totalOf(sb);
+  const totals = new Map();
+  for (const c of cols) {
+    try {
+      for (const row of kcStandings(c.metric)) {
+        totals.set(row.name, (totals.get(row.name) || 0) + row.kc);
+      }
+    } catch { /* cache only */ }
+  }
+  const rankOf = (rsn) => {
+    if (!totals.size) return null;
+    const sorted = [...totals.entries()].sort((x, y) => y[1] - x[1]);
+    const i = sorted.findIndex(([n]) => n === rsn.toLowerCase());
+    return i >= 0 ? i + 1 : null;
+  };
+  const parts = [];
+  for (const c of cols) {
+    const va = kcOf(sa, c.metric);
+    const vb = kcOf(sb, c.metric);
+    if (va != null && vb != null && va !== vb) {
+      parts.push(`${c.label}: ${va > vb ? aName : bName} +${fmt(Math.abs(va - vb))}`);
+    } else if (va != null && vb != null) {
+      parts.push(`${c.label}: tied`);
+    }
+  }
+  const leader = kcA != null && kcB != null && kcA !== kcB ? (kcA > kcB ? 'a' : 'b') : null;
+  const [ca, cb] = await Promise.all([
+    bossClogLuck(aName, key, cols[0].metric, kcA),
+    bossClogLuck(bName, key, cols[0].metric, kcB),
+  ]);
+  const sideCols = (stats) => cols.map((c) => ({ label: c.label, kc: kcOf(stats, c.metric) }));
+  const card = await fetchCard('/compare-boss', {
+    boss: bossName, metric: cols[0].metric,
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null },
+    leader, note: parts.join(' · '),
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: 'raids', catPage: 0 }) };
+  return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${parts.length ? ` (${parts.join(' · ')})` : ''}` };
+}
+
 async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId);
   const entry = kcEntry(key);
@@ -1091,6 +1151,11 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (sa.notFound) return { content: `Could not find the RuneScape name **${aName}**.` };
   if (sb.notFound) return { content: `Could not find the RuneScape name **${bName}**.` };
+  // Combined raid entries from the Raids menu: one card over every
+  // variant column instead of a separate card per variant.
+  if ((key === 'toa' || key === 'cox' || key === 'tob') && entry.cols.length > 1) {
+    return compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, ownerId ?? userId);
+  }
   const rankOf = (rsn) => {
     if (!standings) return null;
     const i = standings.findIndex((r) => r.name === rsn.toLowerCase());
@@ -1437,10 +1502,31 @@ const CMP_CATEGORIES = [
   { id: 'solo', label: 'Solo bosses' },
   { id: 'skilling', label: 'Skilling bosses' },
 ];
-const CMP_RAID_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm', 'tob', 'tob_hard']);
+const CMP_RAID_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm', 'tob', 'tob_hard', 'fractured_archive', 'tfa']);
 const CMP_SLAYER_KEYS = new Set(['sire', 'hydra', 'cerberus', 'kraken', 'thermy', 'grotesque_guardians']);
 const CMP_SKILLING_KEYS = new Set(['wintertodt', 'gotr', 'tempoross', 'zalcano']);
 const CMP_PAGE_SIZE = 22;
+
+// The Raids category lists four combined entries (Gavin, Oct 31,
+// 2026): variants fold into one entry each, and The Fractured
+// Archive is listed even at zero clan KC. Picking a multi-variant
+// entry opens a combined card (per-variant kills + differences).
+const CMP_RAID_COMBINED = [
+  { key: 'fractured_archive', name: 'The Fractured Archive' },
+  { key: 'toa', name: 'Tombs of Amascut' },
+  { key: 'cox', name: 'Chambers of Xeric' },
+  { key: 'tob', name: 'Theatre of Blood' },
+];
+const CMP_RAID_MEMBER_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm',
+  'tob', 'tob_hard', 'fractured_archive', 'tfa']);
+
+function raidColLabel(col) {
+  if (col.label) return col.label;
+  if (col.metric.endsWith('_expert')) return 'Expert';
+  if (col.metric.endsWith('_challenge_mode')) return 'Challenge Mode';
+  if (col.metric.endsWith('_hard_mode')) return 'Hard Mode';
+  return 'Normal';
+}
 
 function compareCategoryOf(key) {
   if (CMP_RAID_KEYS.has(key)) return 'raids';
@@ -1456,6 +1542,7 @@ function bossCatalog() {
   }
   const byMetric = new Map();
   for (const key of Object.keys(KC_KEYS)) {
+    if (CMP_RAID_MEMBER_KEYS.has(key)) continue; // raids built below
     const entry = kcEntry(key);
     if (!entry || !entry.cols || !entry.cols.length) continue;
     const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
@@ -1472,6 +1559,15 @@ function bossCatalog() {
   for (const item of byMetric.values()) {
     if (!top || item.total > top.total) top = item;
     byCat[compareCategoryOf(item.key)].push(item);
+  }
+  for (const r of CMP_RAID_COMBINED) {
+    const entry = kcEntry(r.key);
+    if (!entry || !entry.cols || !entry.cols.length) continue;
+    let total = 0;
+    for (const col of entry.cols) {
+      try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
+    }
+    byCat.raids.push({ key: r.key, name: r.name, total });
   }
   for (const list of Object.values(byCat)) {
     list.sort((x, y) => String(x.name).localeCompare(String(y.name)));
