@@ -186,7 +186,7 @@ function kcEntry(key) {
 // player's standing on it across the tracked cache, and (when known)
 // the collection log strip for the same boss, so !kc and !clog for one
 // boss post the same combined card.
-function kcCardBody(rsn, entry, st, clog) {
+function kcCardBody(rsn, entry, st, clog, luck, pets) {
   const primary = entry.cols[0];
   const myKc = st.kc ? st.kc[primary.metric] : null;
   const standings = kcStandings(primary.metric);
@@ -210,6 +210,8 @@ function kcCardBody(rsn, entry, st, clog) {
     clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
     members: standings.length,
     clog: clog || null,
+    luck: luck || null,
+    pets: pets || null,
   };
 }
 
@@ -233,25 +235,7 @@ async function loadClogItems(res) {
   }));
 }
 
-// The clog strip for a KC card, or null when the boss has no log page
-// or the player has no RuneProfile. Never throws: a missing strip
-// must not cost the KC card.
-async function clogStripFor(rsn, activity) {
-  const page = CLOG_PAGES[activity] || clogPageForActivity(activity);
-  if (!page) return null;
-  try {
-    const res = await getClogPageWithItems(rsn, page[0], page[1]);
-    if (!res || res.notFound) return null;
-    const drawn = await loadClogItems(res);
-    return {
-      obtained: res.obtained,
-      total: res.total,
-      items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
-    };
-  } catch {
-    return null;
-  }
-}
+
 
 // The compare boss card's per-player clog strip + luck line. One
 // RuneProfile page fetch feeds both: the strip draws obtained items,
@@ -358,10 +342,19 @@ async function kcPayload(activity, rsn, userId) {
     label: c.label || prettyMetric(c.metric),
     value: fmtKc(st.kc ? st.kc[c.metric] : null),
   }));
-  // Website card first: same numbers, share-card style, plus the
-  // player's standing on this boss and its collection log strip.
-  const clog = await clogStripFor(rsn, activity);
-  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, clog));
+  // Website card first: same numbers, share-card style, plus
+  // the player's standing on this boss. The collection log
+  // block is the full Draft 4 strip with luck percents and a
+  // pet line, from the same one-fetch path as compare.
+  const primary = entry.cols[0];
+  const cl = await bossClogLuck(rsn, activity, primary.metric,
+    st.kc ? st.kc[primary.metric] : null);
+  let pets = null;
+  if (cl.pageItems && cl.pageItems.length) {
+    const petIds = new Set((await allPetsItems(rsn)).map((p) => p.id));
+    pets = await petsForSide(cl.pageItems, petIds);
+  }
+  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, pets));
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
