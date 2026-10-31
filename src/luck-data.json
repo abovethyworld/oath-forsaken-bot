@@ -1,0 +1,803 @@
+{
+ "_about": "Drop-rate table for Oath Forsaken luck scoring. Adapted from Collection Log Luck by peanubnutter (BSD 2-Clause, see LICENSES/collection-log-luck.txt); rates cross-checked against the OSRS Wiki. Only single-source, fixed-rate drops on one tracked counter are included.",
+ "items": {
+  "11785": {
+   "metric": "commander_zilyana",
+   "name": "Armadyl crossbow",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11787": {
+   "metric": "k'ril_tsutsaroth",
+   "name": "Steam battlestaff",
+   "rate": 0.007874015748031496,
+   "rolls": 1
+  },
+  "11791": {
+   "metric": "k'ril_tsutsaroth",
+   "name": "Staff of the dead",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11810": {
+   "metric": "kree'arra",
+   "name": "Armadyl hilt",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11812": {
+   "metric": "general_graardor",
+   "name": "Bandos hilt",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11814": {
+   "metric": "commander_zilyana",
+   "name": "Saradomin hilt",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11816": {
+   "metric": "k'ril_tsutsaroth",
+   "name": "Zamorak hilt",
+   "rate": 0.001968503937007874,
+   "rolls": 1
+  },
+  "11824": {
+   "metric": "k'ril_tsutsaroth",
+   "name": "Zamorakian spear",
+   "rate": 0.00843205146231721,
+   "rolls": 1
+  },
+  "11826": {
+   "metric": "kree'arra",
+   "name": "Armadyl helmet",
+   "rate": 0.0028106722880112426,
+   "rolls": 1
+  },
+  "11828": {
+   "metric": "kree'arra",
+   "name": "Armadyl chestplate",
+   "rate": 0.0028106722880112426,
+   "rolls": 1
+  },
+  "11830": {
+   "metric": "kree'arra",
+   "name": "Armadyl chainskirt",
+   "rate": 0.0028106722880112426,
+   "rolls": 1
+  },
+  "11832": {
+   "metric": "general_graardor",
+   "name": "Bandos chestplate",
+   "rate": 0.002809219160104987,
+   "rolls": 1
+  },
+  "11834": {
+   "metric": "general_graardor",
+   "name": "Bandos tassets",
+   "rate": 0.002809219160104987,
+   "rolls": 1
+  },
+  "11836": {
+   "metric": "general_graardor",
+   "name": "Bandos boots",
+   "rate": 0.002809219160104987,
+   "rolls": 1
+  },
+  "11838": {
+   "metric": "commander_zilyana",
+   "name": "Saradomin sword",
+   "rate": 0.00843205146231721,
+   "rolls": 1
+  },
+  "11905": {
+   "metric": "kraken",
+   "name": "Trident of the seas (full)",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "11928": {
+   "metric": "chaos_fanatic",
+   "name": "Odium shard 1",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11929": {
+   "metric": "crazy_archaeologist",
+   "name": "Odium shard 2",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11930": {
+   "metric": "scorpia",
+   "name": "Odium shard 3",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11931": {
+   "metric": "chaos_fanatic",
+   "name": "Malediction shard 1",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11932": {
+   "metric": "crazy_archaeologist",
+   "name": "Malediction shard 2",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11933": {
+   "metric": "scorpia",
+   "name": "Malediction shard 3",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "11990": {
+   "metric": "crazy_archaeologist",
+   "name": "Fedora",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "11998": {
+   "metric": "thermonuclear_smoke_devil",
+   "name": "Smoke battlestaff",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "12007": {
+   "metric": "kraken",
+   "name": "Jar of dirt",
+   "rate": 0.001,
+   "rolls": 1
+  },
+  "12643": {
+   "metric": "dagannoth_supreme",
+   "name": "Pet dagannoth supreme",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12644": {
+   "metric": "dagannoth_prime",
+   "name": "Pet dagannoth prime",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12645": {
+   "metric": "dagannoth_rex",
+   "name": "Pet dagannoth rex",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12646": {
+   "metric": "giant_mole",
+   "name": "Baby mole",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "12647": {
+   "metric": "kalphite_queen",
+   "name": "Kalphite princess",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "12648": {
+   "metric": "thermonuclear_smoke_devil",
+   "name": "Pet smoke devil",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "12649": {
+   "metric": "kree'arra",
+   "name": "Pet kree'arra",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12650": {
+   "metric": "general_graardor",
+   "name": "Pet general graardor",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12651": {
+   "metric": "commander_zilyana",
+   "name": "Pet zilyana",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12652": {
+   "metric": "k'ril_tsutsaroth",
+   "name": "Pet k'ril tsutsaroth",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12653": {
+   "metric": "king_black_dragon",
+   "name": "Prince black dragon",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "12655": {
+   "metric": "kraken",
+   "name": "Pet kraken",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "12816": {
+   "metric": "corporeal_beast",
+   "name": "Pet dark core",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "12819": {
+   "metric": "corporeal_beast",
+   "name": "Elysian sigil",
+   "rate": 0.0002442002442002442,
+   "rolls": 1
+  },
+  "12823": {
+   "metric": "corporeal_beast",
+   "name": "Spectral sigil",
+   "rate": 0.0007326007326007326,
+   "rolls": 1
+  },
+  "12827": {
+   "metric": "corporeal_beast",
+   "name": "Arcane sigil",
+   "rate": 0.0007326007326007326,
+   "rolls": 1
+  },
+  "12829": {
+   "metric": "corporeal_beast",
+   "name": "Spirit shield",
+   "rate": 0.015625,
+   "rolls": 1
+  },
+  "12833": {
+   "metric": "corporeal_beast",
+   "name": "Holy elixir",
+   "rate": 0.005859375,
+   "rolls": 1
+  },
+  "12885": {
+   "metric": "kalphite_queen",
+   "name": "Jar of sand",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "12921": {
+   "metric": "zulrah",
+   "name": "Pet snakeling",
+   "rate": 0.00025,
+   "rolls": 1
+  },
+  "12922": {
+   "metric": "zulrah",
+   "name": "Tanzanite fang",
+   "rate": 0.0009765625,
+   "rolls": 2
+  },
+  "12927": {
+   "metric": "zulrah",
+   "name": "Serpentine visage",
+   "rate": 0.0009765625,
+   "rolls": 2
+  },
+  "12932": {
+   "metric": "zulrah",
+   "name": "Magic fang",
+   "rate": 0.0009765625,
+   "rolls": 2
+  },
+  "12936": {
+   "metric": "zulrah",
+   "name": "Jar of swamp",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "13181": {
+   "metric": "scorpia",
+   "name": "Scorpia's offspring",
+   "rate": 0.000496031746031746,
+   "rolls": 1
+  },
+  "13200": {
+   "metric": "zulrah",
+   "name": "Tanzanite mutagen",
+   "rate": 7.630093087135663e-05,
+   "rolls": 2
+  },
+  "13201": {
+   "metric": "zulrah",
+   "name": "Magma mutagen",
+   "rate": 7.630093087135663e-05,
+   "rolls": 2
+  },
+  "13227": {
+   "metric": "cerberus",
+   "name": "Eternal crystal",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "13229": {
+   "metric": "cerberus",
+   "name": "Pegasian crystal",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "13231": {
+   "metric": "cerberus",
+   "name": "Primordial crystal",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "13233": {
+   "metric": "cerberus",
+   "name": "Smouldering stone",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "13245": {
+   "metric": "cerberus",
+   "name": "Jar of souls",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "13247": {
+   "metric": "cerberus",
+   "name": "Hellpuppy",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "13256": {
+   "metric": "commander_zilyana",
+   "name": "Saradomin's light",
+   "rate": 0.003937007874015748,
+   "rolls": 1
+  },
+  "13262": {
+   "metric": "abyssal_sire",
+   "name": "Abyssal orphan",
+   "rate": 0.000390625,
+   "rolls": 1
+  },
+  "13277": {
+   "metric": "abyssal_sire",
+   "name": "Jar of miasma",
+   "rate": 0.0010162601626016261,
+   "rolls": 1
+  },
+  "19685": {
+   "metric": "skotizo",
+   "name": "Dark totem",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "20693": {
+   "metric": "wintertodt",
+   "name": "Phoenix",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "20712": {
+   "metric": "wintertodt",
+   "name": "Warm gloves",
+   "rate": 0.006657789613848203,
+   "rolls": 1
+  },
+  "20716": {
+   "metric": "wintertodt",
+   "name": "Tome of fire (empty)",
+   "rate": 0.000999700089973008,
+   "rolls": 1
+  },
+  "20720": {
+   "metric": "wintertodt",
+   "name": "Bruma torch",
+   "rate": 0.006613756613756614,
+   "rolls": 1
+  },
+  "21273": {
+   "metric": "skotizo",
+   "name": "Skotos",
+   "rate": 0.015384615384615385,
+   "rolls": 1
+  },
+  "21275": {
+   "metric": "skotizo",
+   "name": "Dark claw",
+   "rate": 0.04,
+   "rolls": 1
+  },
+  "21730": {
+   "metric": "grotesque_guardians",
+   "name": "Black tourmaline core",
+   "rate": 0.001,
+   "rolls": 2
+  },
+  "21736": {
+   "metric": "grotesque_guardians",
+   "name": "Granite gloves",
+   "rate": 0.002,
+   "rolls": 2
+  },
+  "21739": {
+   "metric": "grotesque_guardians",
+   "name": "Granite ring",
+   "rate": 0.002,
+   "rolls": 2
+  },
+  "21742": {
+   "metric": "grotesque_guardians",
+   "name": "Granite hammer",
+   "rate": 0.0013333333333333333,
+   "rolls": 2
+  },
+  "21745": {
+   "metric": "grotesque_guardians",
+   "name": "Jar of stone",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "21748": {
+   "metric": "grotesque_guardians",
+   "name": "Noon",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "21992": {
+   "metric": "vorkath",
+   "name": "Vorki",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "22006": {
+   "metric": "vorkath",
+   "name": "Skeletal visage",
+   "rate": 0.0002,
+   "rolls": 1
+  },
+  "22106": {
+   "metric": "vorkath",
+   "name": "Jar of decay",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "22111": {
+   "metric": "vorkath",
+   "name": "Dragonbone necklace",
+   "rate": 0.001,
+   "rolls": 1
+  },
+  "22372": {
+   "metric": "bryophyta",
+   "name": "Bryophyta's essence",
+   "rate": 0.00847457627118644,
+   "rolls": 1
+  },
+  "22746": {
+   "metric": "alchemical_hydra",
+   "name": "Ikkle hydra",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "22966": {
+   "metric": "alchemical_hydra",
+   "name": "Hydra's claw",
+   "rate": 0.000999000999000999,
+   "rolls": 1
+  },
+  "22983": {
+   "metric": "alchemical_hydra",
+   "name": "Hydra leather",
+   "rate": 0.0019455252918287938,
+   "rolls": 1
+  },
+  "22994": {
+   "metric": "hespori",
+   "name": "Bottomless compost bucket",
+   "rate": 0.02857142857142857,
+   "rolls": 1
+  },
+  "23064": {
+   "metric": "alchemical_hydra",
+   "name": "Jar of chemicals",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "23077": {
+   "metric": "alchemical_hydra",
+   "name": "Alchemical hydra heads",
+   "rate": 0.00390625,
+   "rolls": 1
+  },
+  "23495": {
+   "metric": "sarachnis",
+   "name": "Sraracha",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "23517": {
+   "metric": "sarachnis",
+   "name": "Giant egg sac(full)",
+   "rate": 0.05,
+   "rolls": 1
+  },
+  "23525": {
+   "metric": "sarachnis",
+   "name": "Jar of eyes",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "23528": {
+   "metric": "sarachnis",
+   "name": "Sarachnis cudgel",
+   "rate": 0.0026041666666666665,
+   "rolls": 1
+  },
+  "23760": {
+   "metric": "zalcano",
+   "name": "Smolcano",
+   "rate": 0.00044444444444444447,
+   "rolls": 1
+  },
+  "25521": {
+   "metric": "corporeal_beast",
+   "name": "Jar of spirits",
+   "rate": 0.001,
+   "rolls": 1
+  },
+  "25524": {
+   "metric": "thermonuclear_smoke_devil",
+   "name": "Jar of smoke",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "25559": {
+   "metric": "tempoross",
+   "name": "Big harpoonfish",
+   "rate": 0.000625,
+   "rolls": 1
+  },
+  "25576": {
+   "metric": "tempoross",
+   "name": "Tome of water (empty)",
+   "rate": 0.000625,
+   "rolls": 1
+  },
+  "25580": {
+   "metric": "tempoross",
+   "name": "Tackle box",
+   "rate": 0.0025,
+   "rolls": 1
+  },
+  "25582": {
+   "metric": "tempoross",
+   "name": "Fish barrel",
+   "rate": 0.0025,
+   "rolls": 1
+  },
+  "25602": {
+   "metric": "tempoross",
+   "name": "Tiny tempor",
+   "rate": 0.000125,
+   "rolls": 1
+  },
+  "25624": {
+   "metric": "abyssal_sire",
+   "name": "Unsired",
+   "rate": 0.01,
+   "rolls": 1
+  },
+  "27590": {
+   "metric": "phantom_muspah",
+   "name": "Muphin",
+   "rate": 0.0004,
+   "rolls": 1
+  },
+  "27614": {
+   "metric": "phantom_muspah",
+   "name": "Venator shard",
+   "rate": 0.010080645161290322,
+   "rolls": 1
+  },
+  "27622": {
+   "metric": "phantom_muspah",
+   "name": "Frozen cache",
+   "rate": 0.04032258064516129,
+   "rolls": 1
+  },
+  "27627": {
+   "metric": "phantom_muspah",
+   "name": "Ancient icon",
+   "rate": 0.020161290322580645,
+   "rolls": 1
+  },
+  "28246": {
+   "metric": "the_whisperer",
+   "name": "Wisp",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "28248": {
+   "metric": "vardorvis",
+   "name": "Butch",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "28250": {
+   "metric": "duke_sucellus",
+   "name": "Baron",
+   "rate": 0.0004,
+   "rolls": 1
+  },
+  "28252": {
+   "metric": "the_leviathan",
+   "name": "Lil'viathan",
+   "rate": 0.0004,
+   "rolls": 1
+  },
+  "28268": {
+   "metric": "vardorvis",
+   "name": "Blood quartz",
+   "rate": 0.004705147058823529,
+   "rolls": 1
+  },
+  "28270": {
+   "metric": "duke_sucellus",
+   "name": "Ice quartz",
+   "rate": 0.004647777777777778,
+   "rolls": 1
+  },
+  "28272": {
+   "metric": "the_whisperer",
+   "name": "Shadow quartz",
+   "rate": 0.004586029411764706,
+   "rolls": 1
+  },
+  "28274": {
+   "metric": "the_leviathan",
+   "name": "Smoke quartz",
+   "rate": 0.0046603773584905665,
+   "rolls": 1
+  },
+  "28319": {
+   "metric": "vardorvis",
+   "name": "Executioner's axe head",
+   "rate": 0.0009191176470588235,
+   "rolls": 1
+  },
+  "28321": {
+   "metric": "duke_sucellus",
+   "name": "Eye of the duke",
+   "rate": 0.001388888888888889,
+   "rolls": 1
+  },
+  "28323": {
+   "metric": "the_whisperer",
+   "name": "Siren's staff",
+   "rate": 0.001953125,
+   "rolls": 1
+  },
+  "28325": {
+   "metric": "the_leviathan",
+   "name": "Leviathan's lure",
+   "rate": 0.0013020833333333333,
+   "rolls": 1
+  },
+  "29574": {
+   "metric": "tormented_demons",
+   "name": "Burning claw",
+   "rate": 0.001996,
+   "rolls": 1
+  },
+  "29580": {
+   "metric": "tormented_demons",
+   "name": "Tormented synapse",
+   "rate": 0.002,
+   "rolls": 1
+  },
+  "30154": {
+   "metric": "amoxliatl",
+   "name": "Moxi",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "30895": {
+   "metric": "deranged_archaeologist",
+   "name": "Steel ring",
+   "rate": 0.02289901534234028,
+   "rolls": 1
+  },
+  "31285": {
+   "metric": "shellbane_gryphon",
+   "name": "Gull",
+   "rate": 0.0003333333333333333,
+   "rolls": 1
+  },
+  "32921": {
+   "metric": "shellbane_gryphon",
+   "name": "Jar of feathers",
+   "rate": 0.0005,
+   "rolls": 1
+  },
+  "33091": {
+   "metric": "brutus",
+   "name": "Bottomless milk bucket (empty)",
+   "rate": 0.02666666666666667,
+   "rolls": 1
+  },
+  "33093": {
+   "metric": "brutus",
+   "name": "Cow slippers",
+   "rate": 0.006666666666666667,
+   "rolls": 1
+  },
+  "33101": {
+   "metric": "brutus",
+   "name": "Mooleta",
+   "rate": 0.03333333333333333,
+   "rolls": 1
+  },
+  "33382": {
+   "metric": "giant_mole",
+   "name": "Immaculate mole skin",
+   "rate": 0.02,
+   "rolls": 1
+  },
+  "6562": {
+   "metric": "dagannoth_prime",
+   "name": "Mud battlestaff",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "6571": {
+   "metric": "zulrah",
+   "name": "Uncut onyx",
+   "rate": 0.0009765625,
+   "rolls": 2
+  },
+  "6724": {
+   "metric": "dagannoth_supreme",
+   "name": "Seercull",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "6731": {
+   "metric": "dagannoth_prime",
+   "name": "Seers ring",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "6733": {
+   "metric": "dagannoth_supreme",
+   "name": "Archers ring",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "6735": {
+   "metric": "dagannoth_rex",
+   "name": "Warrior ring",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "6737": {
+   "metric": "dagannoth_rex",
+   "name": "Berserker ring",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "7980": {
+   "metric": "king_black_dragon",
+   "name": "Kbd heads",
+   "rate": 0.0078125,
+   "rolls": 1
+  },
+  "7981": {
+   "metric": "kalphite_queen",
+   "name": "Kq head",
+   "rate": 0.0078125,
+   "rolls": 1
+  }
+ }
+}

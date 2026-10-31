@@ -7,6 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
+const { luckForPage } = require('./luck');
 const fs = require('fs');
 const path = require('path');
 
@@ -249,6 +250,31 @@ async function clogStripFor(rsn, activity) {
     };
   } catch {
     return null;
+  }
+}
+
+// The compare boss card's per-player clog strip + luck line. One
+// RuneProfile page fetch feeds both: the strip draws obtained items,
+// the luck engine scores the full page (obtained and missing)
+// against the player's KC for this boss's metric. Never throws.
+async function bossClogLuck(rsn, key, metric, kc) {
+  const page = CLOG_PAGES[key] || clogPageForActivity(key);
+  if (!page) return { clog: null, luck: null };
+  try {
+    const res = await getClogPageWithItems(rsn, page[0], page[1]);
+    if (!res || res.notFound) return { clog: null, luck: null };
+    const drawn = await loadClogItems(res);
+    return {
+      clog: {
+        obtained: res.obtained,
+        total: res.total,
+        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+      },
+      luck: luckForPage(kc, metric,
+        (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }))),
+    };
+  } catch {
+    return { clog: null, luck: null };
   }
 }
 
@@ -947,27 +973,98 @@ async function compareOverallPayload(aName, bName, userId, ownerId, ui = {}) {
   return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
 }
 
+// Which collection log pages belong to a skill, for the single-
+// skill inspect card (mapping set Oct 31, 2026): the skill's
+// own pages plus its skilling boss. Pages are [tab, title] in
+// RuneProfile terms. Scored pages (single KC counter) also get a
+// luck line via SKILL_SECTION_METRIC.
+const SKILL_CLOG_PAGES = {
+  woodcutting: [['Other', 'Forestry'], ['Minigames', 'Temple Trekking']],
+  agility: [['Other', 'Rooftop Agility'], ['Minigames', 'Hallowed Sepulchre'], ['Other', 'Colossal Wyrm Agility']],
+  firemaking: [['Bosses', 'Wintertodt']],
+  fishing: [['Bosses', 'Tempoross'], ['Minigames', 'Fishing Trawler'], ['Other', 'Aerial Fishing']],
+  runecraft: [['Minigames', 'Guardians of the Rift']],
+  mining: [['Bosses', 'Zalcano'], ['Other', 'Motherlode Mine'], ['Minigames', 'Volcanic Mine']],
+  slayer: [['Other', 'Slayer']],
+  farming: [['Minigames', 'Tithe Farm']],
+  hunter: [['Other', 'Hunter Guild']],
+  sailing: [['Minigames', 'Barracuda Trials'], ['Other', 'Ocean Encounters'], ['Other', 'Sea Treasures']],
+  thieving: [['Minigames', "Rogues' Den"]],
+  herblore: [['Minigames', 'Mastering Mixology']],
+  construction: [['Minigames', 'Mahogany Homes']],
+  smithing: [['Minigames', "Giants' Foundry"]],
+};
+const SKILL_SECTION_METRIC = { Wintertodt: 'wintertodt', Tempoross: 'tempoross', Zalcano: 'zalcano' };
+
+async function skillSections(rsn, skillKey, kcMap) {
+  const out = [];
+  for (const [tab, title] of SKILL_CLOG_PAGES[skillKey] || []) {
+    try {
+      const res = await getClogPageWithItems(rsn, tab, title);
+      if (!res || res.notFound) continue;
+      const drawn = await loadClogItems(res);
+      const metric = SKILL_SECTION_METRIC[title] || null;
+      out.push({
+        title, got: res.obtained, total: res.total,
+        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+        luck: metric
+          ? luckForPage(kcMap && typeof kcMap[metric] === 'number' ? kcMap[metric] : null,
+            metric, (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })))
+          : null,
+      });
+    } catch { /* one missing page must not cost the card */ }
+  }
+  return out;
+}
+
 async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId);
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
   if (!sb.st) return { content: `Could not find the RuneScape name **${bName}**.` };
+  const picked = ui.skill && SKILL_ORDER.includes(ui.skill) ? ui.skill : null;
+  if (picked) {
+    // Single-skill inspect: the skill big, plus its clog sections.
+    const ai = sa.skills.find((s) => s.key === picked);
+    const bi = sb.skills.find((s) => s.key === picked);
+    const [secA, secB] = await Promise.all([
+      skillSections(aName, picked, sa.st.kc), skillSections(bName, picked, sb.st.kc),
+    ]);
+    let leader = null;
+    if (ai && bi && ai.level != null && bi.level != null) {
+      if (ai.level !== bi.level) leader = ai.level > bi.level ? 'a' : 'b';
+      else if ((ai.xp || 0) !== (bi.xp || 0)) leader = (ai.xp || 0) > (bi.xp || 0) ? 'a' : 'b';
+    }
+    const leadName = leader === 'a' ? aName : leader === 'b' ? bName : null;
+    const note = !leadName ? 'Dead level.'
+      : ai.level !== bi.level
+        ? `${leadName} leads by ${Math.abs(ai.level - bi.level)} level${Math.abs(ai.level - bi.level) === 1 ? '' : 's'}`
+        : `${leadName} leads on XP`;
+    const noMap = !(picked in SKILL_CLOG_PAGES);
+    const card = await fetchCard('/compare-skill', {
+      skillKey: picked, skillName: ai ? ai.name : picked,
+      a: {
+        rsn: aName, level: ai ? ai.level : null, xp: ai ? ai.xp : null,
+        sections: secA, noSections: noMap,
+      },
+      b: {
+        rsn: bName, level: bi ? bi.level : null, xp: bi ? bi.xp : null,
+        sections: secB, noSections: noMap,
+      },
+      leader, note,
+    });
+    const components = await compareComponents('skills', aName, bName,
+      ui.bossKey || null, ownerId ?? userId, ui);
+    if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skill.png' })], components };
+    return { content: `**${ai ? ai.name : picked}** - ${aName}: ${ai ? ai.level ?? '-' : '-'} · ${bName}: ${bi ? bi.level ?? '-' : '-'}`, components };
+  }
   const led = skillsLed(sa.skills, sb.skills);
   const tied = 24 - led.a - led.b;
   const summary = `Skills led: ${aName} ${led.a} - ${led.b} ${bName}${tied ? ` · ${tied} tied` : ''}`;
-  const skillKey = ui.skill && SKILL_ORDER.includes(ui.skill) ? ui.skill : null;
-  let focusLine = '';
-  if (skillKey) {
-    const ai = sa.skills.find((s) => s.key === skillKey);
-    const bi = sb.skills.find((s) => s.key === skillKey);
-    if (ai && bi) {
-      focusLine = `${ai.name}: ${aName} ${ai.level ?? '-'} · ${abbrXp(ai.xp || 0)} xp · ${bName} ${bi.level ?? '-'} · ${abbrXp(bi.xp || 0)} xp`;
-    }
-  }
   const card = await fetchCard('/compare-skills', {
     a: { rsn: aName }, b: { rsn: bName }, summary, cells: led.cells,
-    highlight: skillKey, focusLine,
+    highlight: null, focusLine: '',
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })], components: await compareComponents('skills', aName, bName, ui.bossKey || null, ownerId ?? userId, ui) };
   return { content: summary };
@@ -1005,14 +1102,90 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   const note = leader
     ? `${leader === 'a' ? aName : bName} leads by ${fmt(Math.abs(kcA - kcB))}`
     : kcA != null && kcA === kcB ? 'Dead level.' : '';
+  const [ca, cb] = await Promise.all([
+    bossClogLuck(aName, key, metric, kcA), bossClogLuck(bName, key, metric, kcB),
+  ]);
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName) },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName) },
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck },
     leader, note,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 }) };
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
+}
+
+// ---- Boss base page: totals before a boss is picked ----
+// Merged units match the website's boss pages: raid variants and
+// the wilderness pairs count as one boss.
+const BOSS_GROUPS = new Map([
+  ['tombs_of_amascut', 'Tombs of Amascut'], ['tombs_of_amascut_expert', 'Tombs of Amascut'],
+  ['chambers_of_xeric', 'Chambers of Xeric'], ['chambers_of_xeric_challenge_mode', 'Chambers of Xeric'],
+  ['theatre_of_blood', 'Theatre of Blood'], ['theatre_of_blood_hard_mode', 'Theatre of Blood'],
+  ['the_gauntlet', 'The Gauntlet'], ['the_corrupted_gauntlet', 'The Gauntlet'],
+  ['callisto', 'Callisto and Artio'], ['artio', 'Callisto and Artio'],
+  ['venenatis', 'Venenatis and Spindel'], ['spindel', 'Venenatis and Spindel'],
+  ["vet'ion", "Vet'ion and Calvar'ion"], ["calvar'ion", "Vet'ion and Calvar'ion"],
+]);
+const RAID_METRICS = ['tombs_of_amascut', 'tombs_of_amascut_expert', 'chambers_of_xeric',
+  'chambers_of_xeric_challenge_mode', 'theatre_of_blood', 'theatre_of_blood_hard_mode'];
+const SKILLING_METRICS = ['wintertodt', 'tempoross', 'guardians_of_the_rift', 'zalcano'];
+
+async function compareBossBasePayload(aName, bName, userId, ownerId, ui = {}) {
+  if (userId) noteUse(userId);
+  const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
+  if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
+  if (!sb.st) return { content: `Could not find the RuneScape name **${bName}**.` };
+  const kcOf = (st, metric) => (st.kc && typeof st.kc[metric] === 'number' ? st.kc[metric] : 0);
+  // One unit per boss page: dedupe metrics across activity keys,
+  // then fold grouped metrics into their merged unit.
+  const units = new Map();
+  const seenMetrics = new Set();
+  for (const key of Object.keys(KC_KEYS)) {
+    const entry = kcEntry(key);
+    if (!entry || !entry.cols || !entry.cols.length) continue;
+    const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
+    const col = entry.cols.length > 1 && variantKey
+      ? entry.cols[entry.cols.length - 1] : entry.cols[0];
+    if (NON_KC_SCORES.has(col.metric)) continue;
+    if (seenMetrics.has(col.metric)) continue; // alias keys share a metric
+    seenMetrics.add(col.metric);
+    const unit = BOSS_GROUPS.get(col.metric) || entry.name;
+    if (!units.has(unit)) units.set(unit, { name: unit, a: 0, b: 0 });
+    const u = units.get(unit);
+    u.a += kcOf(sa.st, col.metric);
+    u.b += kcOf(sb.st, col.metric);
+  }
+  const fought = [...units.values()].filter((u) => u.a + u.b > 0);
+  const ledA = fought.filter((u) => u.a > u.b).length;
+  const ledB = fought.filter((u) => u.b > u.a).length;
+  const sum = (st, metrics) => metrics.reduce((s, m) => s + kcOf(st, m), 0);
+  const raidA = sum(sa.st, RAID_METRICS);
+  const raidB = sum(sb.st, RAID_METRICS);
+  const skilA = sum(sa.st, SKILLING_METRICS);
+  const skilB = sum(sb.st, SKILLING_METRICS);
+  const win = (x, y) => (x === y ? 'tie' : x > y ? 'a' : 'b');
+  const rows = [
+    { label: 'Total KC', aText: fmt(sa.totalKc), bText: fmt(sb.totalKc), winner: win(sa.totalKc, sb.totalKc) },
+    { label: 'Bosses led', aText: `${ledA}`, bText: `${ledB}`, winner: win(ledA, ledB) },
+    { label: 'Raid KC', aText: fmt(raidA), bText: fmt(raidB), winner: win(raidA, raidB) },
+    { label: 'Skilling boss KC', aText: fmt(skilA), bText: fmt(skilB), winner: win(skilA, skilB) },
+  ];
+  const top = fought
+    .sort((x, y) => (y.a + y.b) - (x.a + x.b))
+    .slice(0, 6)
+    .map((u) => ({ name: u.name, aText: fmt(u.a), bText: fmt(u.b), winner: win(u.a, u.b) }));
+  const components = await compareComponents('bossbase', aName, bName,
+    ui.bossKey || null, ownerId ?? userId, ui);
+  const card = await fetchCard('/compare-boss-base', {
+    a: { rsn: aName }, b: { rsn: bName }, rows, top,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss-base.png' })], components };
+  return {
+    content: `**Bosses** - ${aName}: ${fmt(sa.totalKc)} total KC · ${bName}: ${fmt(sb.totalKc)} total KC. The card service is down right now.`,
+    components,
+  };
 }
 
 // Splits the text-command tail into the two players. A name on its
@@ -1341,9 +1514,16 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
     .setCustomId(`cmpswap:${view}:${bossKey || '-'}:${enc}`)
     .setLabel('Change players')
     .setStyle(ButtonStyle.Secondary);
+  // The Boss button lands on the boss base page (totals first);
+  // picking a boss from its menus drills into that boss.
+  const bossBtn = new ButtonBuilder()
+    .setCustomId(`cmp:bossbase:${bossKey || '-'}:${enc}`)
+    .setLabel('Boss')
+    .setStyle(view === 'bossbase' ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(view === 'bossbase');
   const rows = [new ActionRowBuilder().addComponents(
     viewBtn('overall', 'Overall'), viewBtn('skills', 'Skills'),
-    viewBtn('boss', 'Boss'), viewBtn('clogs', 'Clogs'), swapBtn)];
+    bossBtn, viewBtn('clogs', 'Clogs'), swapBtn)];
   if (view === 'skills') {
     const options = [{ label: 'All skills', value: 'all' }];
     for (const key of [...SKILL_ORDER].sort((x, y) => x.localeCompare(y))) {
@@ -1354,7 +1534,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
         .setCustomId(`cmpskill:${enc}`)
         .setPlaceholder('Pick a skill...')
         .addOptions(options.slice(0, 25))));
-  } else if (view === 'boss') {
+  } else if (view === 'boss' || view === 'bossbase') {
     const catalog = bossCatalog();
     const cat = ui.cat && catalog.byCat[ui.cat] ? ui.cat : null;
     if (!cat) {
@@ -1420,6 +1600,7 @@ function savedRsnsFor(userId) {
 async function compareViewRender(view, bossKey, a, b, owner) {
   if (view === 'skills') return compareSkillsPayload(a, b, null, owner, { bossKey });
   if (view === 'clogs') return compareClogsPayload(a, b, null, owner, { bossKey });
+  if (view === 'bossbase') return compareBossBasePayload(a, b, null, owner, { bossKey });
   if (view === 'boss') {
     const key = bossKey && KC_KEYS[bossKey] ? bossKey : bossCatalog().top;
     if (key) return compareBossPayload(key, a, b, null, owner, { cat: compareCategoryOf(key) });
@@ -1543,7 +1724,7 @@ async function handleCompareButton(interaction) {
   const view = parts[1];
   const bossSeg = parts.length >= 4 ? parts[2] : '-';
   const pair = decodePair(parts[parts.length - 1]);
-  if (!pair || !['overall', 'skills', 'boss', 'clogs'].includes(view)) {
+  if (!pair || !['overall', 'skills', 'boss', 'bossbase', 'clogs'].includes(view)) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
@@ -1580,9 +1761,16 @@ async function handleCompareBossSelect(interaction) {
   if (!value) return;
   const state = compareStateOf(interaction);
   const current = state.bossKey && KC_KEYS[state.bossKey] ? state.bossKey : bossCatalog().top;
+  const onBase = state.view === 'bossbase';
   await interaction.deferUpdate().catch(() => {});
   if (parts[1] === 'menu') {
     const cat = value.startsWith('cat:') ? value.slice(4) : null;
+    if (onBase) {
+      await editCompareMessage(interaction, await compareBossBasePayload(
+        pair.a, pair.b, null, pair.owner,
+        { cat: cat || null, catPage: 0, bossKey: state.bossKey }));
+      return;
+    }
     await editCompareMessage(interaction, await compareBossPayload(
       current, pair.a, pair.b, null, pair.owner,
       { cat: cat || compareCategoryOf(current), catPage: 0 }));
@@ -1592,12 +1780,24 @@ async function handleCompareBossSelect(interaction) {
   const cat = parts[2];
   const page = parseInt(parts[3], 10) || 0;
   if (value === 'back') {
-    await editCompareMessage(interaction, await compareBossPayload(
-      current, pair.a, pair.b, null, pair.owner, { cat: null }));
+    if (onBase) {
+      await editCompareMessage(interaction, await compareBossBasePayload(
+        pair.a, pair.b, null, pair.owner, { cat: null, bossKey: state.bossKey }));
+    } else {
+      await editCompareMessage(interaction, await compareBossPayload(
+        current, pair.a, pair.b, null, pair.owner, { cat: null }));
+    }
   } else if (value.startsWith('page:')) {
-    await editCompareMessage(interaction, await compareBossPayload(
-      current, pair.a, pair.b, null, pair.owner,
-      { cat, catPage: parseInt(value.slice(5), 10) || 0 }));
+    const nextPage = parseInt(value.slice(5), 10) || 0;
+    if (onBase) {
+      await editCompareMessage(interaction, await compareBossBasePayload(
+        pair.a, pair.b, null, pair.owner,
+        { cat, catPage: nextPage, bossKey: state.bossKey }));
+    } else {
+      await editCompareMessage(interaction, await compareBossPayload(
+        current, pair.a, pair.b, null, pair.owner,
+        { cat, catPage: nextPage }));
+    }
   } else if (KC_KEYS[value]) {
     await editCompareMessage(interaction, await compareBossPayload(
       value, pair.a, pair.b, null, pair.owner, { cat, catPage: page }));
@@ -1762,4 +1962,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
