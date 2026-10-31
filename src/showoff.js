@@ -1,7 +1,7 @@
 // !-prefixed show-off commands: !kc <activity> [name], !clog <activity|total> [name],
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
-const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
@@ -1134,7 +1134,7 @@ function clogAutocompleteChoices(focused) {
 
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
-  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb' || interaction.commandName === 'compare-boss'
+  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
@@ -1194,8 +1194,12 @@ function compareComponents(view, a, b, bossKey, ownerId) {
     .setLabel(label)
     .setStyle(view === v ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(view === v);
+  const swapBtn = new ButtonBuilder()
+    .setCustomId(`cmpswap:${view}:${bossKey || '-'}:${enc}`)
+    .setLabel('Change players')
+    .setStyle(ButtonStyle.Secondary);
   const rows = [new ActionRowBuilder().addComponents(
-    viewBtn('overall', 'Overall'), viewBtn('skills', 'Skills'))];
+    viewBtn('overall', 'Overall'), viewBtn('skills', 'Skills'), swapBtn)];
   const options = bossMenuOptions();
   if (options.length) {
     rows.push(new ActionRowBuilder().addComponents(
@@ -1204,7 +1208,108 @@ function compareComponents(view, a, b, bossKey, ownerId) {
         .setPlaceholder('Pick a boss...')
         .addOptions(options)));
   }
+  // Quick picks: the owner's other saved RSNs (from /link), one tap to
+  // swap their own side of the compare without typing.
+  if (ownerId) {
+    const saved = savedRsnsFor(ownerId);
+    const inPair = new Set([normName(a), normName(b)]);
+    const alts = saved.filter((r) => !inPair.has(normName(r))).slice(0, 5);
+    if (alts.length) {
+      rows.push(new ActionRowBuilder().addComponents(alts.map((alt) => new ButtonBuilder()
+        .setCustomId(`cmpalt:${view}:${bossKey || '-'}:${saved.indexOf(alt)}:${enc}`)
+        .setLabel(String(alt).slice(0, 80))
+        .setStyle(ButtonStyle.Secondary))));
+    }
+  }
   return rows;
+}
+
+function savedRsnsFor(userId) {
+  const entry = loadRsnLinks()[userId];
+  if (!entry || typeof entry !== 'object') return [];
+  if (Array.isArray(entry.rsns)) return entry.rsns.filter((r) => typeof r === 'string' && r);
+  return typeof entry.rsn === 'string' && entry.rsn ? [entry.rsn] : [];
+}
+
+async function compareViewRender(view, bossKey, a, b, owner) {
+  if (view === 'skills') return compareSkillsPayload(a, b, null, owner);
+  if (view === 'boss' && bossKey && KC_KEYS[bossKey]) {
+    return compareBossPayload(bossKey, a, b, null, owner);
+  }
+  return compareOverallPayload(a, b, null, owner);
+}
+
+async function handleCompareSwapButton(interaction) {
+  const [, view, bossKey, enc] = interaction.customId.split(':');
+  const pair = decodePair(enc);
+  if (!pair) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!await compareOwnerGate(interaction, pair)) return;
+  const input = (id, label, value) => new ActionRowBuilder().addComponents(
+    new TextInputBuilder().setCustomId(id).setLabel(label)
+      .setStyle(TextInputStyle.Short).setRequired(true)
+      .setMaxLength(12).setValue(value));
+  const modal = new ModalBuilder()
+    .setCustomId(`cmpmodal:${view}:${bossKey}:${enc}`)
+    .setTitle('Change players')
+    .addComponents(
+      input('player_a', 'Player A', pair.a),
+      input('player_b', 'Player B', pair.b));
+  await interaction.showModal(modal).catch(() => {});
+}
+
+async function handleCompareSwapModal(interaction) {
+  const [, view, bossKey, enc] = interaction.customId.split(':');
+  const pair = decodePair(enc);
+  if (!pair) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!await compareOwnerGate(interaction, pair)) return;
+  const na = interaction.fields.getTextInputValue('player_a').trim();
+  const nb = interaction.fields.getTextInputValue('player_b').trim();
+  if (!RSN_RE.test(na) || !RSN_RE.test(nb) || normName(na) === normName(nb)) {
+    await interaction.reply({ content: 'Those names do not work. Use two different RuneScape names.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const payload = await compareViewRender(view, bossKey === '-' ? null : bossKey, na, nb, pair.owner);
+  if (!payload || !payload.files) {
+    await interaction.followUp({ content: (payload && payload.content) || 'Could not load those players.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await editCompareMessage(interaction, payload);
+}
+
+async function handleCompareAltButton(interaction) {
+  const [, view, bossKey, idxRaw, enc] = interaction.customId.split(':');
+  const pair = decodePair(enc);
+  if (!pair) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (!await compareOwnerGate(interaction, pair)) return;
+  const saved = savedRsnsFor(interaction.user.id);
+  const alt = saved[Number(idxRaw)];
+  if (!alt) {
+    await interaction.reply({ content: 'That saved name is not on your link anymore.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const mine = new Set(saved.map((r) => normName(r)));
+  let a = pair.a;
+  let b = pair.b;
+  if (mine.has(normName(a))) a = alt;
+  else if (mine.has(normName(b))) b = alt;
+  else a = alt;
+  if (normName(a) === normName(b)) {
+    await interaction.reply({ content: 'That account is already in this compare.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const payload = await compareViewRender(view, bossKey === '-' ? null : bossKey, a, b, pair.owner);
+  await editCompareMessage(interaction, payload);
 }
 
 async function editCompareMessage(interaction, payload) {
@@ -1334,39 +1439,6 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
-      .setName('compare-skills')
-      .setDescription('Compare two players skill by skill')
-      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
-      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
-    run: async (interaction) => {
-      const pair = await resolveComparePair(interaction);
-      if (!pair) return;
-      if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, compareSkillsPayload(pair.a, pair.b, interaction.user.id));
-    },
-  },
-  {
-    data: new SlashCommandBuilder()
-      .setName('compare-boss')
-      .setDescription('Compare two players on one boss')
-      .addStringOption((o) => o.setName('boss').setDescription('Boss or activity').setRequired(true).setAutocomplete(true))
-      .addStringOption((o) => o.setName('player_a').setDescription('First RuneScape name (defaults to your linked RSN)'))
-      .addStringOption((o) => o.setName('player_b').setDescription('Second RuneScape name (defaults to your linked RSN)')),
-    run: async (interaction) => {
-      const bossStr = interaction.options.getString('boss');
-      const bossKey = bossStr ? bossStr.trim().toLowerCase().replace(/\s+/g, '_') : null;
-      if (!bossKey || !KC_KEYS[bossKey]) {
-        await interaction.reply({ content: 'Pick a boss or activity from the list.', ephemeral: true }).catch(() => {});
-        return;
-      }
-      const pair = await resolveComparePair(interaction);
-      if (!pair) return;
-      if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, compareBossPayload(bossKey, pair.a, pair.b, interaction.user.id));
-    },
-  },
-  {
-    data: new SlashCommandBuilder()
       .setName('skills')
       .setDescription("Show a player's skill levels card")
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
@@ -1416,4 +1488,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, handleCompareButton, handleCompareBossSelect, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, handleCompareButton, handleCompareBossSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
