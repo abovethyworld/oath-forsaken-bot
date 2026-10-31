@@ -1173,9 +1173,7 @@ function decodePair(enc) {
 async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId);
   const owner = ownerId ?? userId;
-  const [pa, pb] = await Promise.all([
-    getClogPages(aName).catch(() => null), getClogPages(bName).catch(() => null),
-  ]);
+  const [pa, pb] = await Promise.all([clogPagesOf(aName), clogPagesOf(bName)]);
   const components = await compareComponents('clogs', aName, bName, ui.bossKey || null, owner, ui);
   if (!pa || !pb) {
     const missing = !pa ? aName : bName;
@@ -1186,8 +1184,8 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   }
   const pageTitle = ui.page && (pa[ui.page] || pb[ui.page]) ? ui.page : null;
   if (pageTitle) {
-    const gap = pa[pageTitle] || { got: 0, total: 0, items: [] };
-    const gbp = pb[pageTitle] || { got: 0, total: 0, items: [] };
+    const gap = pa[pageTitle] || { obtained: 0, total: 0, items: [] };
+    const gbp = pb[pageTitle] || { obtained: 0, total: 0, items: [] };
     const byId = new Map();
     for (const it of gap.items || []) byId.set(it.id, { id: it.id, name: it.name, aHas: true, bHas: false });
     for (const it of gbp.items || []) {
@@ -1207,12 +1205,12 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     }));
     const card = await fetchCard('/compare-clog', {
       mode: 'page', page: pageTitle,
-      a: { rsn: aName, got: gap.got || 0, total: gap.total || gbp.total || 0 },
-      b: { rsn: bName, got: gbp.got || 0, total: gbp.total || gap.total || 0 },
+      a: { rsn: aName, got: gap.obtained || 0, total: gap.total || gbp.total || 0 },
+      b: { rsn: bName, got: gbp.obtained || 0, total: gbp.total || gap.total || 0 },
       items, moreCount: Math.max(0, all.length - shown.length),
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-clog.png' })], components };
-    return { content: `${pageTitle}: ${aName} ${gap.got || 0} - ${gbp.got || 0} ${bName}`, components };
+    return { content: `${pageTitle}: ${aName} ${gap.obtained || 0} - ${gbp.obtained || 0} ${bName}`, components };
   }
   const raidTitles = new Set();
   const bossTitles = new Set();
@@ -1221,9 +1219,9 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     if (cat === 'Bosses') bossTitles.add(title);
   }
   const sumGot = (pages, titles) => Object.entries(pages)
-    .reduce((s, [t, p]) => s + (titles.has(t) ? (p.got || 0) : 0), 0);
+    .reduce((s, [t, p]) => s + (titles.has(t) ? (p.obtained || 0) : 0), 0);
   const totalOf = (pages) => Object.values(pages)
-    .reduce((s, p) => ({ got: s.got + (p.got || 0), total: s.total + (p.total || 0) }), { got: 0, total: 0 });
+    .reduce((s, p) => ({ got: s.got + (p.obtained || 0), total: s.total + (p.total || 0) }), { got: 0, total: 0 });
   const ta = totalOf(pa);
   const tb = totalOf(pb);
   const bossA = sumGot(pa, bossTitles);
@@ -1309,15 +1307,20 @@ function bossCatalog() {
   return bossCatalogCache;
 }
 
+// getClogPages wraps its result ({ pages: { title: { obtained,
+// total, items } } }); unwrap to the page map or null.
+async function clogPagesOf(name) {
+  const wrap = await getClogPages(name).catch(() => null);
+  return wrap && wrap.pages ? wrap.pages : null;
+}
+
 async function clogMenuOptions(a, b) {
-  const [pa, pb] = await Promise.all([
-    getClogPages(a).catch(() => null), getClogPages(b).catch(() => null),
-  ]);
+  const [pa, pb] = await Promise.all([clogPagesOf(a), clogPagesOf(b)]);
   if (!pa || !pb) return [];
   const totals = new Map();
   for (const pages of [pa, pb]) {
     for (const [title, page] of Object.entries(pages)) {
-      totals.set(title, (totals.get(title) || 0) + (page.got || 0));
+      totals.set(title, (totals.get(title) || 0) + (page.obtained || 0));
     }
   }
   return [...totals.entries()]
