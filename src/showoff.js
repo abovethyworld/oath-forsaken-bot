@@ -1,7 +1,7 @@
 // !-prefixed show-off commands: !kc <activity> [name], !clog <activity|total> [name],
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
-const { AttachmentBuilder, SlashCommandBuilder } = require('discord.js');
+const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { getStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
@@ -943,7 +943,7 @@ async function compareOverallPayload(aName, bName, userId) {
   const tally = wa === wb ? `ALL SQUARE AT ${wa} - ${wb}`
     : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${wa} - ${wb}`;
   const card = await fetchCard('/compare', { a: { rsn: aName }, b: { rsn: bName }, rows, tally });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })] };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })], components: compareComponents('overall', aName, bName, null) };
   return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
 }
 
@@ -959,7 +959,7 @@ async function compareSkillsPayload(aName, bName, userId) {
   const card = await fetchCard('/compare-skills', {
     a: { rsn: aName }, b: { rsn: bName }, summary, cells: led.cells,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })] };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })], components: compareComponents('skills', aName, bName, null) };
   return { content: summary };
 }
 
@@ -1001,7 +1001,7 @@ async function compareBossPayload(key, aName, bName, userId) {
     b: { rsn: bName, kc: kcB, rank: rankOf(bName) },
     leader, note,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })] };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: compareComponents('boss', aName, bName, key) };
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
 }
 
@@ -1140,6 +1140,104 @@ async function handleAutocomplete(interaction) {
       ? clogAutocompleteChoices(focused)
       : [];
   await interaction.respond(choices).catch(() => {});
+}
+
+// ---- Compare card components: view buttons + boss picker ----
+// The pair travels inside the component ids (base64url of "a\nb"), so
+// the buttons keep working without any server-side state.
+
+function encodePair(a, b) {
+  return Buffer.from(`${a}\n${b}`, 'utf8').toString('base64url');
+}
+
+function decodePair(enc) {
+  try {
+    const parts = Buffer.from(String(enc || ''), 'base64url').toString('utf8').split('\n');
+    return parts.length === 2 && parts[0] && parts[1] ? { a: parts[0], b: parts[1] } : null;
+  } catch {
+    return null;
+  }
+}
+
+let bossMenuCache = { at: 0, options: [] };
+function bossMenuOptions() {
+  if (bossMenuCache.options.length && Date.now() - bossMenuCache.at < 10 * 60 * 1000) {
+    return bossMenuCache.options;
+  }
+  const byMetric = new Map();
+  for (const [key, entry] of Object.entries(KC_KEYS)) {
+    const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
+    const col = entry.cols.length > 1 && variantKey
+      ? entry.cols[entry.cols.length - 1] : entry.cols[0];
+    if (byMetric.has(col.metric)) continue;
+    let total = 0;
+    try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
+    byMetric.set(col.metric, { key, name: entry.name, total });
+  }
+  const options = [...byMetric.values()]
+    .filter((o) => o.total > 0)
+    .sort((x, y) => y.total - x.total)
+    .slice(0, 25)
+    .map((o) => ({ label: String(o.name).slice(0, 100), value: o.key }));
+  bossMenuCache = { at: Date.now(), options };
+  return options;
+}
+
+function compareComponents(view, a, b, bossKey) {
+  const enc = encodePair(a, b);
+  const viewBtn = (v, label) => new ButtonBuilder()
+    .setCustomId(`cmp:${v}:${enc}`)
+    .setLabel(label)
+    .setStyle(view === v ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(view === v);
+  const rows = [new ActionRowBuilder().addComponents(
+    viewBtn('overall', 'Overall'), viewBtn('skills', 'Skills'))];
+  const options = bossMenuOptions();
+  if (options.length) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`cmpboss:${enc}`)
+        .setPlaceholder('Pick a boss...')
+        .addOptions(options)));
+  }
+  return rows;
+}
+
+async function editCompareMessage(interaction, payload) {
+  if (!payload || (!payload.files && !payload.content)) {
+    await interaction.followUp({ content: 'That view is not available right now.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const edit = { ...payload, attachments: [] };
+  if (!payload.components) edit.components = [];
+  delete edit.ephemeral;
+  await interaction.editReply(edit).catch(() => {});
+}
+
+async function handleCompareButton(interaction) {
+  const [, view, enc] = interaction.customId.split(':');
+  const pair = decodePair(enc);
+  if (!pair || (view !== 'overall' && view !== 'skills')) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferUpdate().catch(() => {});
+  const payload = view === 'skills'
+    ? await compareSkillsPayload(pair.a, pair.b, null)
+    : await compareOverallPayload(pair.a, pair.b, null);
+  await editCompareMessage(interaction, payload);
+}
+
+async function handleCompareBossSelect(interaction) {
+  const pair = decodePair(interaction.customId.slice('cmpboss:'.length));
+  if (!pair) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const key = interaction.values && interaction.values[0];
+  if (!key || !KC_KEYS[key]) return;
+  await interaction.deferUpdate().catch(() => {});
+  await editCompareMessage(interaction, await compareBossPayload(key, pair.a, pair.b, null));
 }
 
 // Shared name resolution for the compare commands: each name box is
@@ -1302,4 +1400,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, handleCompareButton, handleCompareBossSelect, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
