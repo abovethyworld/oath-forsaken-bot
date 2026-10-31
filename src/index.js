@@ -34,6 +34,7 @@ const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
+const { reconcileCodeLinks } = require('./plugin-connect');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -104,6 +105,11 @@ client.once(Events.ClientReady, async (c) => {
       await sweepExpiredBounties(client);
       await sweepExpiredTeams(client);
       await sweepPendingButtons(client);
+
+      // Plugin connect codes and RSN links are one system: any RSN with a
+      // live code joins its owner's link list (active name untouched).
+      const linkedRsns = reconcileCodeLinks();
+      if (linkedRsns) console.log(`Plugin connect: linked ${linkedRsns} coded RSN(s) into RSN links.`);
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
