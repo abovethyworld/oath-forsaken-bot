@@ -938,8 +938,10 @@ async function compareOverallPayload(aName, bName, userId) {
   ];
   const wa = rows.filter((r) => r.winner === 'a').length;
   const wb = rows.filter((r) => r.winner === 'b').length;
+  // The score always reads in card order (player A first, player B
+  // second), whichever side leads.
   const tally = wa === wb ? `ALL SQUARE AT ${wa} - ${wb}`
-    : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${Math.max(wa, wb)} - ${Math.min(wa, wb)}`;
+    : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${wa} - ${wb}`;
   const card = await fetchCard('/compare', { a: { rsn: aName }, b: { rsn: bName }, rows, tally });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })] };
   return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
