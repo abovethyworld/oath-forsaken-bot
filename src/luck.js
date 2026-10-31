@@ -5,10 +5,19 @@
 // adapted from Collection Log Luck by peanubnutter, BSD 2-Clause -
 // see LICENSES/collection-log-luck.txt). Raids, team bosses, and
 // multi-source drops are not in the table, so they get no score.
+// Dupe-protected sets (pyromancer outfit, bludgeon pieces, Moons
+// armour) score as a set: any-piece rate, distinct pieces owned.
 //
 // v1 scores ownership (have it / dry on it), not duplicate counts.
 
-const TABLE = (require('./luck-data.json') || {}).items || {};
+const LUCK_DATA = require('./luck-data.json') || {};
+const TABLE = LUCK_DATA.items || {};
+const SETS_BY_METRIC = {};
+const SET_ITEM_IDS = new Set();
+for (const s of Object.values(LUCK_DATA.sets || {})) {
+  (SETS_BY_METRIC[s.metric] = SETS_BY_METRIC[s.metric] || []).push(s);
+  for (const id of s.pieces) SET_ITEM_IDS.add(id);
+}
 
 // P(X <= m) for X ~ Bin(n, p), by PMF recurrence from P(0). Only
 // used with small m (ownership means m is 0 or a capped quantity).
@@ -33,10 +42,30 @@ function binomCdfLE(n, p, m) {
 // at least half of players would have it by now.
 function luckForPage(kc, metric, pageItems) {
   if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return null;
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), it.qty || 0]));
   let scored = 0;
   let driest = null;
   let luckiest = null;
+  const kcText = kc.toLocaleString('en-US');
+  // Dupe-protected sets first: one scored unit per set.
+  for (const s of SETS_BY_METRIC[metric] || []) {
+    scored++;
+    const n = kc * (s.rolls || 1);
+    const p = s.rate * s.pieces.length; // any-piece rate
+    const owned = s.pieces.filter((id) => (qtyOf.get(id) || 0) > 0).length;
+    if (owned >= s.pieces.length) {
+      const fewer = binomCdfLE(n, p, s.pieces.length - 1);
+      if (!luckiest || fewer > luckiest.pct) luckiest = { name: s.name, pct: fewer };
+    } else {
+      const dry = 1 - binomCdfLE(n, p, owned); // share with more pieces
+      const text = owned === 0
+        ? `${s.name} (${Math.round(dry * 100)}% of players have it by ${kcText} KC)`
+        : `${s.name} (${Math.round(dry * 100)}% of players have more pieces by ${kcText} KC)`;
+      if (!driest || dry > driest.pct) driest = { pct: dry, text };
+    }
+  }
   for (const it of pageItems) {
+    if (SET_ITEM_IDS.has(Number(it.id))) continue; // scored as a set
     const t = TABLE[String(it.id)];
     if (!t || t.metric !== metric) continue;
     scored++;
@@ -48,7 +77,8 @@ function luckForPage(kc, metric, pageItems) {
       if (!luckiest || fewer > luckiest.pct) luckiest = { name: t.name, pct: fewer };
     } else {
       const dry = -Math.expm1(n * Math.log1p(-t.rate)); // P(X >= 1)
-      if (!driest || dry > driest.pct) driest = { name: t.name, pct: dry };
+      const text = `${t.name} (${Math.round(dry * 100)}% of players have it by ${kcText} KC)`;
+      if (!driest || dry > driest.pct) driest = { pct: dry, text };
     }
   }
   if (!scored) return null;
@@ -56,9 +86,7 @@ function luckForPage(kc, metric, pageItems) {
   if (driest && driest.pct >= 0.9) word = 'unlucky';
   else if (driest && driest.pct >= 0.75) word = 'dry';
   else if (luckiest && luckiest.pct >= 0.9 && (!driest || driest.pct < 0.5)) word = 'lucky';
-  const dry = driest && driest.pct >= 0.5
-    ? `${driest.name} (${Math.round(driest.pct * 100)}% of players have it by ${kc.toLocaleString('en-US')} KC)`
-    : null;
+  const dry = driest && driest.pct >= 0.5 ? driest.text : null;
   return { word, dry };
 }
 

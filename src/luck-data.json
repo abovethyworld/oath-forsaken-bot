@@ -1,5 +1,5 @@
 {
- "_about": "Drop-rate table for Oath Forsaken luck scoring. Adapted from Collection Log Luck by peanubnutter (BSD 2-Clause, see LICENSES/collection-log-luck.txt); rates cross-checked against the OSRS Wiki. Only single-source, fixed-rate drops on one tracked counter are included.",
+ "_about": "Drop-rate table for Oath Forsaken luck scoring. Adapted from Collection Log Luck by peanubnutter (BSD 2-Clause, see LICENSES/collection-log-luck.txt); rates cross-checked against the OSRS Wiki. Only single-source, fixed-rate drops on one tracked counter are included, plus dupe-protected sets (pyromancer outfit, bludgeon pieces, Moons armour), which score as a set.",
  "items": {
   "11785": {
    "metric": "commander_zilyana",
@@ -361,6 +361,27 @@
    "rate": 0.000390625,
    "rolls": 1
   },
+  "13274": {
+   "metric": "abyssal_sire",
+   "name": "Bludgeon spine",
+   "rate": 0.0016145833333333333,
+   "rolls": 1,
+   "set": "13274,13275,13276"
+  },
+  "13275": {
+   "metric": "abyssal_sire",
+   "name": "Bludgeon claw",
+   "rate": 0.0016145833333333333,
+   "rolls": 1,
+   "set": "13274,13275,13276"
+  },
+  "13276": {
+   "metric": "abyssal_sire",
+   "name": "Bludgeon axon",
+   "rate": 0.0016145833333333333,
+   "rolls": 1,
+   "set": "13274,13275,13276"
+  },
   "13277": {
    "metric": "abyssal_sire",
    "name": "Jar of miasma",
@@ -378,6 +399,34 @@
    "name": "Phoenix",
    "rate": 0.0002,
    "rolls": 1
+  },
+  "20704": {
+   "metric": "wintertodt",
+   "name": "Pyromancer garb",
+   "rate": 0.00164257555847569,
+   "rolls": 1,
+   "set": "20704,20706,20708,20710"
+  },
+  "20706": {
+   "metric": "wintertodt",
+   "name": "Pyromancer robe",
+   "rate": 0.00164257555847569,
+   "rolls": 1,
+   "set": "20704,20706,20708,20710"
+  },
+  "20708": {
+   "metric": "wintertodt",
+   "name": "Pyromancer hood",
+   "rate": 0.00164257555847569,
+   "rolls": 1,
+   "set": "20704,20706,20708,20710"
+  },
+  "20710": {
+   "metric": "wintertodt",
+   "name": "Pyromancer boots",
+   "rate": 0.00164257555847569,
+   "rolls": 1,
+   "set": "20704,20706,20708,20710"
   },
   "20712": {
    "metric": "wintertodt",
@@ -685,6 +734,90 @@
    "rate": 0.0013020833333333333,
    "rolls": 1
   },
+  "28988": {
+   "metric": "lunar_chests",
+   "name": "Blue moon spear",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28988,29013,29016,29019"
+  },
+  "28997": {
+   "metric": "lunar_chests",
+   "name": "Dual macuahuitl",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28997,29022,29025,29028"
+  },
+  "29000": {
+   "metric": "lunar_chests",
+   "name": "Eclipse atlatl",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "29000,29004,29007,29010"
+  },
+  "29004": {
+   "metric": "lunar_chests",
+   "name": "Eclipse moon chestplate",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "29000,29004,29007,29010"
+  },
+  "29007": {
+   "metric": "lunar_chests",
+   "name": "Eclipse moon tassets",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "29000,29004,29007,29010"
+  },
+  "29010": {
+   "metric": "lunar_chests",
+   "name": "Eclipse moon helm",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "29000,29004,29007,29010"
+  },
+  "29013": {
+   "metric": "lunar_chests",
+   "name": "Blue moon chestplate",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28988,29013,29016,29019"
+  },
+  "29016": {
+   "metric": "lunar_chests",
+   "name": "Blue moon tassets",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28988,29013,29016,29019"
+  },
+  "29019": {
+   "metric": "lunar_chests",
+   "name": "Blue moon helm",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28988,29013,29016,29019"
+  },
+  "29022": {
+   "metric": "lunar_chests",
+   "name": "Blood moon chestplate",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28997,29022,29025,29028"
+  },
+  "29025": {
+   "metric": "lunar_chests",
+   "name": "Blood moon tassets",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28997,29022,29025,29028"
+  },
+  "29028": {
+   "metric": "lunar_chests",
+   "name": "Blood moon helm",
+   "rate": 0.004464285714285714,
+   "rolls": 1,
+   "set": "28997,29022,29025,29028"
+  },
   "29574": {
    "metric": "tormented_demons",
    "name": "Burning claw",
@@ -797,6 +930,67 @@
    "metric": "kalphite_queen",
    "name": "Kq head",
    "rate": 0.0078125,
+   "rolls": 1
+  }
+ },
+ "sets": {
+  "13274,13275,13276": {
+   "metric": "abyssal_sire",
+   "name": "Abyssal bludgeon",
+   "pieces": [
+    13274,
+    13275,
+    13276
+   ],
+   "rate": 0.0016145833333333333,
+   "rolls": 1
+  },
+  "20704,20706,20708,20710": {
+   "metric": "wintertodt",
+   "name": "Pyromancer outfit",
+   "pieces": [
+    20704,
+    20706,
+    20708,
+    20710
+   ],
+   "rate": 0.00164257555847569,
+   "rolls": 1
+  },
+  "28988,29013,29016,29019": {
+   "metric": "lunar_chests",
+   "name": "Blue Moon armour",
+   "pieces": [
+    28988,
+    29013,
+    29016,
+    29019
+   ],
+   "rate": 0.004464285714285714,
+   "rolls": 1
+  },
+  "28997,29022,29025,29028": {
+   "metric": "lunar_chests",
+   "name": "Blood Moon armour",
+   "pieces": [
+    28997,
+    29022,
+    29025,
+    29028
+   ],
+   "rate": 0.004464285714285714,
+   "rolls": 1
+  },
+  "29000,29004,29007,29010": {
+   "metric": "lunar_chests",
+   "name": "Eclipse Moon armour",
+   "pieces": [
+    29000,
+    29004,
+    29007,
+    29010
+   ],
+   "rate": 0.004464285714285714,
    "rolls": 1
   }
  }
