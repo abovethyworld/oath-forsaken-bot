@@ -15,7 +15,9 @@ const KEEP_DAYS = 40;
 
 function loadSnaps() {
   try {
-    return JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed : {};
   } catch {
     return {};
   }
@@ -45,7 +47,7 @@ function snapshotToday() {
   snaps[key] = day;
   const keys = Object.keys(snaps).sort();
   while (keys.length > KEEP_DAYS) delete snaps[keys.shift()];
-  atomicWrite(FILE, JSON.stringify(snaps));
+  atomicWrite(FILE, snaps);
   return true;
 }
 
