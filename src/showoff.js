@@ -911,7 +911,7 @@ function abbrXp(n) {
   return `${n}`;
 }
 
-async function compareOverallPayload(aName, bName, userId) {
+async function compareOverallPayload(aName, bName, userId, ownerId) {
   if (userId) noteUse(userId);
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
@@ -943,11 +943,11 @@ async function compareOverallPayload(aName, bName, userId) {
   const tally = wa === wb ? `ALL SQUARE AT ${wa} - ${wb}`
     : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${wa} - ${wb}`;
   const card = await fetchCard('/compare', { a: { rsn: aName }, b: { rsn: bName }, rows, tally });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })], components: compareComponents('overall', aName, bName, null) };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })], components: compareComponents('overall', aName, bName, null, ownerId ?? userId) };
   return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
 }
 
-async function compareSkillsPayload(aName, bName, userId) {
+async function compareSkillsPayload(aName, bName, userId, ownerId) {
   if (userId) noteUse(userId);
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
@@ -959,11 +959,11 @@ async function compareSkillsPayload(aName, bName, userId) {
   const card = await fetchCard('/compare-skills', {
     a: { rsn: aName }, b: { rsn: bName }, summary, cells: led.cells,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })], components: compareComponents('skills', aName, bName, null) };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })], components: compareComponents('skills', aName, bName, null, ownerId ?? userId) };
   return { content: summary };
 }
 
-async function compareBossPayload(key, aName, bName, userId) {
+async function compareBossPayload(key, aName, bName, userId, ownerId) {
   if (userId) noteUse(userId);
   const entry = kcEntry(key);
   if (!entry) return { content: `I do not track a boss or activity called **${key}**.` };
@@ -1001,7 +1001,7 @@ async function compareBossPayload(key, aName, bName, userId) {
     b: { rsn: bName, kc: kcB, rank: rankOf(bName) },
     leader, note,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: compareComponents('boss', aName, bName, key) };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: compareComponents('boss', aName, bName, key, ownerId ?? userId) };
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
 }
 
@@ -1146,14 +1146,15 @@ async function handleAutocomplete(interaction) {
 // The pair travels inside the component ids (base64url of "a\nb"), so
 // the buttons keep working without any server-side state.
 
-function encodePair(a, b) {
-  return Buffer.from(`${a}\n${b}`, 'utf8').toString('base64url');
+function encodePair(a, b, ownerId) {
+  return Buffer.from(`${a}\n${b}\n${ownerId || ''}`, 'utf8').toString('base64url');
 }
 
 function decodePair(enc) {
   try {
     const parts = Buffer.from(String(enc || ''), 'base64url').toString('utf8').split('\n');
-    return parts.length === 2 && parts[0] && parts[1] ? { a: parts[0], b: parts[1] } : null;
+    if (parts.length < 2 || !parts[0] || !parts[1]) return null;
+    return { a: parts[0], b: parts[1], owner: parts[2] || null };
   } catch {
     return null;
   }
@@ -1186,8 +1187,8 @@ function bossMenuOptions() {
   return options;
 }
 
-function compareComponents(view, a, b, bossKey) {
-  const enc = encodePair(a, b);
+function compareComponents(view, a, b, bossKey, ownerId) {
+  const enc = encodePair(a, b, ownerId);
   const viewBtn = (v, label) => new ButtonBuilder()
     .setCustomId(`cmp:${v}:${enc}`)
     .setLabel(label)
@@ -1217,6 +1218,16 @@ async function editCompareMessage(interaction, payload) {
   await interaction.editReply(edit).catch(() => {});
 }
 
+// Only the member who ran the compare may drive its card. Cards
+// posted before owner ids existed carry no owner and stay open.
+async function compareOwnerGate(interaction, pair) {
+  if (pair.owner && interaction.user.id !== pair.owner) {
+    await interaction.reply({ content: 'That is not your compare card. Run /compare to make your own.', ephemeral: true }).catch(() => {});
+    return false;
+  }
+  return true;
+}
+
 async function handleCompareButton(interaction) {
   const [, view, enc] = interaction.customId.split(':');
   const pair = decodePair(enc);
@@ -1224,10 +1235,11 @@ async function handleCompareButton(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
+  if (!await compareOwnerGate(interaction, pair)) return;
   await interaction.deferUpdate().catch(() => {});
   const payload = view === 'skills'
-    ? await compareSkillsPayload(pair.a, pair.b, null)
-    : await compareOverallPayload(pair.a, pair.b, null);
+    ? await compareSkillsPayload(pair.a, pair.b, null, pair.owner)
+    : await compareOverallPayload(pair.a, pair.b, null, pair.owner);
   await editCompareMessage(interaction, payload);
 }
 
@@ -1237,10 +1249,11 @@ async function handleCompareBossSelect(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
+  if (!await compareOwnerGate(interaction, pair)) return;
   const key = interaction.values && interaction.values[0];
   if (!key || !KC_KEYS[key]) return;
   await interaction.deferUpdate().catch(() => {});
-  await editCompareMessage(interaction, await compareBossPayload(key, pair.a, pair.b, null));
+  await editCompareMessage(interaction, await compareBossPayload(key, pair.a, pair.b, null, pair.owner));
 }
 
 // Shared name resolution for the compare commands: each name box is
