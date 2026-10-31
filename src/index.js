@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSwapModal } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -181,6 +181,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId.startsWith('cmpboss:')) {
         await handleCompareBossSelect(interaction);
+      } else if (interaction.customId.startsWith('cmpskill:')) {
+        await handleCompareSkillSelect(interaction);
+      } else if (interaction.customId.startsWith('cmpclog:')) {
+        await handleCompareClogSelect(interaction);
       } else if (interaction.customId === 'member:select') {
         await handleMemberSelect(interaction);
       } else if (interaction.customId === 'team:pick') {
