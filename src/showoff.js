@@ -7,7 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage } = require('./luck');
+const { luckForPage, itemLuckPcts } = require('./luck');
 const fs = require('fs');
 const path = require('path');
 
@@ -263,12 +263,20 @@ async function bossClogLuck(rsn, key, metric, kc) {
   try {
     const res = await getClogPageWithItems(rsn, page[0], page[1]);
     if (!res || res.notFound) return { clog: null, luck: null };
-    const drawn = await loadClogItems(res);
+    // Draft 4 strip: EVERY item on the page (obtained and
+    // missing), each scored item carrying its luck percent.
+    const pcts = itemLuckPcts(kc, metric, res.items || []);
+    const fullItems = await Promise.all((res.items || []).map(async (it) => ({
+      qty: it.quantity || 0,
+      has: (it.quantity || 0) > 0,
+      pct: pcts[it.id] != null ? pcts[it.id] : null,
+      icon: await petIconB64(it.id, it.name),
+    })));
     return {
       clog: {
         obtained: res.obtained,
         total: res.total,
-        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+        items: fullItems,
       },
       luck: luckForPage(kc, metric,
         (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }))),
@@ -1048,21 +1056,59 @@ const SKILL_CLOG_PAGES = {
 };
 const SKILL_SECTION_METRIC = { Wintertodt: 'wintertodt', Tempoross: 'tempoross', Zalcano: 'zalcano' };
 
-async function skillSections(rsn, skillKey, kcMap) {
+// Draft 3 skill sections (Gavin's pick, Oct 31, 2026): paired
+// per page, only the items the two players differ on, plus how
+// many they share. Scored skilling-boss pages keep a compact
+// luck-words line (the full luck % treatment lives on boss
+// cards). Never throws.
+async function skillDiffSections(aName, bName, skillKey, kcMapA, kcMapB) {
   const out = [];
   for (const [tab, title] of SKILL_CLOG_PAGES[skillKey] || []) {
     try {
-      const res = await getClogPageWithItems(rsn, tab, title);
-      if (!res || res.notFound) continue;
-      const drawn = await loadClogItems(res);
+      const [ra, rb] = await Promise.all([
+        getClogPageWithItems(aName, tab, title).catch(() => null),
+        getClogPageWithItems(bName, tab, title).catch(() => null),
+      ]);
+      const okA = !!(ra && !ra.notFound);
+      const okB = !!(rb && !rb.notFound);
+      if (!okA && !okB) continue;
+      const itemsA = new Map((okA ? ra.items || [] : []).map((it) => [it.id, it]));
+      const itemsB = new Map((okB ? rb.items || [] : []).map((it) => [it.id, it]));
+      const ids = [...new Set([...itemsA.keys(), ...itemsB.keys()])];
+      const diffs = [];
+      let shared = 0;
+      for (const id of ids) {
+        const ia = itemsA.get(id);
+        const ib = itemsB.get(id);
+        const ha = !!ia && (ia.quantity || 0) > 0;
+        const hb = !!ib && (ib.quantity || 0) > 0;
+        if (ha && hb) { shared++; continue; }
+        if (ha === hb) continue;
+        const ref = ia || ib;
+        diffs.push({
+          name: ref.name, aHas: ha, bHas: hb,
+          icon: await petIconB64(ref.id, ref.name),
+        });
+      }
+      diffs.sort((x, y) => String(x.name).localeCompare(String(y.name)));
       const metric = SKILL_SECTION_METRIC[title] || null;
+      let luckLine = null;
+      if (metric) {
+        const parts = [];
+        const kcOf = (m, map) => (map && typeof map[metric] === 'number' ? map[metric] : null);
+        const pageItems = (res) => (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }));
+        const la = okA ? luckForPage(kcOf(metric, kcMapA), metric, pageItems(ra)) : null;
+        const lb = okB ? luckForPage(kcOf(metric, kcMapB), metric, pageItems(rb)) : null;
+        if (la) parts.push(`${aName} ${la.word}`);
+        if (lb) parts.push(`${bName} ${lb.word}`);
+        if (parts.length) luckLine = `Luck: ${parts.join(' · ')}`;
+      }
       out.push({
-        title, got: res.obtained, total: res.total,
-        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
-        luck: metric
-          ? luckForPage(kcMap && typeof kcMap[metric] === 'number' ? kcMap[metric] : null,
-            metric, (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })))
-          : null,
+        title,
+        aGot: okA ? ra.obtained : 0,
+        bGot: okB ? rb.obtained : 0,
+        total: (okA ? ra.total : 0) || (okB ? rb.total : 0) || 0,
+        diffs, shared, luckLine,
       });
     } catch { /* one missing page must not cost the card */ }
   }
@@ -1080,9 +1126,8 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     // Single-skill inspect: the skill big, plus its clog sections.
     const ai = sa.skills.find((s) => s.key === picked);
     const bi = sb.skills.find((s) => s.key === picked);
-    const [secA, secB] = await Promise.all([
-      skillSections(aName, picked, sa.st.kc), skillSections(bName, picked, sb.st.kc),
-    ]);
+    const sections = await skillDiffSections(
+      aName, bName, picked, sa.st.kc, sb.st.kc);
     let leader = null;
     if (ai && bi && ai.level != null && bi.level != null) {
       if (ai.level !== bi.level) leader = ai.level > bi.level ? 'a' : 'b';
@@ -1117,14 +1162,10 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     }
     const card = await fetchCard('/compare-skill', {
       skillKey: picked, skillName: ai ? ai.name : picked,
-      a: {
-        rsn: aName, level: ai ? ai.level : null, xp: ai ? ai.xp : null,
-        sections: secA, noSections: noMap,
-      },
-      b: {
-        rsn: bName, level: bi ? bi.level : null, xp: bi ? bi.xp : null,
-        sections: secB, noSections: noMap,
-      },
+      a: { rsn: aName, level: ai ? ai.level : null, xp: ai ? ai.xp : null },
+      b: { rsn: bName, level: bi ? bi.level : null, xp: bi ? bi.xp : null },
+      sections, noSections: noMap,
+      noSync: !noMap && sections.length === 0,
       leader, note, pets: skillPets,
     });
     const components = await compareComponents('skills', aName, bName,

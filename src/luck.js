@@ -100,4 +100,21 @@ function scoredIdsForMetric(metric) {
     .map(([id]) => Number(id));
 }
 
-module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric };
+// Per-item luck percentages for the Draft 4 strip: for each
+// scored item, the share of players (percent) who have it by
+// this KC. Set pieces score as a set, so they get no individual
+// percent. Returns { itemId: pct }.
+function itemLuckPcts(kc, metric, pageItems) {
+  const out = {};
+  if (!kc || kc <= 0 || !metric) return out;
+  for (const it of pageItems || []) {
+    if (SET_ITEM_IDS.has(it.id)) continue;
+    const t = TABLE[it.id];
+    if (!t || t.metric !== metric) continue;
+    const trials = kc * (t.rolls || 1);
+    out[it.id] = Math.round((1 - Math.pow(1 - t.rate, trials)) * 100);
+  }
+  return out;
+}
+
+module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts };
