@@ -1165,7 +1165,9 @@ function bossMenuOptions() {
     return bossMenuCache.options;
   }
   const byMetric = new Map();
-  for (const [key, entry] of Object.entries(KC_KEYS)) {
+  for (const key of Object.keys(KC_KEYS)) {
+    const entry = kcEntry(key);
+    if (!entry || !entry.cols || !entry.cols.length) continue;
     const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
     const col = entry.cols.length > 1 && variantKey
       ? entry.cols[entry.cols.length - 1] : entry.cols[0];
