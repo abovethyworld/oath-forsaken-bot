@@ -93,6 +93,54 @@ function luckForPage(kc, metric, pageItems) {
   return { word, dry };
 }
 
+// Full per-item breakdown for the !dry card: every scored drop
+// on the page with its luck percent, split into missing (driest
+// first) and obtained (luckiest first), plus the page verdict
+// from luckForPage. Percent semantics match the compare strip:
+// the share of players who have the item by this KC, so a low
+// percent on an obtained drop means it came early and a high
+// percent on a missing drop means dry. Sets appear once each,
+// with the set's first piece id for icon purposes.
+function dryReport(kc, metric, pageItems) {
+  if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return null;
+  const qty = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qty(it)]));
+  const missing = [];
+  const obtained = [];
+  let scored = 0;
+  for (const s of SETS_BY_METRIC[metric] || []) {
+    scored++;
+    const n = kc * (s.rolls || 1);
+    const p = s.rate * s.pieces.length; // any-piece rate
+    const owned = s.pieces.filter((id) => (qtyOf.get(id) || 0) > 0).length;
+    if (owned >= s.pieces.length) {
+      const havePct = 1 - binomCdfLE(n, p, s.pieces.length - 1);
+      obtained.push({ id: s.pieces[0], name: s.name, pct: Math.round(havePct * 100) });
+    } else {
+      const havePct = 1 - binomCdfLE(n, p, owned);
+      missing.push({
+        id: s.pieces[0], name: s.name, pct: Math.round(havePct * 100),
+        pieces: `${owned}/${s.pieces.length}`,
+      });
+    }
+  }
+  for (const it of pageItems) {
+    if (SET_ITEM_IDS.has(Number(it.id))) continue; // scored as a set
+    const t = TABLE[String(it.id)];
+    if (!t || t.metric !== metric) continue;
+    scored++;
+    const n = kc * (t.rolls || 1);
+    const havePct = Math.round(-Math.expm1(n * Math.log1p(-t.rate)) * 100);
+    if (qty(it) > 0) obtained.push({ id: Number(it.id), name: t.name, pct: havePct });
+    else missing.push({ id: Number(it.id), name: t.name, pct: havePct });
+  }
+  if (!scored) return null;
+  missing.sort((x, y) => y.pct - x.pct);
+  obtained.sort((x, y) => x.pct - y.pct);
+  const verdict = luckForPage(kc, metric, pageItems);
+  return { word: verdict ? verdict.word : 'on pace', missing, obtained };
+}
+
 // The scored item ids for one metric (exporter parity checks, tests).
 function scoredIdsForMetric(metric) {
   return Object.entries(TABLE)
@@ -117,4 +165,4 @@ function itemLuckPcts(kc, metric, pageItems) {
   return out;
 }
 
-module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts };
+module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts, dryReport };
