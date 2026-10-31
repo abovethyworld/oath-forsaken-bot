@@ -2176,7 +2176,7 @@ const commands = [
       .setName('kc')
       .setDescription("Show a player's boss kill count card")
       .addStringOption((o) => o.setName('activity').setDescription('Which boss or activity').setRequired(true).setAutocomplete(true))
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
@@ -2190,7 +2190,7 @@ const commands = [
       .setName('clog')
       .setDescription("Show a player's collection log card")
       .addStringOption((o) => o.setName('activity').setDescription('Which page, or the whole log').setRequired(true).setAutocomplete(true))
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
@@ -2203,7 +2203,7 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('profile')
       .setDescription("Show a player's profile card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
@@ -2229,7 +2229,7 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('skills')
       .setDescription("Show a player's skill levels card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
@@ -2243,7 +2243,7 @@ const commands = [
       .setName('pb')
       .setDescription("Show a player's personal best times from the clan plugin")
       .addStringOption((o) => o.setName('activity').setDescription('One boss (leave empty for all of them)').setAutocomplete(true))
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
@@ -2270,7 +2270,7 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('tfa')
       .setDescription("Show a player's Fractured Archive card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
