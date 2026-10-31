@@ -180,6 +180,20 @@ function getCachedStats(rsn) {
   return cacheLookup(loadCache(), rsn);
 }
 
+// Every cached player with KC on one metric, best first:
+// [{ name, kc }] with name in cache-key (lowercase) form. Cache-only:
+// standings never fire a network lookup.
+function kcStandings(metric) {
+  const cache = loadCache();
+  const rows = [];
+  for (const [name, entry] of Object.entries(cache)) {
+    const kc = entry && entry.stats && entry.stats.kc ? entry.stats.kc[metric] : null;
+    if (typeof kc === 'number' && kc > 0) rows.push({ name, kc });
+  }
+  rows.sort((a, b) => b.kc - a.kc);
+  return rows;
+}
+
 // Returns { combat, attack, strength, defence, ranged, prayer, magic, hitpoints }
 // or { notFound: true } when WOM has never seen the name, or null on error.
 async function getStats(rsn) {
@@ -275,4 +289,4 @@ async function getCompetition(competitionId) {
   });
 }
 
-module.exports = { getStats, getCachedStats, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, CACHE_MS, NOTFOUND_MS };
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, CACHE_MS, NOTFOUND_MS };
