@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleAutocomplete } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -229,6 +229,7 @@ client.on(Events.MessageCreate, async (message) => {
     else if (cmd === 'tfa') await handleTfaCommand(message, parts.slice(1));
     else if (cmd === 'pb') await handlePbCommand(message, parts.slice(1));
     else if (cmd === 'skills') await handleSkillsCommand(message, parts.slice(1));
+    else if (cmd === 'compare') await handleCompareCommand(message, parts.slice(1));
   } catch (err) {
     console.error(`Show-off command ${cmd} failed:`, err.message);
   }
