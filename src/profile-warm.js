@@ -10,7 +10,7 @@
 // layer. On a warm cache the sweep costs no requests at all.
 const fs = require('fs');
 const path = require('path');
-const { getProfile, getClogSummary } = require('./runeprofile');
+const { getProfile, getClogSummary, getClogPages } = require('./runeprofile');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 
@@ -60,6 +60,7 @@ async function warmProfiles() {
     try {
       await getProfile(rsn);
       await getClogSummary(rsn);
+      await getClogPages(rsn);
       warmed += 1;
     } catch (err) {
       console.warn(`Profile warm failed for ${rsn}: ${err.message}`);
