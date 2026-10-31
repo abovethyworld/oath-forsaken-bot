@@ -7,7 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage, itemLuckPcts, dryReport } = require('./luck');
+const { luckForPage, itemLuckPcts, dryReport, scoredMetricSet } = require('./luck');
 const fs = require('fs');
 const path = require('path');
 
@@ -373,7 +373,12 @@ async function kcPayload(activity, rsn, userId) {
 async function dryPayload(activity, rsn, userId) {
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
-    return { content: `Pick a boss: \`!dry <boss> [name]\`\nBosses: ${Object.keys(KC_KEYS).join(', ')}` };
+    const scored = scoredMetricSet();
+    const keys = Object.keys(KC_KEYS).filter((k) => {
+      const e = KC_ACTIVITIES[k];
+      return e && e.cols.length === 1 && scored.has(e.cols[0].metric);
+    });
+    return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${keys.join(', ')}` };
   }
   if (userId) noteUse(userId);
   let st;
