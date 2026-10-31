@@ -141,6 +141,15 @@ function dryReport(kc, metric, pageItems) {
   return { word: verdict ? verdict.word : 'on pace', missing, obtained };
 }
 
+// The set of WOM metrics that carry any luck scoring (items or
+// sets). Used by !dry to list the bosses it can score.
+function scoredMetricSet() {
+  const out = new Set();
+  for (const t of Object.values(TABLE)) out.add(t.metric);
+  for (const m of Object.keys(SETS_BY_METRIC)) out.add(m);
+  return out;
+}
+
 // The scored item ids for one metric (exporter parity checks, tests).
 function scoredIdsForMetric(metric) {
   return Object.entries(TABLE)
@@ -165,4 +174,4 @@ function itemLuckPcts(kc, metric, pageItems) {
   return out;
 }
 
-module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts, dryReport };
+module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts, dryReport, scoredMetricSet };
