@@ -35,7 +35,8 @@ const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
-const { reconcileCodeLinks } = require('./plugin-connect');
+const { reconcileVerifiedLinks, surfaceHeldPosts } = require('./plugin-connect');
+const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
@@ -110,10 +111,13 @@ client.once(Events.ClientReady, async (c) => {
       await sweepExpiredTeams(client);
       await sweepPendingButtons(client);
 
-      // Plugin connect codes and RSN links are one system: any RSN with a
-      // live code joins its owner's link list (active name untouched).
-      const linkedRsns = reconcileCodeLinks();
-      if (linkedRsns) console.log(`Plugin connect: linked ${linkedRsns} coded RSN(s) into RSN links.`);
+      // Plugin syncs prove RSN ownership: member records stamped with a
+      // Discord id become verified links (active name untouched), and
+      // held sync conflicts are surfaced to the staff log.
+      const verifiedLinks = await reconcileVerifiedLinks();
+      if (verifiedLinks) console.log(`Plugin connect: ${verifiedLinks} verified RSN link(s) reconciled.`);
+      await surfaceHeldPosts(client);
+      await watchRenames(client);
 
       // Publish Friend of the Clan role holders for the website roster.
       await syncFriends(client);
@@ -148,6 +152,8 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
+  setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
+  setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);
   setInterval(() => { try { store.prunePolls(); store.pruneStrikes(); } catch (e) { console.error('Housekeeping prune failed:', e.message); } }, 24 * 3600 * 1000);
 });
 
