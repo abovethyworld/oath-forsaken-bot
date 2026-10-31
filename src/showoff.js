@@ -1470,6 +1470,8 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   const row = (label, x, y) => ({
     label, aText: num(x), bText: num(y), winner: x === y ? 'tie' : (x > y ? 'a' : 'b'),
   });
+  const petsA = pa['All Pets'] ? pa['All Pets'].obtained || 0 : 0;
+  const petsB = pb['All Pets'] ? pb['All Pets'].obtained || 0 : 0;
   const rows = [
     {
       label: 'Collection Log',
@@ -1479,6 +1481,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     },
     row('Bosses', bossA, bossB),
     row('Raids', raidA, raidB),
+    row('Pets', petsA, petsB),
     row('Everything Else', ta.got - bossA - raidA, tb.got - bossB - raidB),
   ];
   const diff = ta.got - tb.got;
@@ -1592,9 +1595,16 @@ async function clogMenuOptions(a, b) {
       totals.set(title, (totals.get(title) || 0) + (page.obtained || 0));
     }
   }
-  return [...totals.entries()]
+  const entries = [...totals.entries()]
     .filter(([, got]) => got > 0)
-    .sort((x, y) => y[1] - x[1])
+    .sort((x, y) => y[1] - x[1]);
+  // All Pets is pinned first (Gavin, Oct 31, 2026): pets get their
+  // own spot in the picker instead of fighting for the top 25.
+  const petsEntry = entries.find(([t]) => t === 'All Pets');
+  const ordered = petsEntry
+    ? [petsEntry, ...entries.filter(([t]) => t !== 'All Pets')]
+    : entries;
+  return ordered
     .slice(0, 25)
     .map(([title]) => ({ label: String(title).slice(0, 100), value: String(title).slice(0, 100) }));
 }
