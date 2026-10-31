@@ -8,6 +8,7 @@ const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks,
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const fs = require('fs');
+const path = require('path');
 
 const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
 
@@ -686,6 +687,101 @@ async function leaderboardPayload(userId) {
   return { files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] };
 }
 
+const PLUGIN_MEMBERS_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'members');
+
+// A member's plugin-sync record (personal bests, collection log),
+// or null when they have never synced.
+function pluginRecord(rsn) {
+  try {
+    const raw = fs.readFileSync(path.join(PLUGIN_MEMBERS_DIR, `${siteSlug(rsn)}.json`), 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function normName(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function pbTime(entry) {
+  if (entry.time) return String(entry.time);
+  if (typeof entry.seconds === 'number') {
+    const m = Math.floor(entry.seconds / 60);
+    const s = entry.seconds - m * 60;
+    return m ? `${m}:${s.toFixed(1).padStart(4, '0')}` : `${s.toFixed(1)}s`;
+  }
+  return '-';
+}
+
+// !pb: personal bests from the clan plugin's sync. !pb [name] lists
+// them; !pb <boss> [name] shows one boss. Nothing is fetched live:
+// the record is a local file the plugin API writes.
+async function pbPayload(activity, rsn, userId) {
+  const record = pluginRecord(rsn);
+  const pbs = (record && record.personalBests) || {};
+  const all = Object.entries(pbs).filter(([, e]) => e && typeof e === 'object');
+  if (!all.length) {
+    return { content: `No personal bests synced for **${rsn}** yet. They land here once the clan plugin's PB sync is on and a PB kill happens in game.` };
+  }
+  if (userId) noteUse(userId);
+  if (activity) {
+    const entry = kcEntry(activity);
+    const targets = new Set([normName(activity)]);
+    if (entry) {
+      targets.add(normName(entry.name));
+      for (const c of entry.cols) targets.add(normName(c.metric));
+    }
+    const hit = all.find(([key, e]) => targets.has(normName(e.boss || key)) || targets.has(normName(key)));
+    if (!hit) {
+      return { content: `No ${entry ? entry.name : activity} personal best synced for **${rsn}** yet. \`!pb\` shows the ${all.length} they do have.` };
+    }
+    const [key, e] = hit;
+    const boss = e.boss || (entry && entry.name) || key;
+    const card = await fetchCard('/pb', {
+      mode: 'single', rsn, boss, time: pbTime(e),
+      killCount: e.killCount || null, at: e.at || null,
+    });
+    if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
+    return { content: `**${rsn}** - ${boss} personal best: **${pbTime(e)}**${e.killCount ? ` at ${Number(e.killCount).toLocaleString('en-US')} KC` : ''}. Member-reported.` };
+  }
+  const rows = all
+    .map(([key, e]) => ({ boss: e.boss || key, time: pbTime(e) }))
+    .sort((a, b) => a.boss.localeCompare(b.boss));
+  const card = await fetchCard('/pb', { mode: 'list', rsn, rows });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
+  const lines = rows.map((r) => `${r.boss}: **${r.time}**`);
+  return { content: `**${rsn}** personal bests (member-reported):\n${lines.join('\n')}` };
+}
+
+// Like takeActivity, but the activity is optional: only consumes the
+// leading tokens when they actually name a known activity.
+function takeOptionalActivity(args) {
+  if (args.length >= 2) {
+    const two = `${args[0]}_${args[1]}`.toLowerCase();
+    if (KC_KEYS[two]) {
+      args.splice(0, 2);
+      return two;
+    }
+  }
+  const one = (args[0] || '').toLowerCase();
+  if (KC_KEYS[one]) {
+    args.shift();
+    return one;
+  }
+  return null;
+}
+
+async function handlePbCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const activity = takeOptionalActivity(args);
+  const { rsn, error, payload } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await message.reply(await pbPayload(activity, rsn, message.author.id)).catch(() => {});
+}
+
 // !tfa [name]: the Fractured Archive combined card, shorthand for
 // !kc tfa with its clog strip.
 async function handleTfaCommand(message, args) {
@@ -757,7 +853,7 @@ function clogAutocompleteChoices(focused) {
 
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
-  const choices = interaction.commandName === 'kc'
+  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
@@ -809,6 +905,20 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('pb')
+      .setDescription("Show a player's personal best times from the clan plugin")
+      .addStringOption((o) => o.setName('activity').setDescription('One boss (leave empty for all of them)').setAutocomplete(true))
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, pbPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('tfa')
       .setDescription("Show a player's Fractured Archive card")
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
@@ -831,4 +941,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
