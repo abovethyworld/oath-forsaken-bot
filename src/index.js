@@ -29,7 +29,8 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal } = require('./showoff');
+const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -127,6 +128,9 @@ client.once(Events.ClientReady, async (c) => {
       // Warm the RuneProfile cache for the website's tracked names, so
       // profile pages carry quest, diary, and combat achievement data.
       await warmProfiles();
+
+      // Daily gains baseline for !gains (cache-only, no API calls).
+      if (snapshotToday()) console.log('Gains: recorded the daily snapshot.');
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -139,6 +143,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
   setInterval(() => syncChampions(), 24 * 3600 * 1000);
   setInterval(() => warmProfiles(), 24 * 3600 * 1000);
+  setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
@@ -239,6 +244,7 @@ client.on(Events.MessageCreate, async (message) => {
     else if (cmd === 'skills') await handleSkillsCommand(message, parts.slice(1));
     else if (cmd === 'compare') await handleCompareCommand(message, parts.slice(1));
     else if (cmd === 'dry') await handleDryCommand(message, parts.slice(1));
+    else if (cmd === 'gains') await handleGainsCommand(message, parts.slice(1));
   } catch (err) {
     console.error(`Show-off command ${cmd} failed:`, err.message);
   }
