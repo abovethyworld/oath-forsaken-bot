@@ -878,7 +878,8 @@ async function compareSnapshot(rsn) {
     ? overall.xp : skills.reduce((s, sk) => s + (sk.xp || 0), 0);
   const totalKc = Object.entries(st.kc || {}).reduce(
     (s, [k, v]) => s + (typeof v === 'number' && !NON_KC_SCORES.has(k) ? v : 0), 0);
-  return { st, skills, totalLevel, totalXp, totalKc, combat: st.combat };
+  const n99 = skills.filter((sk) => sk.level === 99).length;
+  return { st, skills, totalLevel, totalXp, totalKc, combat: st.combat, n99 };
 }
 
 function skillsLed(aSkills, bSkills) {
@@ -925,6 +926,7 @@ async function compareOverallPayload(aName, bName, userId) {
     { label: 'Total level', aText: fmt(sa.totalLevel), bText: fmt(sb.totalLevel), winner: win(sa.totalLevel, sb.totalLevel) },
     { label: 'Total XP', aText: fmt(sa.totalXp), bText: fmt(sb.totalXp), winner: win(sa.totalXp, sb.totalXp) },
     { label: 'Combat', aText: fmt(sa.combat), bText: fmt(sb.combat), winner: win(sa.combat, sb.combat) },
+    { label: '99s', aText: fmt(sa.n99), bText: fmt(sb.n99), winner: win(sa.n99, sb.n99) },
     {
       label: 'Collection log',
       aText: clogA && !clogA.notFound ? `${fmt(clogA.obtained)} / ${fmt(clogA.total)}` : '-',
