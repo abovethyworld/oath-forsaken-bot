@@ -35,7 +35,7 @@ const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
 const { reconcileCodeLinks } = require('./plugin-connect');
-const { syncFriends } = require('./friends');
+const { syncFriends, syncWomGroup } = require('./friends');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -114,6 +114,9 @@ client.once(Events.ClientReady, async (c) => {
 
       // Publish Friend of the Clan role holders for the website roster.
       await syncFriends(client);
+
+      // Publish the WOM group membership: the website's members list.
+      await syncWomGroup();
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
     }
@@ -123,6 +126,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncReminders(client), 5 * 60 * 1000);
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setInterval(() => syncFriends(client), 24 * 3600 * 1000);
+  setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
