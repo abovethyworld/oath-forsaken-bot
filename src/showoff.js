@@ -290,9 +290,10 @@ const SKILL_PETS = {
   thieving: ['Rocky'],
   farming: ['Tangleroot'],
   runecraft: ['Rift guardian'],
-  hunter: ['Herbi', 'Baby chinchompa'],
+  hunter: ['Herbi', 'Baby chinchompa', 'Quetzin', 'Mr McGroot'],
   mining: ['Rock golem'],
   firemaking: ['Phoenix'],
+  sailing: ['Soup'],
 };
 
 async function allPetsItems(rsn) {
@@ -1521,11 +1522,35 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
       }
       return { ...it, iconB64 };
     }));
+    // Pets living on this page attach to the page card (Gavin,
+    // Oct 31, 2026): covers the activity pets with no boss or
+    // skill card of their own (Bloodhound, Pet Penance Queen,
+    // Lil' Creator, Chompy chick) and boss pets alike.
+    let pagePets = null;
+    const pageTab = gap.tab || gbp.tab;
+    if (pageTab) {
+      const full = await getClogPageWithItems(aName, pageTab, pageTitle).catch(() => null);
+      if (full && Array.isArray(full.items)) {
+        const ids = await petIdSet(aName, bName);
+        const found = full.items.filter((it) => ids.has(it.id));
+        if (found.length) {
+          const aIds = new Set((gap.items || []).map((i) => i.id));
+          const bIds = new Set((gbp.items || []).map((i) => i.id));
+          pagePets = await Promise.all(found.map(async (it) => ({
+            name: it.name,
+            aHas: aIds.has(it.id),
+            bHas: bIds.has(it.id),
+            icon: await petIconB64(it.id, it.name),
+          })));
+        }
+      }
+    }
     const card = await fetchCard('/compare-clog', {
       mode: 'page', page: pageTitle,
       a: { rsn: aName, got: gap.obtained || 0, total: gap.total || gbp.total || 0 },
       b: { rsn: bName, got: gbp.obtained || 0, total: gbp.total || gap.total || 0 },
       items, moreCount: Math.max(0, all.length - shown.length),
+      pets: pagePets,
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-clog.png' })], components };
     return { content: `${pageTitle}: ${aName} ${gap.obtained || 0} - ${gbp.obtained || 0} ${bName}`, components };
