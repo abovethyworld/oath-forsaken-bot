@@ -843,6 +843,7 @@ async function handleSkillsCommand(message, args) {
 // !compare in three shapes: overall versus, skills diff, and boss
 // head-to-head. Everything reads the same cached WOM + RuneProfile
 // data as the other commands.
+const fmt = (n) => (typeof n === 'number' ? n.toLocaleString('en-US') : '-');
 
 async function compareSnapshot(rsn) {
   const st = await getStats(rsn);
@@ -953,18 +954,19 @@ async function compareBossPayload(key, aName, bName, userId) {
   const [sa, sb] = await Promise.all([
     getStats(aName).catch(() => null), getStats(bName).catch(() => null),
   ]);
+  const metric = entry.cols[0].metric;
   let standings = null;
-  try { standings = kcStandings(entry.metric); } catch { standings = null; }
+  try { standings = kcStandings(metric); } catch { standings = null; }
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (sa.notFound) return { content: `Could not find the RuneScape name **${aName}**.` };
   if (sb.notFound) return { content: `Could not find the RuneScape name **${bName}**.` };
   const rankOf = (rsn) => {
     if (!standings) return null;
-    const i = standings.rows.findIndex((r) => normName(r.rsn) === normName(rsn));
+    const i = standings.findIndex((r) => r.name === rsn.toLowerCase());
     return i >= 0 ? i + 1 : null;
   };
-  const kcA = sa.kc && typeof sa.kc[entry.metric] === 'number' ? sa.kc[entry.metric] : null;
-  const kcB = sb.kc && typeof sb.kc[entry.metric] === 'number' ? sb.kc[entry.metric] : null;
+  const kcA = sa.kc && typeof sa.kc[metric] === 'number' ? sa.kc[metric] : null;
+  const kcB = sb.kc && typeof sb.kc[metric] === 'number' ? sb.kc[metric] : null;
   const leader = kcA != null && kcB != null && kcA !== kcB ? (kcA > kcB ? 'a' : 'b') : null;
   const note = leader
     ? `${leader === 'a' ? aName : bName} leads by ${fmt(Math.abs(kcA - kcB))}`
@@ -1188,13 +1190,13 @@ const commands = [
       const mode = interaction.options.getString('mode');
       if (mode === 'boss') {
         const bossStr = interaction.options.getString('boss');
-        const entry = bossStr ? resolveActivity(bossStr) : null;
-        if (!entry) {
+        const bossKey = bossStr ? bossStr.trim().toLowerCase().replace(/\s+/g, '_') : null;
+        if (!bossKey || !KC_KEYS[bossKey]) {
           await interaction.reply({ content: 'Boss mode needs a boss or activity name.', ephemeral: true }).catch(() => {});
           return;
         }
         if (await slashCooldown(interaction)) return;
-        await slashReply(interaction, compareBossPayload(entry.key, aRes.rsn, bRes.rsn, uid));
+        await slashReply(interaction, compareBossPayload(bossKey, aRes.rsn, bRes.rsn, uid));
         return;
       }
       if (await slashCooldown(interaction)) return;
