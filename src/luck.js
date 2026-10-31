@@ -42,7 +42,10 @@ function binomCdfLE(n, p, m) {
 // at least half of players would have it by now.
 function luckForPage(kc, metric, pageItems) {
   if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return null;
-  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), it.qty || 0]));
+  // Page items arrive as {qty} from some callers and {quantity}
+  // (raw RuneProfile shape) from others; accept both.
+  const qty = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qty(it)]));
   let scored = 0;
   let driest = null;
   let luckiest = null;
@@ -70,7 +73,7 @@ function luckForPage(kc, metric, pageItems) {
     if (!t || t.metric !== metric) continue;
     scored++;
     const n = kc * (t.rolls || 1);
-    if ((it.qty || 0) > 0) {
+    if (qty(it) > 0) {
       // Ownership scoring: fewer = P(X = 0), the share of players
       // who would still have none of this drop at this KC.
       const fewer = binomCdfLE(n, t.rate, 0);
