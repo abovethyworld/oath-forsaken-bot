@@ -8,7 +8,9 @@
 // Dupe-protected sets (pyromancer outfit, bludgeon pieces, Moons
 // armour) score as a set: any-piece rate, distinct pieces owned.
 //
-// v1 scores ownership (have it / dry on it), not duplicate counts.
+// Scoring started as ownership-only (v1); v2 makes the obtained
+// side count-aware (duplicates raise the luck percentile). The
+// displayed percents stay ownership-based everywhere.
 
 const LUCK_DATA = require('./luck-data.json') || {};
 const TABLE = LUCK_DATA.items || {};
@@ -74,9 +76,11 @@ function luckForPage(kc, metric, pageItems) {
     scored++;
     const n = kc * (t.rolls || 1);
     if (qty(it) > 0) {
-      // Ownership scoring: fewer = P(X = 0), the share of players
-      // who would still have none of this drop at this KC.
-      const fewer = binomCdfLE(n, t.rate, 0);
+      // Count-aware (v2): fewer = P(X < qty), the share of
+      // players who would have fewer of this drop than the
+      // player does at this KC. qty 1 reduces to the v1
+      // ownership score P(X = 0); duplicates push it up.
+      const fewer = binomCdfLE(n, t.rate, Math.min(qty(it) - 1, 100));
       if (!luckiest || fewer > luckiest.pct) luckiest = { name: t.name, pct: fewer };
     } else {
       const dry = -Math.expm1(n * Math.log1p(-t.rate)); // P(X >= 1)
