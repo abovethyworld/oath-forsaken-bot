@@ -184,6 +184,46 @@ async function getClogSummary(username) {
     });
 }
 
+// Per-page parse of the same collection-log index: every page with
+// its obtained count, total, and obtained items. Powers the website
+// compare page's per-boss collection log head-to-head.
+function parseClogPages(json) {
+  if (!json || !Array.isArray(json.tabs)) return null;
+  const pages = {};
+  for (const tab of json.tabs) {
+    for (const page of (tab.pages || [])) {
+      const items = (page.items || [])
+        .filter((it) => it && typeof it.id === 'number' && typeof it.name === 'string');
+      if (!page.name || !items.length) continue;
+      pages[String(page.name)] = {
+        tab: String(tab.name || ''),
+        obtained: items.filter((it) => (it.quantity || 0) > 0).length,
+        total: items.length,
+        items: items.filter((it) => (it.quantity || 0) > 0)
+          .map((it) => ({ id: it.id, name: it.name })),
+      };
+    }
+  }
+  return Object.keys(pages).length ? { pages } : null;
+}
+
+// { pages: { <title>: { tab, obtained, total, items } } } |
+// { notFound: true } | null. Cached 24h under clogpages:<name>.
+async function getClogPages(username) {
+  const key = `clogpages:${String(username).toLowerCase().trim()}`;
+  const cached = loadCache()[key];
+  if (cached && Date.now() - cached.fetchedAt < CACHE_MS) {
+    if (cached.notFound) return { notFound: true };
+    if (cached.pages) return { pages: cached.pages };
+  }
+  const u = encodeURIComponent(String(username).trim());
+  return fetchInto(key, `/accounts/${u}/collection-log`, parseClogPages)
+    .catch((err) => {
+      console.warn(`RuneProfile clog pages lookup failed for ${username}: ${err.message}`);
+      return null;
+    });
+}
+
 // The account collection-log index lists EVERY clog item (game-wide),
 // deduped by item id. Used by the icon warmer to know the full set.
 function parseClogIndex(json) {
@@ -354,6 +394,7 @@ async function getProfile(username) {
 module.exports = {
   getClogPage,
   getClogIndex,
+  getClogPages,
   getClogSummary,
   parseClogIndex,
   getClogPageWithItems,
