@@ -686,6 +686,17 @@ async function leaderboardPayload(userId) {
   return { files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] };
 }
 
+// !tfa [name]: the Fractured Archive combined card, shorthand for
+// !kc tfa with its clog strip.
+async function handleTfaCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const { rsn, error, payload } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await message.reply(await kcPayload('tfa', rsn, message.author.id)).catch(() => {});
+}
+
 async function handleLeaderboardCommand(message) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
@@ -798,6 +809,19 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('tfa')
+      .setDescription("Show a player's Fractured Archive card")
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, kcPayload('tfa', rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('leaderboard')
       .setDescription('Collection log leaderboard for linked clan members'),
     run: async (interaction) => {
@@ -807,4 +831,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
