@@ -772,6 +772,59 @@ function takeOptionalActivity(args) {
   return null;
 }
 
+// Skill grid order, mirroring the website profile pages.
+const SKILL_ORDER = [
+  'attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer',
+  'magic', 'cooking', 'woodcutting', 'fletching', 'fishing',
+  'firemaking', 'crafting', 'smithing', 'mining', 'herblore',
+  'agility', 'thieving', 'slayer', 'farming', 'runecraft', 'hunter',
+  'construction', 'sailing',
+];
+
+// !skills: the full skill grid from Wise Old Man, same numbers the
+// website profile pages show.
+async function skillsPayload(rsn, userId) {
+  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch (err) {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const skillsMap = st.skills || {};
+  const skills = SKILL_ORDER.map((key) => {
+    const entry = skillsMap[key];
+    return {
+      name: key.charAt(0).toUpperCase() + key.slice(1),
+      level: entry && typeof entry.level === 'number' ? entry.level : null,
+      xp: entry && typeof entry.xp === 'number' ? entry.xp : null,
+    };
+  });
+  const overall = skillsMap.overall;
+  const totalLevel = overall && typeof overall.level === 'number'
+    ? overall.level
+    : skills.reduce((s, sk) => s + (sk.level || 0), 0);
+  const totalXp = overall && typeof overall.xp === 'number'
+    ? overall.xp
+    : skills.reduce((s, sk) => s + (sk.xp || 0), 0);
+  const card = await fetchCard('/skills', {
+    rsn, combat: st.combat, totalLevel, totalXp, skills,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'skills.png' })] };
+  return { content: `**${rsn}** - Total level ${totalLevel.toLocaleString('en-US')}, total XP ${totalXp.toLocaleString('en-US')}, combat ${st.combat}. The full grid card is down right now.` };
+}
+
+async function handleSkillsCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const { rsn, error, payload } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await message.reply(await skillsPayload(rsn, message.author.id)).catch(() => {});
+}
+
 async function handlePbCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
@@ -905,6 +958,19 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('skills')
+      .setDescription("Show a player's skill levels card")
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, skillsPayload(rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('pb')
       .setDescription("Show a player's personal best times from the clan plugin")
       .addStringOption((o) => o.setName('activity').setDescription('One boss (leave empty for all of them)').setAutocomplete(true))
@@ -941,4 +1007,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
