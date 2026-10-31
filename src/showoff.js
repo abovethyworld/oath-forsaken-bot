@@ -812,8 +812,18 @@ async function skillsPayload(rsn, userId) {
   const totalXp = overall && typeof overall.xp === 'number'
     ? overall.xp
     : skills.reduce((s, sk) => s + (sk.xp || 0), 0);
+  // Skilling boss counts ride along as a strip under the grid.
+  const SKILLING_BOSSES = [
+    ['wintertodt', 'Wintertodt'],
+    ['tempoross', 'Tempoross'],
+    ['guardians_of_the_rift', 'Guardians of the Rift'],
+    ['zalcano', 'Zalcano'],
+  ];
+  const skillingBosses = SKILLING_BOSSES
+    .map(([metric, name]) => ({ name, kc: st.kc ? st.kc[metric] : null }))
+    .filter((b) => typeof b.kc === 'number' && b.kc > 0);
   const card = await fetchCard('/skills', {
-    rsn, combat: st.combat, totalLevel, totalXp, skills,
+    rsn, combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'skills.png' })] };
   return { content: `**${rsn}** - Total level ${totalLevel.toLocaleString('en-US')}, total XP ${totalXp.toLocaleString('en-US')}, combat ${st.combat}. The full grid card is down right now.` };
