@@ -467,8 +467,45 @@ async function handleClogCommand(message, args) {
   await message.reply(await clogPayload(key, rsn, message.author.id)).catch(() => {});
 }
 
+const SITE_BASE = 'https://oathforsaken.cc';
+
+// The website builds a share card for every tracked member: the same
+// numbers as the RuneProfile card below, in house style, with clan
+// standing. When a card exists for the name, the profile command posts
+// it (with a quiet link to the full page) and that is the one card.
+// Names the site does not track yet fall through to the RuneProfile
+// card. Slug rule mirrors the site builder's slugify.
+function siteSlug(rsn) {
+  return String(rsn).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
+async function siteCardPayload(rsn) {
+  const slug = siteSlug(rsn);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(`${SITE_BASE}/members/${slug}-card.png`, {
+      headers: { 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length) return null;
+    return {
+      content: `<${SITE_BASE}/members/${slug}.html>`,
+      files: [new AttachmentBuilder(buf, { name: 'profile.png' })],
+    };
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function profilePayload(rsn, userId) {
   if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  const site = await siteCardPayload(rsn);
+  if (site) return site;
   const prof = await getProfile(rsn).catch(() => null);
   if (!prof) return { content: 'Could not reach the profile service right now. Try again in a bit.' };
   if (prof.notFound) return { content: RP_GUIDE };
@@ -628,7 +665,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('profile')
-      .setDescription("Show a player's RuneProfile card")
+      .setDescription("Show a player's profile card")
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
