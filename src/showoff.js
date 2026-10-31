@@ -8,6 +8,7 @@ const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks,
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const { luckForPage, itemLuckPcts, dryReport, scoredMetricSet } = require('./luck');
+const { snapshotToday, baselineFor } = require('./gains');
 const fs = require('fs');
 const path = require('path');
 
@@ -415,6 +416,78 @@ async function handleDryCommand(message, args) {
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   await message.reply(await dryPayload(activity, rsn, message.author.id)).catch(() => {});
+}
+
+// !gains [name] [week|month]: XP and KC gained over the
+// period, diffed against the bot's daily snapshots (src/gains).
+async function gainsPayload(rsn, days, userId) {
+  if (userId) noteUse(userId);
+  snapshotToday(); // make sure today's baseline exists
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const base = baselineFor(days || 7);
+  if (!base) return { content: 'Gains tracking just started. Check back tomorrow.' };
+  if (base.isToday) {
+    return { content: 'Gains tracking started today, so there is no baseline to compare against yet. First real numbers land tomorrow.' };
+  }
+  const prev = base.snap[rsn.toLowerCase()];
+  if (!prev) {
+    return { content: `No gains baseline for **${rsn}** yet. Baselines are recorded daily for every tracked player.` };
+  }
+  const skillGains = [];
+  for (const [skill, v] of Object.entries(st.skills || {})) {
+    if (skill === 'overall' || !v || typeof v.xp !== 'number') continue;
+    const d = v.xp - (prev.xp[skill] || 0);
+    if (d > 0) {
+      skillGains.push({
+        skill: skill === 'runecrafting' ? 'runecraft' : skill,
+        name: skill.charAt(0).toUpperCase() + skill.slice(1),
+        xp: d,
+      });
+    }
+  }
+  skillGains.sort((x, y) => y.xp - x.xp);
+  const totalXp = Math.max(0,
+    ((st.skills || {}).overall?.xp || 0) - (prev.xp.overall || 0));
+  const kcGains = [];
+  for (const [m, v] of Object.entries(st.kc || {})) {
+    if (typeof v !== 'number' || NON_KC_SCORES.has(m)) continue;
+    const d = v - (prev.kc[m] || 0);
+    if (d > 0) kcGains.push({ metric: m, name: prettyMetric(m), kc: d });
+  }
+  kcGains.sort((x, y) => y.kc - x.kc);
+  const totalKc = kcGains.reduce((s, g) => s + g.kc, 0);
+  const card = await fetchCard('/gains', {
+    rsn, spanDays: base.spanDays, totalXp, totalKc,
+    skills: skillGains.slice(0, 5), bosses: kcGains.slice(0, 5),
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'gains.png' })] };
+  return {
+    content: `**${rsn}** last ${base.spanDays} days: +${totalXp.toLocaleString('en-US')} XP, +${totalKc.toLocaleString('en-US')} KC`,
+  };
+}
+
+async function handleGainsCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  let days = 7;
+  const rest = [];
+  for (const a of args) {
+    const low = String(a).toLowerCase();
+    if (low === 'month' || low === 'monthly') days = 30;
+    else if (low === 'week' || low === 'weekly') days = 7;
+    else rest.push(a);
+  }
+  const { rsn, error, payload } = resolveName(rest, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await message.reply(await gainsPayload(rsn, days, message.author.id)).catch(() => {});
 }
 
 async function handleKcCommand(message, args) {
@@ -2254,6 +2327,23 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('gains')
+      .setDescription("Show a player's XP and KC gains")
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)'))
+      .addStringOption((o) => o.setName('period').setDescription('How far back to compare')
+        .addChoices(
+          { name: 'Last 7 days', value: '7' },
+          { name: 'Last 30 days', value: '30' })),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, gainsPayload(rsn, Number(interaction.options.getString('period') || '7'), interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('dry')
       .setDescription("Check a player's drop luck on one boss")
       .addStringOption((o) => o.setName('activity').setDescription('Boss to check').setAutocomplete(true).setRequired(true))
@@ -2290,4 +2380,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
