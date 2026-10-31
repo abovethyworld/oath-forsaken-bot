@@ -285,6 +285,39 @@ async function getStats(rsn) {
   });
 }
 
+// Identity lookups for the rename watcher. A WOM player id is stable
+// across renames, so id -> current username is the rename detector, and
+// username -> id seeds it. Both paced through the shared limiter; null
+// on any failure.
+async function getPlayerIdentity(rsn) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key) return null;
+  return paced(async () => {
+    try {
+      const details = await fetchPlayerDetails(key);
+      if (details.notFound || !details.player) return null;
+      const { id, username } = details.player;
+      return typeof id === 'number' && username ? { id, username } : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
+async function getPlayerById(id) {
+  if (typeof id !== 'number') return null;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/players/id/${encodeURIComponent(id)}`);
+      if (!res.ok) return null;
+      const player = await res.json();
+      return player && player.username ? { id: player.id, username: player.username } : null;
+    } catch {
+      return null;
+    }
+  });
+}
+
 // The clan's WOM group membership, as display names. One paced, limiter-
 // gated GET; returns null on any failure so callers keep their last list.
 async function getGroupMembers(groupId) {
@@ -338,4 +371,4 @@ async function getCompetition(competitionId) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, CACHE_MS, NOTFOUND_MS };
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, CACHE_MS, NOTFOUND_MS };

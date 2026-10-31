@@ -307,20 +307,36 @@ function getRsn(userId) {
 }
 
 // RSN links support alts: {userId: {rsns: [...], active}}. Old single-RSN
-// shape {rsn} is normalized on read.
+// shape {rsn} is normalized on read. Entries also carry `verified` (RSNs
+// proven by a plugin sync under the member's own code, identity redesign
+// Oct 31 2026) and `womIds` ({lowercased rsn: WOM player id}) for the
+// rename watcher; both survive every mutation.
 function normalizeRsnEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;
+  let base = null;
   if (Array.isArray(entry.rsns)) {
     const rsns = entry.rsns.filter((r) => typeof r === 'string' && r);
     if (!rsns.length) return null;
-    return { rsns, active: rsns.includes(entry.active) ? entry.active : rsns[0] };
+    base = { rsns, active: rsns.includes(entry.active) ? entry.active : rsns[0] };
+  } else if (typeof entry.rsn === 'string' && entry.rsn) {
+    base = { rsns: [entry.rsn], active: entry.rsn };
   }
-  if (typeof entry.rsn === 'string' && entry.rsn) return { rsns: [entry.rsn], active: entry.rsn };
-  return null;
+  if (!base) return null;
+  const verified = Array.isArray(entry.verified)
+    ? entry.verified.filter((r) => base.rsns.includes(r))
+    : [];
+  const womIds = {};
+  if (entry.womIds && typeof entry.womIds === 'object') {
+    for (const r of base.rsns) {
+      const id = entry.womIds[r.toLowerCase()];
+      if (typeof id === 'number') womIds[r.toLowerCase()] = id;
+    }
+  }
+  return { ...base, verified, womIds };
 }
 
 function getRsnEntry(userId) {
-  return normalizeRsnEntry(loadRsnLinks()[userId]) || { rsns: [], active: null };
+  return normalizeRsnEntry(loadRsnLinks()[userId]) || { rsns: [], active: null, verified: [], womIds: {} };
 }
 
 // ─── Serialized RSN-link mutations ──────────────────────────────────
@@ -364,9 +380,73 @@ function setActiveRsn(userId, rsn) {
   const links = loadRsnLinks();
   const entry = normalizeRsnEntry(links[userId]);
   if (!entry || !entry.rsns.includes(rsn)) return false;
-  links[userId] = { rsns: entry.rsns, active: rsn };
+  links[userId] = { ...entry, active: rsn };
   saveRsnLinks(links);
   return true;
+}
+
+// The Discord user who has verified this RSN (played it under their own
+// plugin code), or null. A verified name is claimed: typed links from
+// anyone else are refused.
+function verifiedOwnerOf(rsn) {
+  const target = String(rsn).toLowerCase();
+  for (const [userId, raw] of Object.entries(loadRsnLinks())) {
+    const entry = normalizeRsnEntry(raw);
+    if (entry && entry.verified.some((r) => r.toLowerCase() === target)) return userId;
+  }
+  return null;
+}
+
+// Record an RSN as verified for a member (plugin synced it under their
+// code). Quiet-adds the link without moving the active name. Returns
+// true when anything changed.
+function markVerified(userId, rsn, womId) {
+  return mutateRsnLinks((links) => {
+    const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null, verified: [], womIds: {} };
+    let changed = false;
+    if (!entry.rsns.includes(rsn)) { entry.rsns.push(rsn); changed = true; }
+    if (!entry.active) entry.active = rsn;
+    if (!entry.verified.includes(rsn)) { entry.verified.push(rsn); changed = true; }
+    if (typeof womId === 'number' && entry.womIds[rsn.toLowerCase()] !== womId) {
+      entry.womIds[rsn.toLowerCase()] = womId;
+      changed = true;
+    }
+    links[userId] = entry;
+    return changed;
+  });
+}
+
+// Remove one RSN from a member's list entirely (links, verified claim,
+// WOM id). Returns true when it was there.
+function removeRsn(userId, rsn) {
+  return mutateRsnLinks((links) => {
+    const entry = normalizeRsnEntry(links[userId]);
+    if (!entry || !entry.rsns.includes(rsn)) return false;
+    entry.rsns = entry.rsns.filter((r) => r !== rsn);
+    entry.verified = entry.verified.filter((r) => r !== rsn);
+    delete entry.womIds[rsn.toLowerCase()];
+    if (entry.active === rsn) entry.active = entry.rsns[0] || null;
+    if (entry.rsns.length) links[userId] = entry;
+    else delete links[userId];
+    return true;
+  });
+}
+
+// Move a link to a new RSN after a WOM-confirmed rename, keeping the
+// verified claim, the active slot, and the WOM id.
+function renameLinkedRsn(userId, oldRsn, newRsn) {
+  return mutateRsnLinks((links) => {
+    const entry = normalizeRsnEntry(links[userId]);
+    if (!entry || !entry.rsns.includes(oldRsn)) return false;
+    entry.rsns = entry.rsns.map((r) => (r === oldRsn ? newRsn : r));
+    entry.verified = entry.verified.map((r) => (r === oldRsn ? newRsn : r));
+    if (entry.active === oldRsn) entry.active = newRsn;
+    const id = entry.womIds[oldRsn.toLowerCase()];
+    delete entry.womIds[oldRsn.toLowerCase()];
+    if (typeof id === 'number') entry.womIds[newRsn.toLowerCase()] = id;
+    links[userId] = entry;
+    return true;
+  });
 }
 
 // ─── Spec weapons (special-attack weapons members own) ──
@@ -1209,6 +1289,10 @@ async function readRsnFromModal(interaction) {
     rsn = '';
   }
   if (!/^[A-Za-z0-9 ]{1,12}$/.test(rsn)) return { error: 'That name has characters RuneScape does not allow. Try again.' };
+  const owner = verifiedOwnerOf(rsn);
+  if (owner && owner !== interaction.user.id) {
+    return { error: 'That name is already linked and verified to another member. If it is yours, ask staff to clear it.' };
+  }
   const stats = await getStats(rsn).catch(() => null);
   if (stats && stats.notFound) return { error: 'Could not find that RuneScape name. Check the spelling and try again.' };
   if (!stats) return { error: 'Could not reach the stats service right now. Your name was not linked, try again in a bit.' };
@@ -3388,6 +3472,10 @@ module.exports = {
   getRsnEntry,
   addRsn,
   linkRsnQuiet,
+  verifiedOwnerOf,
+  markVerified,
+  removeRsn,
+  renameLinkedRsn,
   setActiveRsn,
   handleTeamButton,
   handleTeamSelect,
