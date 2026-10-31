@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete, handleCompareBossSelect } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSwapModal } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -200,6 +200,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const [modalKind] = interaction.customId.split(':');
       if (modalKind === 'suggest') {
         await handleSuggestModal(interaction);
+      } else if (modalKind === 'cmpmodal') {
+        await handleCompareSwapModal(interaction);
       } else if (modalKind === 'team') {
         await handleTeamModal(interaction);
       } else {
