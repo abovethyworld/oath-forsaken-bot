@@ -794,8 +794,11 @@ async function skillsPayload(rsn, userId) {
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
   const skillsMap = st.skills || {};
+  // WOM names the skill runecrafting; the display order (and the
+  // website) call it runecraft.
+  const SKILL_DATA_KEYS = { runecraft: 'runecrafting' };
   const skills = SKILL_ORDER.map((key) => {
-    const entry = skillsMap[key];
+    const entry = skillsMap[key] || skillsMap[SKILL_DATA_KEYS[key]];
     return {
       name: key.charAt(0).toUpperCase() + key.slice(1),
       level: entry && typeof entry.level === 'number' ? entry.level : null,
