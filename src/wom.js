@@ -140,8 +140,20 @@ function parseStats(playerJson) {
     // entirely) renders as null -> the board shows '-', never a fake 1.
     levels[sk] = lvl == null ? null : Math.min(Math.max(lvl, 1), 99);
   }
+  // Full skill picture (added Oct 30, 2026): WOM sends every skill with
+  // level and XP in the same snapshot. The party board only reads the
+  // subset above, but the website, profile pages, and the ladder need
+  // all 24 skills, so keep them all here instead of dropping them.
+  const allSkills = {};
+  for (const [sk, entry] of Object.entries(skills)) {
+    if (!entry || typeof entry.level !== 'number') continue;
+    allSkills[sk] = {
+      level: entry.level,
+      xp: typeof entry.experience === 'number' ? entry.experience : null,
+    };
+  }
   const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
-  return { combat: combatLevel(levels), ...levels, kc, accountType };
+  return { combat: combatLevel(levels), ...levels, kc, accountType, skills: allSkills };
 }
 
 async function fetchPlayerDetails(username) {
