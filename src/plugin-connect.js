@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { SlashCommandBuilder } = require('discord.js');
 const { atomicWrite } = require('./store');
-const { getRsnEntry, rsnLinkRow } = require('./teams');
+const { getRsnEntry, rsnLinkRow, linkRsnQuiet } = require('./teams');
 
 const CODES_FILE = path.join(__dirname, '..', 'data', 'plugin-sync', 'codes.json');
 
@@ -51,17 +51,23 @@ function revokeCodes(rsns) {
   return removed;
 }
 
-async function connect(interaction) {
-  const entry = getRsnEntry(interaction.user.id);
-  if (!entry.rsns.length) {
-    await interaction.reply({
-      content: 'No RSN linked yet. Tap below to link yours.',
-      components: rsnLinkRow(),
-      ephemeral: true,
-    });
-    return;
+// Links and codes are one system: a live code is proof the RSN belongs to
+// the member, so every coded RSN also sits on their bot link list, with
+// the active (clan) name untouched. Runs at startup so a code that landed
+// in the store any other way still reconciles. Returns how many RSNs were
+// newly linked.
+function reconcileCodeLinks() {
+  const codes = loadCodes();
+  let linked = 0;
+  for (const entry of Object.values(codes)) {
+    if (entry.discordId && entry.rsn && linkRsnQuiet(entry.discordId, entry.rsn)) linked++;
   }
+  return linked;
+}
+
+async function connect(interaction) {
   const action = interaction.options.getString('action') || 'code';
+  const entry = getRsnEntry(interaction.user.id);
   if (action === 'revoke') {
     const removed = revokeCodes(entry.rsns);
     await interaction.reply({
@@ -72,15 +78,29 @@ async function connect(interaction) {
     });
     return;
   }
+  // A code is only ever issued for a name on the member's link list: a
+  // name that is not linked yet gets linked (as an alt, active untouched)
+  // in the same step, so codes and links never disagree.
   const wanted = interaction.options.getString('rsn');
+  let justLinked = null;
   if (wanted && !entry.rsns.includes(wanted)) {
-    await interaction.reply({ content: `"${wanted}" is not one of your linked RSNs.`, ephemeral: true });
+    linkRsnQuiet(interaction.user.id, wanted);
+    justLinked = wanted;
+  }
+  const fresh = justLinked ? getRsnEntry(interaction.user.id) : entry;
+  if (!fresh.rsns.length) {
+    await interaction.reply({
+      content: 'No RSN linked yet. Tap below to link yours.',
+      components: rsnLinkRow(),
+      ephemeral: true,
+    });
     return;
   }
-  const rsn = wanted || entry.active;
+  const rsn = wanted || fresh.active;
   const code = issueCode(interaction.user.id, rsn);
   await interaction.reply({
     content:
+      (justLinked ? `**${justLinked}** is linked to your RSNs now.\n` : '') +
       `Your plugin connect code for **${rsn}**:\n\`${code}\`\n` +
       'Paste it into the Connect Code setting in the Oath Forsaken RuneLite plugin. ' +
       'Keep it to yourself: anyone with this code can sync as you. ' +
@@ -101,10 +121,10 @@ const commands = [
           .addChoices({ name: 'Get a code', value: 'code' }, { name: 'Revoke my code', value: 'revoke' })
       )
       .addStringOption((o) =>
-        o.setName('rsn').setDescription('Which linked RSN the code is for (default: your active one)')
+        o.setName('rsn').setDescription('Which RSN the code is for (default: your active one)')
       ),
     run: connect,
   },
 ];
 
-module.exports = { commands, issueCode, revokeCodes };
+module.exports = { commands, issueCode, revokeCodes, reconcileCodeLinks };
