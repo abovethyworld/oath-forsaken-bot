@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleAutocomplete, handleCompareBossSelect } = require('./showoff');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -179,7 +179,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       cooldowns.set(btnKey, btnNow);
       await routeButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
-      if (interaction.customId === 'member:select') {
+      if (interaction.customId.startsWith('cmpboss:')) {
+        await handleCompareBossSelect(interaction);
+      } else if (interaction.customId === 'member:select') {
         await handleMemberSelect(interaction);
       } else if (interaction.customId === 'team:pick') {
         await handleTeamSelect(interaction);

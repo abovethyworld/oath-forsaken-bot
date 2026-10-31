@@ -9,6 +9,7 @@ const { handleEventButton } = require('./calendar');
 const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
+const { handleCompareButton } = require('./showoff');
 const config = require('./config');
 
 function panelRoleIds() {
@@ -32,6 +33,7 @@ async function routeButton(interaction) {
   if (kind === 'suggest') return handleSuggestButton(interaction);
   if (kind === 'bounty') return handleBountyButton(interaction);
   if (kind === 'team') return handleTeamButton(interaction);
+  if (kind === 'cmp') return handleCompareButton(interaction);
   if (kind === 'donate') {
     await interaction.reply({
       content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nEvery bit helps. Chaos takes all.',
