@@ -7,7 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage, itemLuckPcts } = require('./luck');
+const { luckForPage, itemLuckPcts, dryReport } = require('./luck');
 const fs = require('fs');
 const path = require('path');
 
@@ -365,6 +365,58 @@ async function kcPayload(activity, rsn, userId) {
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
+}
+
+// !dry <boss> [name]: one player's drop luck on one boss, from
+// the same engine that scores the compare strips. Raids and
+// multi-source drops are not scored and say so.
+async function dryPayload(activity, rsn, userId) {
+  const entry = activity ? kcEntry(activity) : null;
+  if (!entry) {
+    return { content: `Pick a boss: \`!dry <boss> [name]\`\nBosses: ${Object.keys(KC_KEYS).join(', ')}` };
+  }
+  if (userId) noteUse(userId);
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const metric = entry.cols.length ? entry.cols[0].metric : null;
+  const kc = metric && st.kc ? st.kc[metric] : null;
+  if (!kc) return { content: `**${rsn}** has no ${entry.name} kills yet, so there is no luck to check.` };
+  const page = CLOG_PAGES[activity] || clogPageForActivity(activity);
+  if (!page) return { content: `${entry.name} has no collection log page to score.` };
+  const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
+  if (!res || res.notFound) return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score.` };
+  const report = dryReport(kc, metric,
+    (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
+  if (!report) return { content: `No luck scoring for ${entry.name} yet. Raids and multi-source drops are not scored.` };
+  const withIcons = async (list) => Promise.all(list.map(async (e) => ({
+    ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
+  })));
+  const card = await fetchCard('/dry', {
+    boss: entry.name, metric, rsn, kc, word: report.word,
+    missing: await withIcons(report.missing),
+    obtained: await withIcons(report.obtained),
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'dry.png' })] };
+  const top = report.missing.slice(0, 3).map((e) => `${e.name} (${e.pct}%)`).join(', ');
+  return {
+    content: `**${entry.name}** - ${rsn}: ${kc.toLocaleString('en-US')} KC, luck: ${report.word}${top ? `. Driest: ${top}` : ''}`,
+  };
+}
+
+async function handleDryCommand(message, args) {
+  const cd = checkCooldown(message.author.id);
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const activity = takeActivity(args, KC_KEYS);
+  const { rsn, error, payload } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await message.reply(await dryPayload(activity, rsn, message.author.id)).catch(() => {});
 }
 
 async function handleKcCommand(message, args) {
@@ -1505,6 +1557,7 @@ function clogAutocompleteChoices(focused) {
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
   const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb'
+    || interaction.commandName === 'dry'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
@@ -2203,6 +2256,20 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('dry')
+      .setDescription("Check a player's drop luck on one boss")
+      .addStringOption((o) => o.setName('activity').setDescription('Boss to check').setAutocomplete(true).setRequired(true))
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction)) return;
+      await slashReply(interaction, dryPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('tfa')
       .setDescription("Show a player's Fractured Archive card")
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (defaults to your linked RSN)')),
@@ -2225,4 +2292,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES };
