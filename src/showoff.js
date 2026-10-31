@@ -845,6 +845,18 @@ async function handleSkillsCommand(message, args) {
 // data as the other commands.
 const fmt = (n) => (typeof n === 'number' ? n.toLocaleString('en-US') : '-');
 
+// WOM activity scores that live in the kc map but are not kill
+// counts (Colosseum Glory, PvP Arena, clue completions, the
+// collection log count itself). Total KC sums real kills only.
+const NON_KC_SCORES = new Set([
+  'league_points', 'bounty_hunter_hunter', 'bounty_hunter_rogue',
+  'bounty_hunter_hunter_hardcore', 'bounty_hunter_rogue_hardcore',
+  'clue_scrolls_all', 'clue_scrolls_beginner', 'clue_scrolls_easy',
+  'clue_scrolls_medium', 'clue_scrolls_hard', 'clue_scrolls_elite',
+  'clue_scrolls_master', 'last_man_standing', 'pvp_arena',
+  'soul_wars_zeal', 'colosseum_glory', 'collections_logged',
+]);
+
 async function compareSnapshot(rsn) {
   const st = await getStats(rsn);
   if (!st || st.notFound) return { st };
@@ -864,8 +876,8 @@ async function compareSnapshot(rsn) {
     ? overall.level : skills.reduce((s, sk) => s + (sk.level || 0), 0);
   const totalXp = overall && typeof overall.xp === 'number'
     ? overall.xp : skills.reduce((s, sk) => s + (sk.xp || 0), 0);
-  const totalKc = Object.values(st.kc || {}).reduce(
-    (s, v) => s + (typeof v === 'number' ? v : 0), 0);
+  const totalKc = Object.entries(st.kc || {}).reduce(
+    (s, [k, v]) => s + (typeof v === 'number' && !NON_KC_SCORES.has(k) ? v : 0), 0);
   return { st, skills, totalLevel, totalXp, totalKc, combat: st.combat };
 }
 
