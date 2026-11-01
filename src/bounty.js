@@ -382,6 +382,7 @@ async function postCommand(interaction) {
       proof,
     });
     const postContent = [
+      '━━━━━━ ⛧ ━━━━━━',
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
       `⛧ **A new contract: ${contract.name}** ⛧`,
       'Fresh only: get it while the contract is live and bring back proof. First hunter back takes the title.',
