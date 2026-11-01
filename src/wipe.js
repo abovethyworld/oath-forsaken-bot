@@ -1,10 +1,15 @@
-// Staff-only channel wipe panel (posted in #bot-commands).
+// Staff-only channel wipe panel. The panel lives in
+// #bot-commands-staff (staff only) but always wipes the public
+// #bot-commands test channel, wherever the panel is posted.
 // The panel button asks for an ephemeral confirmation first;
-// confirming bulk-deletes the channel's messages except pinned
-// ones and the panel itself. Discord refuses bulk deletes for
-// messages older than 14 days, so those are counted and left.
+// confirming bulk-deletes the target channel's messages except
+// pinned ones. Discord refuses bulk deletes for messages older
+// than 14 days, so those are counted and left.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { isStaff } = require('./utils');
+
+// Public #bot-commands: the channel this panel wipes.
+const TARGET_CHANNEL_ID = '1561979844470775839';
 
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
 const wiping = new Set();
@@ -19,7 +24,7 @@ async function handleWipeButton(interaction) {
     }
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId(`wipe:confirm:${interaction.message.id}`)
+        .setCustomId('wipe:confirm')
         .setLabel('Yes, wipe it')
         .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
@@ -28,9 +33,9 @@ async function handleWipeButton(interaction) {
         .setStyle(ButtonStyle.Secondary),
     );
     return interaction.reply({
-      content: `Wipe <#${interaction.channelId}>? Every message goes `
-        + 'except pinned ones and the wipe panel. Messages older than '
-        + '14 days cannot be bulk deleted and stay.',
+      content: `Wipe <#${TARGET_CHANNEL_ID}>? Every message in it goes `
+        + 'except pinned ones. Messages older than 14 days cannot be '
+        + 'bulk deleted and stay.',
       ephemeral: true,
       components: [row],
     });
@@ -44,8 +49,8 @@ async function handleWipeButton(interaction) {
     if (!isStaff(interaction)) {
       return interaction.reply({ content: 'Staff only.', ephemeral: true });
     }
-    const panelId = parts[2];
-    const channel = interaction.channel;
+    const channel = await interaction.client.channels
+      .fetch(TARGET_CHANNEL_ID).catch(() => null);
     if (!channel || wiping.has(channel.id)) {
       return interaction.update({
         content: 'A wipe is already running here.', components: [],
@@ -65,7 +70,7 @@ async function handleWipeButton(interaction) {
         if (!batch.size) break;
         before = batch.last().id;
         const now = Date.now();
-        const keep = (m) => m.id !== panelId && !pinnedIds.has(m.id);
+        const keep = (m) => !pinnedIds.has(m.id);
         const deletable = batch.filter(
           (m) => keep(m) && now - m.createdTimestamp < FOURTEEN_DAYS);
         skippedOld += batch.filter(
