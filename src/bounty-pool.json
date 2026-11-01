@@ -8,7 +8,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_hunter_wand_detail.png/1239px-Dragon_hunter_wand_detail.png?a3e16",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 2,
@@ -17,7 +18,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/Hill_giant_club_detail.png?53073",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 3,
@@ -26,7 +28,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bryophyta%27s_essence_detail.png/892px-Bryophyta%27s_essence_detail.png?e56c2",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 4,
@@ -35,7 +38,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zombie_champion_scroll_detail.png/1242px-Zombie_champion_scroll_detail.png?3964f",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 5,
@@ -44,7 +48,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Golden_tench_detail.png?27700",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 6,
@@ -53,7 +58,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Big_harpoonfish_detail.png?36d0f",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 7,
@@ -62,7 +68,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Tome_of_fire_detail.png?b9bae",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 8,
@@ -71,7 +78,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Jar_of_souls_detail.png/712px-Jar_of_souls_detail.png?7bdc6",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 9,
@@ -80,7 +88,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Craw%27s_bow_%28u%29_detail.png/1290px-Craw%27s_bow_%28u%29_detail.png?bf1fd",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 10,
@@ -89,7 +98,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Draconic_visage_detail.png/1007px-Draconic_visage_detail.png?6edab",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 11,
@@ -98,7 +108,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/Kq_head_detail.png?4a8ca",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 12,
@@ -107,7 +118,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/Basilisk_jaw_detail.png?e3794",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 13,
@@ -116,7 +128,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Enhanced_crystal_weapon_seed_detail.png?48996",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 14,
@@ -125,7 +138,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zalcano_shard_detail.png/1177px-Zalcano_shard_detail.png?f52af",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 15,
@@ -134,7 +148,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Crystal_tool_seed_detail.png/648px-Crystal_tool_seed_detail.png?d8a0b",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 16,
@@ -143,7 +158,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/Voidwaker_gem_detail.png?fcc14",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 17,
@@ -152,7 +168,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/Black_tourmaline_core_detail.png?6db72",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 18,
@@ -161,7 +178,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ancient_hilt_detail.png/1311px-Ancient_hilt_detail.png?87a43",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 19,
@@ -170,7 +188,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Virtus_mask_detail.png/789px-Virtus_mask_detail.png?379b8",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 20,
@@ -179,7 +198,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tonalztics_of_ralos_detail.png/1418px-Tonalztics_of_ralos_detail.png?fa107",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 21,
@@ -188,7 +208,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Hydra%27s_claw_detail.png?994b3",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 22,
@@ -197,7 +218,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Avernic_treads_detail.png?003ec",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 23,
@@ -206,7 +228,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Elder_venator_fang_detail.png?59cce",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 24,
@@ -215,7 +238,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/Araxyte_fang_detail.png?43deb",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 25,
@@ -224,7 +248,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Oathplate_helm_detail.png/1016px-Oathplate_helm_detail.png?0b1a0",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 26,
@@ -233,7 +258,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Imbued_heart_detail.png?be01a",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 27,
@@ -242,7 +268,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Hallowfell_detail.png/1259px-Hallowfell_detail.png?7f58d",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 28,
@@ -251,7 +278,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Belle%27s_folly_%28tarnished%29_detail.png/1138px-Belle%27s_folly_%28tarnished%29_detail.png?77da3",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 29,
@@ -260,7 +288,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dharok%27s_greataxe_detail.png/1276px-Dharok%27s_greataxe_detail.png?d8a0b",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 30,
@@ -269,7 +298,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tormented_synapse_detail.png/911px-Tormented_synapse_detail.png?27153",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 31,
@@ -278,7 +308,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_green_dye_detail.png/701px-Abyssal_green_dye_detail.png?e5674",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 32,
@@ -287,7 +318,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ice_element_staff_crown_detail.png/1139px-Ice_element_staff_crown_detail.png?db8f6",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 33,
@@ -296,7 +328,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_warhammer_detail.png/1088px-Dragon_warhammer_detail.png?7f65a",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 34,
@@ -305,7 +338,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Berserker_ring_detail.png/1209px-Berserker_ring_detail.png?81f8b",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 35,
@@ -314,7 +348,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bottomless_compost_bucket_detail.png/888px-Bottomless_compost_bucket_detail.png?c1867",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 36,
@@ -323,7 +358,8 @@
    "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dual_macuahuitl_detail.png/1190px-Dual_macuahuitl_detail.png?be5ad",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 37,
@@ -332,7 +368,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_protector_%28follower%29.png/613px-Abyssal_protector_%28follower%29.png?bfcb7",
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 38,
@@ -341,7 +378,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/Baby_Mole_%28follower%29.png?c4d59",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 39,
@@ -350,7 +388,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bran_%28follower%29.png/802px-Bran_%28follower%29.png?68158",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 40,
@@ -359,7 +398,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Dom_%28follower%29.png?e7157",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 41,
@@ -368,7 +408,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Gull_%28follower%29.png/1281px-Gull_%28follower%29.png?8f09f",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 42,
@@ -377,7 +418,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Moxi_%28follower%29.png/607px-Moxi_%28follower%29.png?19e22",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 43,
@@ -386,7 +428,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Muphin_%28follower%2C_ranged%29.png/1267px-Muphin_%28follower%2C_ranged%29.png?01b57",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 44,
@@ -395,7 +438,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/Snakeling.png?f371a",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 45,
@@ -404,7 +448,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/Prince_Black_Dragon.png?318e7",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 46,
@@ -413,7 +458,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Scurry_%28follower%29.png/1230px-Scurry_%28follower%29.png?4de8a",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 47,
@@ -422,7 +468,8 @@
    "tier": "Extreme",
    "thumbnail": "https://oldschool.runescape.wiki/images/Sraracha_%28follower%29.png?e9085",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 48,
@@ -431,7 +478,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Yami_%28follower%29.png/1418px-Yami_%28follower%29.png?58add",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 49,
@@ -440,7 +488,8 @@
    "tier": "Medium",
    "thumbnail": "https://oldschool.runescape.wiki/images/Youngllef_%28follower%29.png?fc90e",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 50,
@@ -449,7 +498,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dagannoth_Supreme_Jr..png/909px-Dagannoth_Supreme_Jr..png?4a144",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 51,
@@ -458,7 +508,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Zilyana_Jr..png?fd984",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 52,
@@ -467,7 +518,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Wisp_%28follower%29.png/488px-Wisp_%28follower%29.png?d6646",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 53,
@@ -476,7 +528,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Olmlet_%28follower%29.png?24b14",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 54,
@@ -485,7 +538,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Hellpuppy_%28follower%29.png?b9d9d",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 55,
@@ -494,7 +548,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/TzRek-Jad.png/1149px-TzRek-Jad.png?87507",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 56,
@@ -503,7 +558,8 @@
    "tier": "Hard",
    "thumbnail": "https://oldschool.runescape.wiki/images/Scorpia%27s_offspring_%28follower%29.png?dfe31",
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 57,
@@ -512,7 +568,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 58,
@@ -521,7 +578,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 59,
@@ -530,7 +588,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 60,
@@ -539,7 +598,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 61,
@@ -548,7 +608,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 62,
@@ -557,7 +618,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 63,
@@ -566,7 +628,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 64,
@@ -575,7 +638,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 65,
@@ -584,7 +648,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 66,
@@ -593,7 +658,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 67,
@@ -602,7 +668,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 68,
@@ -611,7 +678,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 69,
@@ -620,7 +688,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 70,
@@ -629,7 +698,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 71,
@@ -638,7 +708,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 72,
@@ -647,7 +718,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 73,
@@ -656,7 +728,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 74,
@@ -665,7 +738,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 75,
@@ -674,7 +748,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 76,
@@ -683,7 +758,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 77,
@@ -692,7 +768,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 78,
@@ -701,7 +778,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 79,
@@ -710,7 +788,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 80,
@@ -719,7 +798,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 81,
@@ -728,7 +808,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 82,
@@ -737,7 +818,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 83,
@@ -746,7 +828,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 84,
@@ -755,7 +838,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 85,
@@ -764,7 +848,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 86,
@@ -773,7 +858,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 87,
@@ -782,7 +868,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   },
   {
    "id": 88,
@@ -791,7 +878,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 89,
@@ -800,7 +888,8 @@
    "tier": "Easy",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 90,
@@ -809,7 +898,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 91,
@@ -818,7 +908,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 92,
@@ -827,7 +918,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 93,
@@ -836,7 +928,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 94,
@@ -845,7 +938,8 @@
    "tier": "Hard",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 95,
@@ -854,7 +948,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 96,
@@ -863,7 +958,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 97,
@@ -872,7 +968,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 98,
@@ -881,7 +978,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 99,
@@ -890,7 +988,8 @@
    "tier": "Extreme",
    "thumbnail": null,
    "lane": "PvM",
-   "winners": 1
+   "winners": 1,
+   "pet": true
   },
   {
    "id": 100,
@@ -899,7 +998,8 @@
    "tier": "Medium",
    "thumbnail": null,
    "lane": "Skilling",
-   "winners": 1
+   "winners": 1,
+   "pet": false
   }
  ]
 }
