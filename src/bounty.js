@@ -169,6 +169,7 @@ async function fetchPoster(bounty, hunters, statusText) {
         daysLeft,
         proofText: posterProofText(bounty.proof),
         hunters,
+        bottomLine: { text: 'First back with fresh proof takes the title.', kind: 'voice' },
         statusText: statusText || null,
         image: bounty.image ? await thumbB64(bounty.image) : null,
       }),
@@ -191,7 +192,10 @@ async function boardPosterEdit(msg, bounty, state, { statusText = null, close = 
   const png = await fetchPoster(bounty, hunters, statusText);
   if (!png) return false;
   const edit = { embeds: [], files: [new AttachmentBuilder(png, { name: 'bounty-poster.png' })] };
-  if (close) edit.components = [];
+  if (close) {
+    edit.components = [];
+    edit.content = '';
+  }
   await msg.edit(edit);
   return true;
 }
@@ -374,14 +378,18 @@ async function postCommand(interaction) {
       winners,
       proof,
     });
+    const postContent = [
+      bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
+      `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
+    ]
+      .filter(Boolean)
+      .join('\n');
     let msg;
     try {
       msg = await channel.send({
+        content: postContent,
         ...(bountyConfig().notifyRoleId
-          ? {
-              content: `<@&${bountyConfig().notifyRoleId}>`,
-              allowedMentions: { roles: [bountyConfig().notifyRoleId] },
-            }
+          ? { allowedMentions: { roles: [bountyConfig().notifyRoleId] } }
           : {}),
         ...(poster
           ? { files: [new AttachmentBuilder(poster, { name: 'bounty-poster.png' })] }
