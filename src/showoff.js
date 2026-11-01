@@ -2052,8 +2052,8 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
     .setStyle(view === 'bossbase' ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(view === 'bossbase');
   const rows = [new ActionRowBuilder().addComponents(
-    viewBtn('overall', 'Overall'), viewBtn('skills', 'Skills'),
-    bossBtn, viewBtn('clogs', 'Clogs'), swapBtn)];
+    viewBtn('overall', 'Overall'), bossBtn,
+    viewBtn('skills', 'Skills'), viewBtn('clogs', 'Clogs'), swapBtn)];
   if (view === 'skills') {
     const options = [{ label: 'All skills', value: 'all' }];
     for (const key of [...SKILL_ORDER].sort((x, y) => x.localeCompare(y))) {
