@@ -9,7 +9,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_hunter_wand_detail.png/1239px-Dragon_hunter_wand_detail.png?a3e16",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": "Coiled around the Darkfrost, the Hueycoatl sleeps on a pile of gold. Her hoard holds a wand made for hunting dragons. First hunter back with the drop takes the title.",
+   "winLine": "The Hueycoatl is subdued and her gold is scattered."
   },
   {
    "id": 2,
@@ -19,7 +21,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Hill_giant_club_detail.png?53073",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 3,
@@ -29,7 +33,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bryophyta%27s_essence_detail.png/892px-Bryophyta%27s_essence_detail.png?e56c2",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 4,
@@ -39,7 +45,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zombie_champion_scroll_detail.png/1242px-Zombie_champion_scroll_detail.png?3964f",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 5,
@@ -49,7 +57,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Golden_tench_detail.png?27700",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": "Deep in Lake Molch swims a tench of gold. First skiller back with the drop takes the title.",
+   "winLine": "The cormorant finally comes up gold."
   },
   {
    "id": 6,
@@ -59,7 +69,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Big_harpoonfish_detail.png?36d0f",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 7,
@@ -69,7 +81,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Tome_of_fire_detail.png?b9bae",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 8,
@@ -79,7 +93,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Jar_of_souls_detail.png/712px-Jar_of_souls_detail.png?7bdc6",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 9,
@@ -89,7 +105,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Craw%27s_bow_%28u%29_detail.png/1290px-Craw%27s_bow_%28u%29_detail.png?bf1fd",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 10,
@@ -99,7 +117,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Draconic_visage_detail.png/1007px-Draconic_visage_detail.png?6edab",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 11,
@@ -109,7 +129,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Kq_head_detail.png?4a8ca",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 12,
@@ -119,7 +141,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Basilisk_jaw_detail.png?e3794",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 13,
@@ -129,7 +153,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Enhanced_crystal_weapon_seed_detail.png?48996",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 14,
@@ -139,7 +165,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zalcano_shard_detail.png/1177px-Zalcano_shard_detail.png?f52af",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 15,
@@ -149,7 +177,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Crystal_tool_seed_detail.png/648px-Crystal_tool_seed_detail.png?d8a0b",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 16,
@@ -159,7 +189,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Voidwaker_gem_detail.png?fcc14",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 17,
@@ -169,7 +201,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Black_tourmaline_core_detail.png?6db72",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 18,
@@ -179,7 +213,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ancient_hilt_detail.png/1311px-Ancient_hilt_detail.png?87a43",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 19,
@@ -189,7 +225,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Virtus_mask_detail.png/789px-Virtus_mask_detail.png?379b8",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 20,
@@ -199,7 +237,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tonalztics_of_ralos_detail.png/1418px-Tonalztics_of_ralos_detail.png?fa107",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 21,
@@ -209,7 +249,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Hydra%27s_claw_detail.png?994b3",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 22,
@@ -219,7 +261,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Avernic_treads_detail.png?003ec",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 23,
@@ -229,7 +273,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Elder_venator_fang_detail.png?59cce",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 24,
@@ -239,7 +285,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Araxyte_fang_detail.png?43deb",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 25,
@@ -249,7 +297,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Oathplate_helm_detail.png/1016px-Oathplate_helm_detail.png?0b1a0",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 26,
@@ -259,7 +309,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Imbued_heart_detail.png?be01a",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 27,
@@ -269,7 +321,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Hallowfell_detail.png/1259px-Hallowfell_detail.png?7f58d",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 28,
@@ -279,7 +333,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Belle%27s_folly_%28tarnished%29_detail.png/1138px-Belle%27s_folly_%28tarnished%29_detail.png?77da3",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 29,
@@ -289,7 +345,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dharok%27s_greataxe_detail.png/1276px-Dharok%27s_greataxe_detail.png?d8a0b",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 30,
@@ -299,7 +357,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tormented_synapse_detail.png/911px-Tormented_synapse_detail.png?27153",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 31,
@@ -309,7 +369,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_green_dye_detail.png/701px-Abyssal_green_dye_detail.png?e5674",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 32,
@@ -319,7 +381,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ice_element_staff_crown_detail.png/1139px-Ice_element_staff_crown_detail.png?db8f6",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 33,
@@ -329,7 +393,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_warhammer_detail.png/1088px-Dragon_warhammer_detail.png?7f65a",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 34,
@@ -339,7 +405,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Berserker_ring_detail.png/1209px-Berserker_ring_detail.png?81f8b",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 35,
@@ -349,7 +417,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bottomless_compost_bucket_detail.png/888px-Bottomless_compost_bucket_detail.png?c1867",
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 36,
@@ -359,7 +429,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dual_macuahuitl_detail.png/1190px-Dual_macuahuitl_detail.png?be5ad",
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 37,
@@ -369,7 +441,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_protector_%28follower%29.png/613px-Abyssal_protector_%28follower%29.png?bfcb7",
    "lane": "Skilling",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 38,
@@ -379,7 +453,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Baby_Mole_%28follower%29.png?c4d59",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 39,
@@ -389,7 +465,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bran_%28follower%29.png/802px-Bran_%28follower%29.png?68158",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 40,
@@ -399,7 +477,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Dom_%28follower%29.png?e7157",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 41,
@@ -409,7 +489,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Gull_%28follower%29.png/1281px-Gull_%28follower%29.png?8f09f",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 42,
@@ -419,7 +501,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Moxi_%28follower%29.png/607px-Moxi_%28follower%29.png?19e22",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 43,
@@ -429,7 +513,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Muphin_%28follower%2C_ranged%29.png/1267px-Muphin_%28follower%2C_ranged%29.png?01b57",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 44,
@@ -439,7 +525,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Snakeling.png?f371a",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 45,
@@ -449,7 +537,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Prince_Black_Dragon.png?318e7",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 46,
@@ -459,7 +549,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Scurry_%28follower%29.png/1230px-Scurry_%28follower%29.png?4de8a",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 47,
@@ -469,7 +561,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Sraracha_%28follower%29.png?e9085",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 48,
@@ -479,7 +573,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Yami_%28follower%29.png/1418px-Yami_%28follower%29.png?58add",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 49,
@@ -489,7 +585,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Youngllef_%28follower%29.png?fc90e",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 50,
@@ -499,7 +597,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dagannoth_Supreme_Jr..png/909px-Dagannoth_Supreme_Jr..png?4a144",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 51,
@@ -509,7 +609,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Zilyana_Jr..png?fd984",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 52,
@@ -519,7 +621,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Wisp_%28follower%29.png/488px-Wisp_%28follower%29.png?d6646",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 53,
@@ -529,7 +633,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Olmlet_%28follower%29.png?24b14",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 54,
@@ -539,7 +645,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Hellpuppy_%28follower%29.png?b9d9d",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 55,
@@ -549,7 +657,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/TzRek-Jad.png/1149px-TzRek-Jad.png?87507",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 56,
@@ -559,7 +669,9 @@
    "thumbnail": "https://oldschool.runescape.wiki/images/Scorpia%27s_offspring_%28follower%29.png?dfe31",
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 57,
@@ -569,7 +681,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 58,
@@ -579,7 +693,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 59,
@@ -589,7 +705,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 60,
@@ -599,7 +717,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 61,
@@ -609,7 +729,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 62,
@@ -619,7 +741,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 63,
@@ -629,7 +753,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 64,
@@ -639,7 +765,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 65,
@@ -649,7 +777,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 66,
@@ -659,7 +789,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 67,
@@ -669,7 +801,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 68,
@@ -679,7 +813,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 69,
@@ -689,7 +825,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 70,
@@ -699,7 +837,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 71,
@@ -709,7 +849,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 72,
@@ -719,7 +861,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 73,
@@ -729,7 +873,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 74,
@@ -739,7 +885,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 75,
@@ -749,7 +897,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 76,
@@ -759,7 +909,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 77,
@@ -769,7 +921,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 78,
@@ -779,7 +933,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 79,
@@ -789,7 +945,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 80,
@@ -799,7 +957,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 81,
@@ -809,7 +969,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 82,
@@ -819,7 +981,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 83,
@@ -829,7 +993,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 84,
@@ -839,7 +1005,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 85,
@@ -849,7 +1017,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 86,
@@ -859,7 +1029,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 87,
@@ -869,7 +1041,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 88,
@@ -879,7 +1053,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 89,
@@ -889,7 +1065,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 90,
@@ -899,7 +1077,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 91,
@@ -909,7 +1089,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 92,
@@ -919,7 +1101,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 93,
@@ -929,7 +1113,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 94,
@@ -939,7 +1125,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 95,
@@ -949,7 +1137,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 96,
@@ -959,7 +1149,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 97,
@@ -969,7 +1161,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 98,
@@ -979,7 +1173,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 99,
@@ -989,7 +1185,9 @@
    "thumbnail": null,
    "lane": "PvM",
    "winners": 1,
-   "pet": true
+   "pet": true,
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 100,
@@ -999,7 +1197,9 @@
    "thumbnail": null,
    "lane": "Skilling",
    "winners": 1,
-   "pet": false
+   "pet": false,
+   "blurb": null,
+   "winLine": null
   }
  ]
 }
