@@ -386,7 +386,7 @@ async function postCommand(interaction) {
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
       `⛧ **A new contract: ${contract.name}** ⛧`,
       'Fresh only: get it while the contract is live and bring back proof. First hunter back takes the title.',
-      `Reward: **${LANE_TITLES[lane]}**`,
+      `Reward: <@&${role.id}>`,
       `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
     ]
       .filter(Boolean)
