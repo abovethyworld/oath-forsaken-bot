@@ -92,14 +92,17 @@ function resolveName(args, authorId) {
 // Activities can be typed as two words ("toa expert", "cox cm") — fold
 // them into the underscored key when the pair matches.
 function takeActivity(args, table) {
+  // Apostrophes never decide a match: "phosani's" and "phosanis"
+  // are the same ask, and members type both.
+  const clean = (s) => s.toLowerCase().replace(/['’]/g, '');
   if (args.length >= 2) {
-    const two = `${args[0]}_${args[1]}`.toLowerCase();
+    const two = `${clean(args[0])}_${clean(args[1])}`;
     if (table[two]) {
       args.splice(0, 2);
       return two;
     }
   }
-  return (args.shift() || '').toLowerCase();
+  return clean(args.shift() || '');
 }
 
 // Payload builders: return what to reply with ({ files }, { embeds }, or
@@ -160,6 +163,11 @@ const KC_ACTIVITIES = {
   mad_angel: { name: 'The Mad Angel', cols: [{ metric: 'mad_angel' }] },
   maggot_king: { name: 'Maggot King', cols: [{ metric: 'maggot_king' }] },
   mimic: { name: 'The Mimic', cols: [{ metric: 'mimic' }] },
+  nightmare: { name: 'The Nightmare', cols: [{ metric: 'nightmare', label: 'Nightmare' }, { metric: 'phosanis_nightmare', label: "Phosani's" }] },
+  phosani: { name: "Phosani's Nightmare", cols: [{ metric: 'phosanis_nightmare' }] },
+  phosanis: { name: "Phosani's Nightmare", cols: [{ metric: 'phosanis_nightmare' }] },
+  tombs: { name: 'Tombs of Amascut', cols: [{ metric: 'tombs_of_amascut', label: 'Normal' }, { metric: 'tombs_of_amascut_expert', label: 'Expert' }] },
+  tombs_of_amascut: { name: 'Tombs of Amascut', cols: [{ metric: 'tombs_of_amascut', label: 'Normal' }, { metric: 'tombs_of_amascut_expert', label: 'Expert' }] },
   moons: { name: 'Moons of Peril', cols: [{ metric: 'lunar_chests', label: 'Lunar Chests' }] },
   moons_of_peril: { name: 'Moons of Peril', cols: [{ metric: 'lunar_chests', label: 'Lunar Chests' }] },
   muspah: { name: 'Phantom Muspah', cols: [{ metric: 'phantom_muspah' }] },
@@ -617,6 +625,23 @@ const CLOG_PAGES = {
   clues_hard: ['Clues', 'Hard Treasure Trails'],
   clues_elite: ['Clues', 'Elite Treasure Trails'],
   clues_master: ['Clues', 'Master Treasure Trails'],
+  beginner_clues: ['Clues', 'Beginner Treasure Trails'],
+  easy_clues: ['Clues', 'Easy Treasure Trails'],
+  medium_clues: ['Clues', 'Medium Treasure Trails'],
+  hard_clues: ['Clues', 'Hard Treasure Trails'],
+  elite_clues: ['Clues', 'Elite Treasure Trails'],
+  master_clues: ['Clues', 'Master Treasure Trails'],
+  beginner_clue: ['Clues', 'Beginner Treasure Trails'],
+  easy_clue: ['Clues', 'Easy Treasure Trails'],
+  medium_clue: ['Clues', 'Medium Treasure Trails'],
+  hard_clue: ['Clues', 'Hard Treasure Trails'],
+  elite_clue: ['Clues', 'Elite Treasure Trails'],
+  master_clue: ['Clues', 'Master Treasure Trails'],
+  nightmare: ['Bosses', 'The Nightmare'],
+  phosani: ['Bosses', 'The Nightmare'],
+  phosanis: ['Bosses', 'The Nightmare'],
+  tombs: ['Raids', 'Tombs of Amascut'],
+  tombs_of_amascut: ['Raids', 'Tombs of Amascut'],
   clues_hard_rare: ['Clues', 'Hard Treasure Trails (Rare)'],
   clues_elite_rare: ['Clues', 'Elite Treasure Trails (Rare)'],
   clues_master_rare: ['Clues', 'Master Treasure Trails (Rare)'],
