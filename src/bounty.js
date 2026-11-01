@@ -611,9 +611,14 @@ async function handleLock(interaction, threadId) {
   await interaction.reply({ content: 'Thread locked and archived.', ephemeral: true }).catch(() => {});
 }
 
-// Daily sweep: expire bounties past their time limit. Marks them inactive,
-// closes the contract embed, and posts an expiry notice to the board so
-// staff knows a new contract is needed. Idempotent across restarts.
+const LAST_CALL_MS = 48 * 3600 * 1000;
+
+// Periodic sweep with a pulse. Inside the final 48 hours a contract
+// gets one last call: the board post is marked, a notice lands on the
+// board, and every open claim thread is pinged. At expiry the claims
+// flip to expired and the closing post says what actually happened
+// (no claims, claims that never proved, or winners before the close).
+// Idempotent across restarts: lastCallAt is stamped once.
 async function sweepExpiredBounties(client) {
   return mutateBounty(async () => {
     const state = loadState();
@@ -622,12 +627,59 @@ async function sweepExpiredBounties(client) {
     for (const [id, b] of Object.entries(state.bounties)) {
       if (!b.active) continue;
       const expiresAt = b.expiresAt || (b.createdAt || 0) + (b.days || 14) * DAY_MS;
-      if (expiresAt > now) continue;
+
+      if (expiresAt > now) {
+        // Last call window.
+        if (!b.lastCallAt && expiresAt - now <= LAST_CALL_MS) {
+          b.lastCallAt = now;
+          changed = true;
+          try {
+            const chan = await client.channels.fetch(b.channelId).catch(() => null);
+            if (chan && chan.isTextBased()) {
+              const msg = await chan.messages.fetch(id).catch(() => null);
+              if (msg && msg.embeds[0]) {
+                const marked = EmbedBuilder.from(msg.embeds[0]).setFooter({
+                  text: 'Last call: this contract closes in under 48 hours.',
+                });
+                await msg.edit({ embeds: [marked] }).catch(() => {});
+              }
+              await chan
+                .send(`⏳ Last call on **${b.target}** (${bountyLane(b)} lane): the contract closes in under 48 hours.`)
+                .catch(() => {});
+            }
+            for (const [threadId, c] of Object.entries(state.claims)) {
+              if (c.bountyId !== id || c.status !== 'pending') continue;
+              const thread = await client.channels.fetch(threadId).catch(() => null);
+              if (thread && thread.isThread()) {
+                await thread
+                  .send(`<@${c.claimerId}> Last call: this contract closes in under 48 hours. Press Done if you have the proof.`)
+                  .catch(() => {});
+              }
+            }
+          } catch (err) {
+            console.warn('Bounty last call failed:', err.message);
+          }
+        }
+        continue;
+      }
+
+      // Expiry.
       b.active = false;
       changed = true;
+      let pendingCount = 0;
       for (const c of Object.values(state.claims)) {
-        if (c.bountyId === id && c.status === 'pending') c.status = 'expired';
+        if (c.bountyId === id && c.status === 'pending') {
+          c.status = 'expired';
+          pendingCount += 1;
+        }
       }
+      const winners = (b.winnerIds || []).length;
+      const outcome =
+        winners > 0
+          ? `⌛ The contract on **${b.target}** closed with ${winners} winner${winners === 1 ? '' : 's'} on the board.`
+          : pendingCount > 0
+            ? `⌛ The contract on **${b.target}** expired mid-grind: ${pendingCount} open claim${pendingCount === 1 ? '' : 's'} never proved in time.`
+            : `⌛ The contract on **${b.target}** expired with no claim.`;
       try {
         const chan = await client.channels.fetch(b.channelId).catch(() => null);
         if (!chan || !chan.isTextBased()) continue;
@@ -636,12 +688,7 @@ async function sweepExpiredBounties(client) {
           const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
           await msg.edit({ embeds: [expired], components: [] });
         }
-        await chan
-          .send(
-            `⌛ The contract on **${b.target}** expired with no claim. ` +
-              `A new contract will be nailed to the board soon.`
-          )
-          .catch(() => {});
+        await chan.send(`${outcome} A new contract will be nailed to the board soon.`).catch(() => {});
       } catch (err) {
         console.warn('Bounty expiry sweep failed:', err.message);
       }
