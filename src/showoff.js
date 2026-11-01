@@ -7,7 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage, itemLuckPcts, dryReport, scoredMetricSet } = require('./luck');
+const { luckForPage, itemLuckScores, dryReport, scoredMetricSet } = require('./luck');
 const { snapshotToday, baselineFor } = require('./gains');
 const fs = require('fs');
 const path = require('path');
@@ -248,13 +248,14 @@ async function bossClogLuck(rsn, key, metric, kc) {
   try {
     const res = await getClogPageWithItems(rsn, page[0], page[1]);
     if (!res || res.notFound) return { clog: null, luck: null };
-    // Draft 4 strip: EVERY item on the page (obtained and
-    // missing), each scored item carrying its luck percent.
-    const pcts = itemLuckPcts(kc, metric, res.items || []);
+    // Full strip: EVERY item on the page (obtained and
+    // missing), each scored item carrying its luck percentile
+    // (the plugin's overall luck, 0-100).
+    const scores = itemLuckScores(kc, metric, res.items || []);
     const fullItems = await Promise.all((res.items || []).map(async (it) => ({
       qty: it.quantity || 0,
       has: (it.quantity || 0) > 0,
-      pct: pcts[it.id] != null ? pcts[it.id] : null,
+      score: scores[it.id] != null ? scores[it.id] : null,
       icon: await petIconB64(it.id, it.name),
     })));
     return {
@@ -345,17 +346,13 @@ async function kcPayload(activity, rsn, userId) {
   }));
   // Website card first: same numbers, share-card style, plus
   // the player's standing on this boss. The collection log
-  // block is the full Draft 4 strip with luck percents and a
-  // pet line, from the same one-fetch path as compare.
+  // block is the full strip with luck scores, from the same
+  // one-fetch path as compare. No separate pet line: the pet
+  // is an item on the page and shows in the strip.
   const primary = entry.cols[0];
   const cl = await bossClogLuck(rsn, activity, primary.metric,
     st.kc ? st.kc[primary.metric] : null);
-  let pets = null;
-  if (cl.pageItems && cl.pageItems.length) {
-    const petIds = new Set((await allPetsItems(rsn)).map((p) => p.id));
-    pets = await petsForSide(cl.pageItems, petIds);
-  }
-  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, pets));
+  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, null));
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
   return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
@@ -402,7 +399,7 @@ async function dryPayload(activity, rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'dry.png' })] };
-  const top = report.missing.slice(0, 3).map((e) => `${e.name} (${e.pct}%)`).join(', ');
+  const top = report.missing.slice(0, 3).map((e) => `${e.name} (${e.score}/100)`).join(', ');
   return {
     content: `**${entry.name}** - ${rsn}: ${kc.toLocaleString('en-US')} KC, luck: ${report.word}${top ? `. Driest: ${top}` : ''}`,
   };
@@ -1356,15 +1353,11 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
     bossClogLuck(aName, key, cols[0].metric, kcA),
     bossClogLuck(bName, key, cols[0].metric, kcB),
   ]);
-  const petIds = await petIdSet(aName, bName);
-  const [petsA, petsB] = await Promise.all([
-    petsForSide(ca.pageItems, petIds), petsForSide(cb.pageItems, petIds),
-  ]);
   const sideCols = (stats) => cols.map((c) => ({ label: c.label, kc: kcOf(stats, c.metric) }));
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric: cols[0].metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null, pets: petsA },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: petsB },
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null, pets: null },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: null },
     leader, note: parts.join(' · '),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: 'raids', catPage: 0 }) };
@@ -1411,14 +1404,10 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   const [ca, cb] = await Promise.all([
     bossClogLuck(aName, key, metric, kcA), bossClogLuck(bName, key, metric, kcB),
   ]);
-  const petIds = await petIdSet(aName, bName);
-  const [petsA, petsB] = await Promise.all([
-    petsForSide(ca.pageItems, petIds), petsForSide(cb.pageItems, petIds),
-  ]);
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck, pets: petsA },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: petsB },
+    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck, pets: null },
+    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: null },
     leader, note,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 }) };
