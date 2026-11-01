@@ -377,18 +377,30 @@ async function handleClaim(interaction, bountyId) {
     }
 
     await interaction.deferReply({ ephemeral: true });
-    const parentMsg = await interaction.channel.messages.fetch(bountyId).catch(() => null);
-    if (!parentMsg) {
-      await interaction.editReply({ content: 'Could not find the bounty post.' }).catch(() => {});
+    // Claim threads live in #contact-staff as standalone private threads,
+    // the same way ticket threads are made. A thread started from the
+    // board post makes Discord drop a thread-created system message in
+    // the board channel; a standalone thread does not.
+    const contactChannel = await interaction.client.channels
+      .fetch(config.tickets.panelChannelId)
+      .catch(() => null);
+    if (!contactChannel || !contactChannel.threads) {
+      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
       return;
     }
     const name = `Bounty Claim - ${interaction.user.displayName}`.slice(0, 100);
     let thread;
     try {
-      thread = await parentMsg.startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN, type: ChannelType.PrivateThread });
+      thread = await contactChannel.threads.create({
+        name,
+        autoArchiveDuration: CLAIM_ARCHIVE_MIN,
+        type: ChannelType.PrivateThread,
+        invitable: false,
+        reason: `Bounty claim by ${interaction.user.tag}`,
+      });
     } catch {
-      thread = await parentMsg
-        .startThread({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN })
+      thread = await contactChannel.threads
+        .create({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN })
         .catch(() => null);
     }
     if (!thread) {
