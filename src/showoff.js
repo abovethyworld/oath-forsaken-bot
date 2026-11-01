@@ -227,8 +227,11 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
 // in-bot renderer, base64 for the website card). Icons fetch in
 // parallel through the paced item-icon queue.
 async function loadClogItems(res) {
-  const obtained = (res.items || []).filter((it) => it.quantity > 0);
-  return Promise.all(obtained.slice(0, 49).map(async (it) => {
+  // EVERY item on the page, obtained and missing: missing items
+  // render as dark silhouettes, the way the game log shows them.
+  // Entries carry their item id so callers pair scores by id,
+  // never by position.
+  return Promise.all((res.items || []).slice(0, 49).map(async (it) => {
     let icon = null;
     let iconB64 = null;
     const p = await getItemIcon(it.id, it.name).catch(() => null);
@@ -239,7 +242,7 @@ async function loadClogItems(res) {
         iconB64 = raw.toString('base64');
       } catch { icon = null; }
     }
-    return { icon, qty: it.quantity, iconB64 };
+    return { id: it.id, icon, qty: it.quantity || 0, iconB64 };
   }));
 }
 
@@ -743,11 +746,10 @@ async function clogPayload(key, rsn, userId) {
       const strip = {
         obtained: res.obtained,
         total: res.total,
-        items: drawn.map((d, i) => ({
+        items: drawn.map((d) => ({
           qty: d.qty,
           has: (d.qty || 0) > 0,
-          score: scores[(res.items || [])[i]?.id] != null
-            ? scores[(res.items || [])[i].id] : null,
+          score: scores[d.id] != null ? scores[d.id] : null,
           icon: d.iconB64,
         })),
       };
@@ -765,10 +767,10 @@ async function clogPayload(key, rsn, userId) {
     page: page[1],
     obtained: res.obtained,
     total: res.total,
-    items: drawn.map((d, i) => ({
+    items: drawn.map((d) => ({
       qty: d.qty, icon: d.iconB64,
-      score: pageScores[(res.items || [])[i]?.id] != null
-        ? pageScores[(res.items || [])[i].id] : null,
+      has: (d.qty || 0) > 0,
+      score: pageScores[d.id] != null ? pageScores[d.id] : null,
     })),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
