@@ -10,6 +10,7 @@ const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
 const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton } = require('./showoff');
+const { handleWipeButton } = require('./wipe');
 const config = require('./config');
 
 function panelRoleIds() {
@@ -34,6 +35,7 @@ async function routeButton(interaction) {
   if (kind === 'bounty') return handleBountyButton(interaction);
   if (kind === 'team') return handleTeamButton(interaction);
   if (kind === 'cmp') return handleCompareButton(interaction);
+  if (kind === 'wipe') return handleWipeButton(interaction);
   if (kind === 'cmpswap') return handleCompareSwapButton(interaction);
   if (kind === 'cmpalt') return handleCompareAltButton(interaction);
   if (kind === 'donate') {
