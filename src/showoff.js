@@ -1909,12 +1909,13 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
 }
 
 // Compare menus group bosses by type, alphabetical inside each type
-// Categories sorted A to Z by label (Alex, Nov 1, 2026).
-// The catalog is the canonical metric-deduped boss list,
-// keeping only bosses the clan has KC on.
+// Category order is Alex's (Nov 1, 2026): Raids first, then
+// Bosses, Skilling bosses, Slayer bosses. The catalog is the
+// canonical metric-deduped boss list, keeping only bosses the
+// clan has KC on.
 const CMP_CATEGORIES = [
-  { id: 'solo', label: 'Bosses' },
   { id: 'raids', label: 'Raids' },
+  { id: 'solo', label: 'Bosses' },
   { id: 'skilling', label: 'Skilling bosses' },
   { id: 'slayer', label: 'Slayer bosses' },
 ];
