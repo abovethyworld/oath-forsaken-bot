@@ -111,7 +111,7 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention, lan
   if (winners > 1) lines.push(`**Winners:** First ${winners} hunters to prove it. First takes the title.`);
   const pl = proofLine(proof);
   if (pl) lines.push(pl);
-  lines.push(``, `First to return with the drop claims the title.`);
+  lines.push(``, `First back with the drop takes the title.`);
   const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle('📜 Bounty Contract Available')
@@ -364,6 +364,8 @@ async function postCommand(interaction) {
       proof,
       poolId: contract.id,
       pet: contract.pet || false,
+      blurb: contract.blurb || null,
+      winLine: contract.winLine || null,
       days,
       wiki: wikiUrl,
       image: contract.thumbnail || null,
@@ -390,7 +392,8 @@ async function postCommand(interaction) {
       '━━━━━━ ⛧ ━━━━━━',
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
       `⛧ **A new contract: ${contract.name}** ⛧`,
-      'Get it while the contract is live. First hunter back with the drop takes the title.',
+      record.blurb ||
+        `Get it while the contract is live. First ${contract.pet ? 'pet hunter' : lane === 'Skilling' ? 'skiller' : 'hunter'} back with the drop takes the title.`,
       `Reward: <@&${role.id}>`,
       `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
     ]
@@ -665,7 +668,11 @@ async function handleGrant(interaction, threadId) {
           }
           if (chan && chan.isTextBased()) {
             await chan
-              .send(`🩸 Contract complete. **${bounty.target}** falls to ${names}. A new contract will be nailed to the board soon.`)
+              .send(
+                bounty.winLine
+                  ? `🩸 ${bounty.winLine} ${names} ${winnersNow === 1 ? 'takes' : 'take'} the title. A new contract will be nailed to the board soon.`
+                  : `🩸 Contract complete. **${bounty.target}** goes to ${names}. A new contract will be nailed to the board soon.`
+              )
               .catch(() => {});
           }
         }
