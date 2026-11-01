@@ -10,8 +10,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": "Coiled around the Darkfrost, the Hueycoatl sleeps on a pile of gold. Her hoard holds a wand made for hunting dragons. First hunter back with the drop takes the title.",
-   "winLine": "The Hueycoatl is subdued and her gold is scattered."
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 2,
@@ -58,8 +58,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": "Deep in Lake Molch swims a tench of gold. First skiller back with the drop takes the title.",
-   "winLine": "The cormorant finally comes up gold."
+   "blurb": null,
+   "winLine": null
   },
   {
    "id": 6,
