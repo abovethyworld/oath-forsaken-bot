@@ -1,6 +1,9 @@
-// Bounty board: staff posts contracts, members claim with proof in a
-// private thread, staff grants or rejects. The winner holds the champion
-// title until dethroned — granting to a new winner strips the old holder.
+// Bounty board: staff posts contracts from the bounty pool (synced from
+// the bounty sheet), members claim with proof in a private thread, staff
+// grants or rejects. Two lanes run at once, PvM and Skilling, each with
+// its own title role: the first winner of a contract takes the lane
+// title, and a contract can allow several winners (the sheet's Winners
+// column) before it closes.
 const {
   SlashCommandBuilder,
   EmbedBuilder,
@@ -22,6 +25,14 @@ const CLAIM_ARCHIVE_MIN = 4320; // 3 days
 const DAYS_BY_THREAT = { Easy: 7, Medium: 14, Hard: 21, Extreme: 21 };
 // Clan member roles allowed to claim: Iron Sworn, Unbound, Friend of the Clan.
 const GUILD_MEMBER_ROLES = (config.bounty && config.bounty.memberRoleIds) || [];
+const LANE_TITLES = { PvM: 'Reaper of Chaos', Skilling: 'Artisan of Chaos' };
+
+let POOL = [];
+try {
+  POOL = require('./bounty-pool.json').contracts || [];
+} catch {
+  POOL = [];
+}
 
 function loadState() {
   try {
@@ -50,28 +61,56 @@ function bountyConfig() {
   return config.bounty || {};
 }
 
-function championRole(guild) {
+// The title role for a lane. PvM falls back to the legacy bounty role
+// config (the original champion role, renamed Reaper of Chaos).
+function laneRole(guild, lane) {
   const cfg = bountyConfig();
-  return getRoleById(guild, cfg.roleId, cfg.roleName || 'Champion of Chaos');
+  const laneCfg = (cfg.laneRoles && cfg.laneRoles[lane]) || {};
+  if (lane === 'Skilling') {
+    return getRoleById(guild, laneCfg.id, laneCfg.name || LANE_TITLES.Skilling);
+  }
+  return getRoleById(guild, laneCfg.id || cfg.roleId, laneCfg.name || LANE_TITLES.PvM);
 }
 
 function isMember(member) {
   return member.roles.cache.some((r) => GUILD_MEMBER_ROLES.includes(r.id));
 }
 
-function bountyEmbed({ target, location, threat, days, image, rewardMention }) {
+function bountyLane(bounty) {
+  return bounty.lane === 'Skilling' ? 'Skilling' : 'PvM';
+}
+
+function bountyCap(bounty) {
+  const cap = parseInt(bounty.winners, 10);
+  return Number.isFinite(cap) && cap > 1 ? cap : 1;
+}
+
+function proofLine(proof) {
+  if (!proof || !proof.type) return null;
+  const label = { drop: 'Drop', kc: 'KC', xp: 'XP', clog: 'Collection log' }[proof.type] || proof.type;
+  const amount = proof.amount ? ` x${proof.amount}` : '';
+  return `**Proof:** ${label}: ${proof.target}${amount} (fresh, after you claim)`;
+}
+
+function bountyEmbed({ target, location, threat, days, image, rewardMention, lane, winners, proof }) {
+  const lines = [
+    `Chaos demands tribute. A new contract is nailed to the board.`,
+    ``,
+    `**Target:** ${target}`,
+    `**Location:** ${location}`,
+    `**Threat Level:** ${threat}`,
+    `**Lane:** ${lane}`,
+    `**Time Limit:** ${days} day${days === 1 ? '' : 's'}`,
+    `**Reward:** ${rewardMention}`,
+  ];
+  if (winners > 1) lines.push(`**Winners:** First ${winners} hunters to prove it. First takes the title.`);
+  const pl = proofLine(proof);
+  if (pl) lines.push(pl);
+  lines.push(``, `First to return with proof claims the title. The kill must be fresh.`);
   const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle('📜 Bounty Contract Available')
-    .setDescription(clampDesc(
-      `Chaos demands tribute. A new contract is nailed to the board.\n\n` +
-        `**Target:** ${target}\n` +
-        `**Location:** ${location}\n` +
-        `**Threat Level:** ${threat}\n` +
-        `**Time Limit:** ${days} day${days === 1 ? '' : 's'}\n` +
-        `**Reward:** ${rewardMention}\n\n` +
-        `First to return with proof claims the title. The kill must be fresh.`
-    ))
+    .setDescription(clampDesc(lines.join('\n')))
     .setTimestamp();
   if (image) embed.setThumbnail(image);
   return embed;
@@ -96,17 +135,44 @@ function reviewButtons(threadId) {
   ];
 }
 
+function findContract(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return null;
+  return (
+    POOL.find((c) => c.name.toLowerCase() === q) ||
+    POOL.find((c) => c.name.toLowerCase().startsWith(q)) ||
+    POOL.find((c) => c.name.toLowerCase().includes(q)) ||
+    null
+  );
+}
+
+// "Next" for a lane: the earliest sheet row in that lane that has never
+// been posted; once the whole lane has run, the least recently posted.
+function nextContract(lane, state) {
+  const posted = state.poolPosted || {};
+  const inLane = POOL.filter((c) => (c.lane === 'Skilling' ? 'Skilling' : 'PvM') === lane);
+  return (
+    inLane.find((c) => !posted[c.name]) ||
+    inLane.sort((a, b) => (posted[a.name] || 0) - (posted[b.name] || 0))[0] ||
+    null
+  );
+}
+
+function bountyAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  const all = [
+    { name: 'Next PvM contract', value: 'next:PvM' },
+    { name: 'Next Skilling contract', value: 'next:Skilling' },
+    ...POOL.map((c) => ({ name: `${c.name} (${c.tier}, ${c.lane})`.slice(0, 100), value: c.name })),
+  ];
+  return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.toLowerCase().includes(q)).slice(0, 25);
+}
+
 async function postCommand(interaction) {
   if (!isStaff(interaction)) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
-  const target = interaction.options.getString('target', true).trim();
-  const location = interaction.options.getString('location', true).trim();
-  const threat = interaction.options.getString('threat', true);
-  const days = DAYS_BY_THREAT[threat] || 14;
-  const wiki = interaction.options.getString('wiki')?.trim();
-  const image = interaction.options.getString('image')?.trim();
   const channelId = bountyConfig().channelId;
   if (!channelId) {
     await interaction.reply({ content: 'Bounty board is not set up yet. Tell staff.', ephemeral: true }).catch(() => {});
@@ -117,19 +183,48 @@ async function postCommand(interaction) {
     await interaction.reply({ content: 'Could not find the bounty board channel.', ephemeral: true }).catch(() => {});
     return;
   }
-  const role = championRole(interaction.guild);
-  if (!role) {
-    await interaction.reply({ content: 'Champion role is not set up yet. Tell staff.', ephemeral: true }).catch(() => {});
+  const query = interaction.options.getString('contract', true).trim();
+  const daysOverride = interaction.options.getInteger('days');
+  const proofType = interaction.options.getString('proof_type');
+  const proofTarget = interaction.options.getString('proof_target')?.trim();
+  const proofAmount = interaction.options.getInteger('proof_amount');
+  if ((proofType && !proofTarget) || (!proofType && proofTarget)) {
+    await interaction
+      .reply({ content: 'Proof needs both a type and a target, or neither.', ephemeral: true })
+      .catch(() => {});
     return;
   }
+  const proof = proofType ? { type: proofType, target: proofTarget, amount: proofAmount || null } : null;
 
   await interaction.deferReply({ ephemeral: true });
 
   return mutateBounty(async () => {
     const state = loadState();
-    // Retire any currently active bounty.
+    state.poolPosted = state.poolPosted || {};
+    let contract = null;
+    if (query.startsWith('next:')) {
+      contract = nextContract(query.split(':')[1] === 'Skilling' ? 'Skilling' : 'PvM', state);
+    } else {
+      contract = findContract(query);
+    }
+    if (!contract) {
+      await interaction.editReply({ content: `No pool contract matches "${query}".` }).catch(() => {});
+      return;
+    }
+    const lane = contract.lane === 'Skilling' ? 'Skilling' : 'PvM';
+    const role = laneRole(interaction.guild, lane);
+    if (!role) {
+      await interaction
+        .editReply({ content: `The ${lane} title role (${LANE_TITLES[lane]}) is not set up yet.` })
+        .catch(() => {});
+      return;
+    }
+    const days = daysOverride || DAYS_BY_THREAT[contract.tier] || 14;
+    const winners = contract.winners > 1 ? contract.winners : 1;
+
+    // Retire the active bounty in this lane only; the other lane runs on.
     for (const [id, b] of Object.entries(state.bounties)) {
-      if (b.active) {
+      if (b.active && bountyLane(b) === lane) {
         b.active = false;
         try {
           const oldMsg = await channel.messages.fetch(id);
@@ -141,16 +236,18 @@ async function postCommand(interaction) {
       }
     }
 
-    const wikiUrl = wiki || `https://runescape.wiki/w/${encodeURIComponent(target.replace(/ /g, '_'))}`;
+    const wikiUrl = `https://oldschool.runescape.wiki/w/${encodeURIComponent(contract.name.replace(/ /g, '_'))}`;
     const embed = bountyEmbed({
-      target,
-      location,
-      threat,
+      target: contract.name,
+      location: contract.content,
+      threat: contract.tier,
       days,
-      image,
+      image: contract.thumbnail,
       rewardMention: `<@&${role.id}>`,
+      lane,
+      winners,
+      proof,
     });
-    // Stash wiki for the link button (per-bounty).
     let msg;
     try {
       msg = await channel.send({
@@ -189,20 +286,26 @@ async function postCommand(interaction) {
 
     state.bounties[msg.id] = {
       channelId: channel.id,
-      target,
-      location,
-      threat,
+      target: contract.name,
+      location: contract.content,
+      threat: contract.tier,
+      lane,
+      winners,
+      proof,
+      poolId: contract.id,
       days,
       wiki: wikiUrl,
-      image: image || null,
+      image: contract.thumbnail || null,
       active: true,
       winnerId: null,
+      winnerIds: [],
       createdAt: Date.now(),
       expiresAt: Date.now() + days * DAY_MS,
       createdBy: interaction.user.id,
     };
+    state.poolPosted[contract.name] = Date.now();
     saveState(state);
-    await interaction.editReply({ content: `Bounty posted: ${target}` }).catch(() => {});
+    await interaction.editReply({ content: `Bounty posted (${lane}): ${contract.name}` }).catch(() => {});
   });
 }
 
@@ -217,13 +320,20 @@ async function handleClaim(interaction, bountyId) {
     await interaction.reply({ content: 'Clan members only. Join the clan first.', ephemeral: true }).catch(() => {});
     return;
   }
-  // One pending claim per member per bounty.
+  // One pending claim per member per bounty, and a past winner cannot
+  // claim the same contract twice.
   const existing = Object.entries(state.claims).find(
     ([, c]) => c.bountyId === bountyId && c.claimerId === interaction.user.id && c.status === 'pending'
   );
   if (existing) {
     await interaction
       .reply({ content: 'You already have an open claim. Post your proof in your thread.', ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+  if ((bounty.winnerIds || []).includes(interaction.user.id)) {
+    await interaction
+      .reply({ content: 'You already won this contract. Let another hunter take a shot.', ephemeral: true })
       .catch(() => {});
     return;
   }
@@ -245,6 +355,12 @@ async function handleClaim(interaction, bountyId) {
     if (dup) {
       await interaction
         .reply({ content: 'You already have an open claim. Post your proof in your thread.', ephemeral: true })
+        .catch(() => {});
+      return;
+    }
+    if ((bounty.winnerIds || []).includes(interaction.user.id)) {
+      await interaction
+        .reply({ content: 'You already won this contract. Let another hunter take a shot.', ephemeral: true })
         .catch(() => {});
       return;
     }
@@ -273,10 +389,12 @@ async function handleClaim(interaction, bountyId) {
     state.claims[thread.id] = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
     saveState(state);
     try {
+      const pl = proofLine(bounty.proof);
       await thread.send({
         content:
           `<@${interaction.user.id}> would like to claim the bounty!\n` +
-          `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.`,
+          `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.` +
+          (pl ? `\n${pl.replace(/\*\*/g, '')}` : ''),
         components: reviewButtons(thread.id),
       });
     } catch {
@@ -307,58 +425,70 @@ async function handleGrant(interaction, threadId) {
       return;
     }
     const guild = interaction.guild;
-    const role = championRole(guild);
+    const lane = bountyLane(bounty);
+    const role = laneRole(guild, lane);
     if (!role) {
-      await interaction.reply({ content: 'Champion role is not set up.', ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `${lane} title role is not set up.`, ephemeral: true }).catch(() => {});
       return;
     }
     await interaction.deferReply({ ephemeral: true });
 
-    // Confirm the winner can receive the title before stripping the old one.
     const winner = await guild.members.fetch(claim.claimerId).catch(() => null);
     if (!winner) {
       await interaction.editReply({ content: 'Winner is no longer in the server.' }).catch(() => {});
       return;
     }
-    const retained = winner.roles.cache.has(role.id);
-    if (!retained) {
-      try {
-        await winner.roles.add(role);
-      } catch (err) {
-        console.error('Bounty grant failed:', err.message);
-        await interaction.editReply({ content: 'Could not grant the role. Check my permissions.' }).catch(() => {});
-        return;
+
+    bounty.winnerIds = bounty.winnerIds || (bounty.winnerId ? [bounty.winnerId] : []);
+    const isFirstWinner = bounty.winnerIds.length === 0;
+    const cap = bountyCap(bounty);
+
+    // The title changes hands on the first winner only. Later winners
+    // inside the cap count as winners but do not strip the title.
+    let retained = false;
+    if (isFirstWinner) {
+      retained = winner.roles.cache.has(role.id);
+      if (!retained) {
+        try {
+          await winner.roles.add(role);
+        } catch (err) {
+          console.error('Bounty grant failed:', err.message);
+          await interaction.editReply({ content: 'Could not grant the role. Check my permissions.' }).catch(() => {});
+          return;
+        }
       }
-    }
-    // Strip the previous holder(s). The title belongs to one champion.
-    const prevHolders = [...role.members.values()].filter((m) => m.id !== claim.claimerId);
-    for (const m of prevHolders) {
-      await m.roles.remove(role).catch((err) => console.warn('Bounty strip failed:', err.message));
+      const prevHolders = [...role.members.values()].filter((m) => m.id !== claim.claimerId);
+      for (const m of prevHolders) {
+        await m.roles.remove(role).catch((err) => console.warn('Bounty strip failed:', err.message));
+      }
     }
 
     claim.status = 'granted';
-    for (const c of Object.values(state.claims)) {
-      if (c !== claim && c.bountyId === claim.bountyId && c.status === 'pending') c.status = 'superseded';
-    }
-    if (bounty) {
+    claim.titleHolder = isFirstWinner;
+    bounty.winnerIds.push(claim.claimerId);
+    if (!bounty.winnerId) bounty.winnerId = claim.claimerId;
+    const winnersNow = bounty.winnerIds.length;
+    const closesContract = winnersNow >= cap;
+
+    if (closesContract) {
       bounty.active = false;
-      bounty.winnerId = claim.claimerId;
+      for (const c of Object.values(state.claims)) {
+        if (c !== claim && c.bountyId === claim.bountyId && c.status === 'pending') c.status = 'superseded';
+      }
       try {
         const chan = await guild.channels.fetch(bounty.channelId).catch(() => null);
         const msg = chan ? await chan.messages.fetch(claim.bountyId).catch(() => null) : null;
         if (msg && msg.embeds[0]) {
+          const names = bounty.winnerIds.map((id) => `<@${id}>`).join(', ');
           const done = EmbedBuilder.from(msg.embeds[0]).setFooter({
-            text: `Claimed by ${winner.displayName}`,
+            text: `Claimed by ${winner.displayName}${winnersNow > 1 ? ` and ${winnersNow - 1} more` : ''}`,
           });
           await msg.edit({ embeds: [done], components: [] });
-        }
-        if (chan && chan.isTextBased()) {
-          await chan
-            .send(
-              `🩸 Contract claimed. **${bounty.target}** falls to <@${winner.id}>. ` +
-                `A new contract will be nailed to the board soon.`
-            )
-            .catch(() => {});
+          if (chan && chan.isTextBased()) {
+            await chan
+              .send(`🩸 Contract claimed. **${bounty.target}** falls to ${names}. A new contract will be nailed to the board soon.`)
+              .catch(() => {});
+          }
         }
       } catch (err) {
         console.warn('Bounty close edit failed:', err.message);
@@ -368,15 +498,22 @@ async function handleGrant(interaction, threadId) {
 
     const thread = await guild.channels.fetch(threadId).catch(() => null);
     if (thread && thread.isThread()) {
-      await thread
-        .send(
-          retained
-            ? `👑 Bounty Confirmed! <@${winner.id}> retains the title ${role.name}.`
-            : `👑 Bounty Confirmed! <@${winner.id}> has been granted the title ${role.name}.`
-        )
-        .catch(() => {});
-      await thread.setLocked(true).catch(() => {});
-      await thread.setArchived(true).catch(() => {});
+      let note;
+      if (isFirstWinner) {
+        note = retained
+          ? `👑 Bounty Confirmed! <@${winner.id}> retains the title ${role.name}.`
+          : `👑 Bounty Confirmed! <@${winner.id}> has been granted the title ${role.name}.`;
+        if (!closesContract) note += ` The contract stays open: ${cap - winnersNow} winner slot${cap - winnersNow === 1 ? '' : 's'} left.`;
+      } else {
+        note = closesContract
+          ? `👑 Bounty Confirmed! <@${winner.id}> takes the final winner slot on this contract.`
+          : `👑 Bounty Confirmed! <@${winner.id}> is a winner on this contract. ${cap - winnersNow} slot${cap - winnersNow === 1 ? '' : 's'} left. The title stays with the first winner.`;
+      }
+      await thread.send(note).catch(() => {});
+      if (closesContract) {
+        await thread.setLocked(true).catch(() => {});
+        await thread.setArchived(true).catch(() => {});
+      }
     }
     await interaction.editReply({ content: `Granted to ${winner.displayName}.` }).catch(() => {});
   });
@@ -473,23 +610,30 @@ const commands = [
       .addSubcommand((s) =>
         s
           .setName('post')
-          .setDescription('Post a new bounty contract (staff)')
-          .addStringOption((o) => o.setName('target').setDescription('What to hunt').setRequired(true).setMaxLength(100))
-          .addStringOption((o) => o.setName('location').setDescription('Where').setRequired(true).setMaxLength(100))
+          .setDescription('Post a contract from the bounty pool (staff)')
           .addStringOption((o) =>
             o
-              .setName('threat')
-              .setDescription('Threat level')
+              .setName('contract')
+              .setDescription('Pool contract name, or pick a Next option')
               .setRequired(true)
+              .setAutocomplete(true)
+          )
+          .addIntegerOption((o) =>
+            o.setName('days').setDescription('Day limit override (default comes from the tier)').setMinValue(1).setMaxValue(90)
+          )
+          .addStringOption((o) =>
+            o
+              .setName('proof_type')
+              .setDescription('What proves the bounty (optional)')
               .addChoices(
-                { name: 'Easy', value: 'Easy' },
-                { name: 'Medium', value: 'Medium' },
-                { name: 'Hard', value: 'Hard' },
-                { name: 'Extreme', value: 'Extreme' }
+                { name: 'Drop', value: 'drop' },
+                { name: 'KC', value: 'kc' },
+                { name: 'XP', value: 'xp' },
+                { name: 'Collection log', value: 'clog' }
               )
           )
-          .addStringOption((o) => o.setName('wiki').setDescription('Wiki URL (defaults to OSRS wiki)').setRequired(false))
-          .addStringOption((o) => o.setName('image').setDescription('Thumbnail image URL').setRequired(false))
+          .addStringOption((o) => o.setName('proof_target').setDescription('Item, boss, or skill the proof is about'))
+          .addIntegerOption((o) => o.setName('proof_amount').setDescription('How many (KC or XP targets)').setMinValue(1))
       ),
     run: async (interaction) => {
       if (interaction.options.getSubcommand() === 'post') return postCommand(interaction);
@@ -497,4 +641,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleBountyButton, sweepExpiredBounties };
+module.exports = { commands, handleBountyButton, sweepExpiredBounties, bountyAutocompleteChoices };
