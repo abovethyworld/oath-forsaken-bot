@@ -22,8 +22,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Obor waits in his pit below Edgeville, a giant among giants, swinging a club the size of a tree trunk.",
+   "winLine": "Obor is down, and his club changes hands."
   },
   {
    "id": 3,
@@ -34,8 +34,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Bryophyta grows in the dark of the Varrock Sewers, a giant of moss and root.",
+   "winLine": "Bryophyta is uprooted, and her essence is taken."
   },
   {
    "id": 4,
