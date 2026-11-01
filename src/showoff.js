@@ -7,7 +7,14 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage, itemLuckScores, dryReport, scoredMetricSet } = require('./luck');
+const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor } = require('./luck');
+
+// A player's full luck counter set: WOM boss/activity
+// counts plus any plugin-synced log-header counters.
+const countersFor = (stats, rsn) => ({
+  ...(stats && stats.kc ? stats.kc : {}),
+  ...pluginCountersFor(rsn),
+});
 const { snapshotToday, baselineFor } = require('./gains');
 const fs = require('fs');
 const path = require('path');
@@ -241,8 +248,8 @@ async function loadClogItems(res) {
 // The compare boss card's per-player clog strip + luck line. One
 // RuneProfile page fetch feeds both: the strip draws obtained items,
 // the luck engine scores the full page (obtained and missing)
-// against the player's KC for this boss's metric. Never throws.
-async function bossClogLuck(rsn, key, metric, kc) {
+// against the player's counters. Never throws.
+async function bossClogLuck(rsn, key, counters) {
   const page = CLOG_PAGES[key] || clogPageForActivity(key);
   if (!page) return { clog: null, luck: null };
   try {
@@ -251,7 +258,7 @@ async function bossClogLuck(rsn, key, metric, kc) {
     // Full strip: EVERY item on the page (obtained and
     // missing), each scored item carrying its luck percentile
     // (the plugin's overall luck, 0-100).
-    const scores = itemLuckScores(kc, metric, res.items || []);
+    const scores = itemLuckScores(counters, res.items || []);
     const fullItems = await Promise.all((res.items || []).map(async (it) => ({
       qty: it.quantity || 0,
       has: (it.quantity || 0) > 0,
@@ -264,7 +271,7 @@ async function bossClogLuck(rsn, key, metric, kc) {
         total: res.total,
         items: fullItems,
       },
-      luck: luckForPage(kc, metric,
+      luck: luckForPage(counters,
         (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }))),
       pageItems: res.items || [],
     };
@@ -349,9 +356,7 @@ async function kcPayload(activity, rsn, userId) {
   // block is the full strip with luck scores, from the same
   // one-fetch path as compare. No separate pet line: the pet
   // is an item on the page and shows in the strip.
-  const primary = entry.cols[0];
-  const cl = await bossClogLuck(rsn, activity, primary.metric,
-    st.kc ? st.kc[primary.metric] : null);
+  const cl = await bossClogLuck(rsn, activity, countersFor(st, rsn));
   const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, null));
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
   const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
@@ -360,11 +365,11 @@ async function kcPayload(activity, rsn, userId) {
 
 // !dry <boss> [name]: one player's drop luck on one boss, from
 // the same engine that scores the compare strips. Raids and
-// multi-source drops are not scored and say so.
+// the wilderness boss pairs are not scored and say so.
 async function dryPayload(activity, rsn, userId) {
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
-    const scored = scoredMetricSet();
+    const scored = scoredCounters();
     const keys = Object.keys(KC_KEYS).filter((k) => {
       const e = KC_ACTIVITIES[k];
       return e && e.cols.length === 1 && scored.has(e.cols[0].metric);
@@ -387,9 +392,9 @@ async function dryPayload(activity, rsn, userId) {
   if (!page) return { content: `${entry.name} has no collection log page to score.` };
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res || res.notFound) return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score.` };
-  const report = dryReport(kc, metric,
+  const report = dryReport(countersFor(st, rsn),
     (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
-  if (!report) return { content: `No luck scoring for ${entry.name} yet. Raids and multi-source drops are not scored.` };
+  if (!report) return { content: `No luck scoring for ${entry.name}. Raids and the wilderness boss pairs are not scored.` };
   const withIcons = async (list) => Promise.all(list.map(async (e) => ({
     ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
   })));
@@ -733,21 +738,38 @@ async function clogPayload(key, rsn, userId) {
   if (kcEnt && kcEnt.cols.length) {
     const st = await getStats(rsn).catch(() => null);
     if (st && !st.notFound) {
+      const counters = countersFor(st, rsn);
+      const scores = itemLuckScores(counters, res.items || []);
       const strip = {
         obtained: res.obtained,
         total: res.total,
-        items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+        items: drawn.map((d, i) => ({
+          qty: d.qty,
+          has: (d.qty || 0) > 0,
+          score: scores[(res.items || [])[i]?.id] != null
+            ? scores[(res.items || [])[i].id] : null,
+          icon: d.iconB64,
+        })),
       };
-      const combined = await fetchCard('/kc', kcCardBody(rsn, kcEnt, st, strip));
+      const luck = luckForPage(counters,
+        (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
+      const combined = await fetchCard('/kc', kcCardBody(rsn, kcEnt, st, strip, luck, null));
       if (combined) return { files: [new AttachmentBuilder(combined, { name: 'clog.png' })] };
     }
   }
+  const st2 = await getStats(rsn).catch(() => null);
+  const pageScores = st2 && !st2.notFound
+    ? itemLuckScores(countersFor(st2, rsn), res.items || []) : {};
   const card = await fetchCard('/clog-page', {
     rsn,
     page: page[1],
     obtained: res.obtained,
     total: res.total,
-    items: drawn.map((d) => ({ qty: d.qty, icon: d.iconB64 })),
+    items: drawn.map((d, i) => ({
+      qty: d.qty, icon: d.iconB64,
+      score: pageScores[(res.items || [])[i]?.id] != null
+        ? pageScores[(res.items || [])[i].id] : null,
+    })),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
   const buf = renderClogCard({
@@ -1215,10 +1237,9 @@ async function skillDiffSections(aName, bName, skillKey, kcMapA, kcMapB) {
       let luckLine = null;
       if (metric) {
         const parts = [];
-        const kcOf = (m, map) => (map && typeof map[metric] === 'number' ? map[metric] : null);
         const pageItems = (res) => (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 }));
-        const la = okA ? luckForPage(kcOf(metric, kcMapA), metric, pageItems(ra)) : null;
-        const lb = okB ? luckForPage(kcOf(metric, kcMapB), metric, pageItems(rb)) : null;
+        const la = okA ? luckForPage({ ...(kcMapA || {}), ...pluginCountersFor(aName) }, pageItems(ra)) : null;
+        const lb = okB ? luckForPage({ ...(kcMapB || {}), ...pluginCountersFor(bName) }, pageItems(rb)) : null;
         if (la) parts.push(`${aName} ${la.word}`);
         if (lb) parts.push(`${bName} ${lb.word}`);
         if (parts.length) luckLine = `Luck: ${parts.join(' · ')}`;
@@ -1350,8 +1371,8 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
   }
   const leader = kcA != null && kcB != null && kcA !== kcB ? (kcA > kcB ? 'a' : 'b') : null;
   const [ca, cb] = await Promise.all([
-    bossClogLuck(aName, key, cols[0].metric, kcA),
-    bossClogLuck(bName, key, cols[0].metric, kcB),
+    bossClogLuck(aName, key, countersFor(sa, aName)),
+    bossClogLuck(bName, key, countersFor(sb, bName)),
   ]);
   const sideCols = (stats) => cols.map((c) => ({ label: c.label, kc: kcOf(stats, c.metric) }));
   const card = await fetchCard('/compare-boss', {
@@ -1402,7 +1423,7 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
     ? `${leader === 'a' ? aName : bName} leads by ${fmt(Math.abs(kcA - kcB))}`
     : kcA != null && kcA === kcB ? 'Dead level.' : '';
   const [ca, cb] = await Promise.all([
-    bossClogLuck(aName, key, metric, kcA), bossClogLuck(bName, key, metric, kcB),
+    bossClogLuck(aName, key, countersFor(sa, aName)), bossClogLuck(bName, key, countersFor(sb, bName)),
   ]);
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric,
@@ -1668,13 +1689,33 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     }
     const all = [...byId.values()].sort((x, y) => String(x.name).localeCompare(String(y.name)));
     const shown = all.slice(0, 16);
+    // Luck percentiles per player for this page's items, when
+    // their counters are known (best effort: stats or plugin
+    // counters missing just means no chips on the card).
+    let aScores = {};
+    let bScores = {};
+    const tab0 = gap.tab || gbp.tab;
+    if (tab0) {
+      const [fa, fb, sta, stb] = await Promise.all([
+        getClogPageWithItems(aName, tab0, pageTitle).catch(() => null),
+        getClogPageWithItems(bName, tab0, pageTitle).catch(() => null),
+        getStats(aName).catch(() => null),
+        getStats(bName).catch(() => null),
+      ]);
+      if (fa && sta && !sta.notFound) aScores = itemLuckScores(countersFor(sta, aName), fa.items || []);
+      if (fb && stb && !stb.notFound) bScores = itemLuckScores(countersFor(stb, bName), fb.items || []);
+    }
     const items = await Promise.all(shown.map(async (it) => {
       let iconB64 = null;
       const p = await getItemIcon(it.id, it.name).catch(() => null);
       if (p) {
         try { iconB64 = fs.readFileSync(p).toString('base64'); } catch { iconB64 = null; }
       }
-      return { ...it, iconB64 };
+      return {
+        ...it, iconB64,
+        aScore: aScores[it.id] != null ? aScores[it.id] : null,
+        bScore: bScores[it.id] != null ? bScores[it.id] : null,
+      };
     }));
     // Pets living on this page attach to the page card (Alex,
     // Oct 31, 2026): covers the activity pets with no boss or
