@@ -32,12 +32,32 @@ const DAYS_BY_THREAT = { Easy: 7, Medium: 14, Hard: 21, Extreme: 21 };
 const GUILD_MEMBER_ROLES = (config.bounty && config.bounty.memberRoleIds) || [];
 const LANE_TITLES = { PvM: 'Reaper of Chaos', Skilling: 'Artisan of Chaos' };
 
+// The pool lives in the data dir so staff edits land without a rebuild:
+// the sync drops a fresh bounty-pool.json there and the next read picks it
+// up. The bundled copy is only a first-boot fallback.
+const POOL_FILE = path.join(__dirname, '..', 'data', 'bounty-pool.json');
 let POOL = [];
-try {
-  POOL = require('./bounty-pool.json').contracts || [];
-} catch {
-  POOL = [];
+let poolMtime = 0;
+function loadPool() {
+  try {
+    const st = fs.statSync(POOL_FILE);
+    if (st.mtimeMs !== poolMtime) {
+      POOL = JSON.parse(fs.readFileSync(POOL_FILE, 'utf8')).contracts || [];
+      poolMtime = st.mtimeMs;
+      console.log(`Bounty pool loaded from data dir: ${POOL.length} contracts`);
+    }
+  } catch {
+    if (!POOL.length) {
+      try {
+        POOL = require('./bounty-pool.json').contracts || [];
+      } catch {
+        POOL = [];
+      }
+    }
+  }
+  return POOL;
 }
+loadPool();
 
 function loadState() {
   try {
@@ -248,10 +268,11 @@ function reviewButtons(threadId) {
 function findContract(query) {
   const q = String(query || '').trim().toLowerCase();
   if (!q) return null;
+  const pool = loadPool();
   return (
-    POOL.find((c) => c.name.toLowerCase() === q) ||
-    POOL.find((c) => c.name.toLowerCase().startsWith(q)) ||
-    POOL.find((c) => c.name.toLowerCase().includes(q)) ||
+    pool.find((c) => c.name.toLowerCase() === q) ||
+    pool.find((c) => c.name.toLowerCase().startsWith(q)) ||
+    pool.find((c) => c.name.toLowerCase().includes(q)) ||
     null
   );
 }
@@ -260,7 +281,7 @@ function findContract(query) {
 // been posted; once the whole lane has run, the least recently posted.
 function nextContract(lane, state) {
   const posted = state.poolPosted || {};
-  const inLane = POOL.filter((c) => (c.lane === 'Skilling' ? 'Skilling' : 'PvM') === lane);
+  const inLane = loadPool().filter((c) => (c.lane === 'Skilling' ? 'Skilling' : 'PvM') === lane);
   return (
     inLane.find((c) => !posted[c.name]) ||
     inLane.sort((a, b) => (posted[a.name] || 0) - (posted[b.name] || 0))[0] ||
@@ -273,7 +294,7 @@ function bountyAutocompleteChoices(focused) {
   const all = [
     { name: 'Next PvM contract', value: 'next:PvM' },
     { name: 'Next Skilling contract', value: 'next:Skilling' },
-    ...POOL.map((c) => ({ name: `${c.name} (${c.tier}, ${c.lane})`.slice(0, 100), value: c.name })),
+    ...loadPool().map((c) => ({ name: `${c.name} (${c.tier}, ${c.lane})`.slice(0, 100), value: c.name })),
   ];
   return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.toLowerCase().includes(q)).slice(0, 25);
 }
