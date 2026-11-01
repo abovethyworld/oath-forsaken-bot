@@ -16,6 +16,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
+const { takeSnapshot, snapshotLine, verifyProof, resolveRsn } = require('./bounty-verify');
 const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, getRoleById, clampDesc, DAY_MS } = require('./utils');
 
@@ -119,6 +120,10 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention, lan
 function reviewButtons(threadId) {
   return [
     new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`bounty:done:${threadId}`)
+        .setLabel('Done - Check My Proof')
+        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`bounty:grant:${threadId}`)
         .setLabel('Grant Winnings')
@@ -386,15 +391,28 @@ async function handleClaim(interaction, bountyId) {
     }
     await thread.members.add(interaction.user.id).catch(() => {});
 
-    state.claims[thread.id] = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
+    const claim = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
+    state.claims[thread.id] = claim;
     saveState(state);
+    // Snapshot the claimant's numbers now; proof is measured from the
+    // claim forward. A failed snapshot never blocks the claim.
+    if (bounty.proof) {
+      const snapshot = await takeSnapshot(resolveRsn(interaction.user.id), bounty.proof).catch(() => null);
+      if (snapshot) {
+        claim.snapshot = snapshot;
+        saveState(state);
+      }
+    }
     try {
       const pl = proofLine(bounty.proof);
+      const sl = bounty.proof ? snapshotLine(claim.snapshot, bounty.proof) : null;
       await thread.send({
         content:
           `<@${interaction.user.id}> would like to claim the bounty!\n` +
           `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.` +
-          (pl ? `\n${pl.replace(/\*\*/g, '')}` : ''),
+          (pl ? `\n${pl.replace(/\*\*/g, '')}` : '') +
+          (sl ? `\n${sl}` : '') +
+          (bounty.proof ? `\nWhen you have it, press Done and the bot checks for you. Staff make the final call.` : ''),
         components: reviewButtons(thread.id),
       });
     } catch {
@@ -519,6 +537,45 @@ async function handleGrant(interaction, threadId) {
   });
 }
 
+// The Done button: run the proof checker and post the verdict into the
+// thread as evidence. Staff still grant or reject.
+async function handleDone(interaction, threadId) {
+  const state = loadState();
+  const claim = state.claims[threadId];
+  if (!claim || claim.status !== 'pending') {
+    await interaction.reply({ content: 'Nothing to check here.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (interaction.user.id !== claim.claimerId && !isStaff(interaction)) {
+    await interaction.reply({ content: 'Only the claimant or staff can run the check.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const bounty = state.bounties[claim.bountyId];
+  if (!bounty || !bounty.proof) {
+    await interaction
+      .reply({ content: 'This contract has no proof target. Post a screenshot and staff will judge it.', ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+  await interaction.deferReply();
+  const rsn = (claim.snapshot && claim.snapshot.rsn) || resolveRsn(claim.claimerId);
+  const result = await verifyProof({
+    rsn,
+    proof: bounty.proof,
+    snapshot: claim.snapshot || null,
+    claimedAt: claim.createdAt,
+  }).catch((err) => ({ status: 'unknown', lines: [`Checker failed: ${err.message}`] }));
+  const header =
+    result.status === 'proven'
+      ? '✅ **Proof check: proven.**'
+      : result.status === 'not'
+        ? '❌ **Proof check: not yet.**'
+        : '⚠️ **Proof check: could not confirm.**';
+  await interaction
+    .editReply({ content: `${header}\n${result.lines.join('\n')}\nStaff make the final call.` })
+    .catch(() => {});
+}
+
 async function handleReject(interaction, threadId) {
   if (!isStaff(interaction)) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
@@ -597,6 +654,7 @@ async function handleBountyButton(interaction) {
   // customId: 'bounty:claim:<msgId>' | 'bounty:grant:<threadId>' | 'bounty:reject:<threadId>' | 'bounty:lock:<threadId>'
   const [, action, id] = interaction.customId.split(':');
   if (action === 'claim') return handleClaim(interaction, id);
+  if (action === 'done') return handleDone(interaction, id);
   if (action === 'grant') return handleGrant(interaction, id);
   if (action === 'reject') return handleReject(interaction, id);
   if (action === 'lock') return handleLock(interaction, id);

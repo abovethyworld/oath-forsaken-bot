@@ -882,10 +882,12 @@
     ],
     "laneRoles": {
       "PvM": {
-        "name": "Reaper of Chaos"
+        "name": "Reaper of Chaos",
+        "id": "1560855011163115586"
       },
       "Skilling": {
-        "name": "Artisan of Chaos"
+        "name": "Artisan of Chaos",
+        "id": "1566335159697932480"
       }
     }
   },
