@@ -1909,13 +1909,13 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
 }
 
 // Compare menus group bosses by type, alphabetical inside each type
-// (Alex's layout, Oct 31, 2026): Raids, Slayer bosses, Solo bosses,
+// (Alex's layout, Oct 31, 2026): Raids, Slayer bosses, Bosses,
 // Skilling bosses. The catalog is the canonical metric-deduped boss
 // list, keeping only bosses the clan has KC on.
 const CMP_CATEGORIES = [
   { id: 'raids', label: 'Raids' },
   { id: 'slayer', label: 'Slayer bosses' },
-  { id: 'solo', label: 'Solo bosses' },
+  { id: 'solo', label: 'Bosses' },
   { id: 'skilling', label: 'Skilling bosses' },
 ];
 const CMP_RAID_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm', 'tob', 'tob_hard', 'fractured_archive', 'tfa']);
@@ -2112,7 +2112,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
   // picking a boss from its menus drills into that boss.
   const bossBtn = new ButtonBuilder()
     .setCustomId(`cmp:bossbase:${bossKey || '-'}:${enc}`)
-    .setLabel('Boss')
+    .setLabel('PvM')
     .setStyle(view === 'bossbase' ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(view === 'bossbase');
   const rows = [new ActionRowBuilder().addComponents(
