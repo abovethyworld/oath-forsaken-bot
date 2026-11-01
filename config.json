@@ -152,6 +152,12 @@
           "emoji": "\ud83c\udfac",
           "roleId": "1558468788897452174",
           "style": "Danger"
+        },
+        {
+          "label": "Bounties",
+          "emoji": "\ud83d\udcdc",
+          "roleId": "1566342297082269787",
+          "style": "Danger"
         }
       ]
     },
@@ -889,7 +895,8 @@
         "name": "Artisan of Chaos",
         "id": "1566335159697932480"
       }
-    }
+    },
+    "notifyRoleId": "1566342297082269787"
   },
   "roles": {
     "oathForsakersId": "1559575596407857182"

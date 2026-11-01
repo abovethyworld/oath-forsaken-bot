@@ -256,6 +256,12 @@ async function postCommand(interaction) {
     let msg;
     try {
       msg = await channel.send({
+        ...(bountyConfig().notifyRoleId
+          ? {
+              content: `<@&${bountyConfig().notifyRoleId}>`,
+              allowedMentions: { roles: [bountyConfig().notifyRoleId] },
+            }
+          : {}),
         embeds: [embed],
         components: [
           new ActionRowBuilder().addComponents(
