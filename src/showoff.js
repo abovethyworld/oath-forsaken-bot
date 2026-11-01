@@ -1909,14 +1909,14 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
 }
 
 // Compare menus group bosses by type, alphabetical inside each type
-// (Alex's layout, Oct 31, 2026): Raids, Slayer bosses, Bosses,
-// Skilling bosses. The catalog is the canonical metric-deduped boss
-// list, keeping only bosses the clan has KC on.
+// Categories sorted A to Z by label (Alex, Nov 1, 2026).
+// The catalog is the canonical metric-deduped boss list,
+// keeping only bosses the clan has KC on.
 const CMP_CATEGORIES = [
-  { id: 'raids', label: 'Raids' },
-  { id: 'slayer', label: 'Slayer bosses' },
   { id: 'solo', label: 'Bosses' },
+  { id: 'raids', label: 'Raids' },
   { id: 'skilling', label: 'Skilling bosses' },
+  { id: 'slayer', label: 'Slayer bosses' },
 ];
 const CMP_RAID_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm', 'tob', 'tob_hard', 'fractured_archive', 'tfa']);
 const CMP_SLAYER_KEYS = new Set(['sire', 'hydra', 'cerberus', 'kraken', 'thermy', 'grotesque_guardians']);
