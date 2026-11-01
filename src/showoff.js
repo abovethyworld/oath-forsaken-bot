@@ -2091,6 +2091,23 @@ async function clogPickerData(a, b) {
   for (const list of byTab.values()) {
     list.sort((x, y) => x.localeCompare(y));
   }
+  // The game's Clues list is not A to Z (Alex, Nov 1, 2026):
+  // tiers run Beginner to Master, then the (Rare) pages, then
+  // the shared pages. Match that order in the menu.
+  const clueOrder = [
+    'Beginner Treasure Trails', 'Easy Treasure Trails',
+    'Medium Treasure Trails', 'Hard Treasure Trails',
+    'Elite Treasure Trails', 'Master Treasure Trails',
+    'Hard Treasure Trails (Rare)', 'Elite Treasure Trails (Rare)',
+    'Master Treasure Trails (Rare)', 'Shared Treasure Trail Rewards',
+    'Scroll Cases',
+  ];
+  byTab.get('clues').sort((x, y) => {
+    const ix = clueOrder.indexOf(x);
+    const iy = clueOrder.indexOf(y);
+    return (ix === -1 ? 99 : ix) - (iy === -1 ? 99 : iy)
+      || x.localeCompare(y);
+  });
   return byTab;
 }
 
