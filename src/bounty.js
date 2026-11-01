@@ -167,6 +167,9 @@ async function fetchPoster(bounty, hunters, statusText) {
         target: bounty.target,
         location: bounty.location,
         tier: bounty.threat,
+        postedText: bounty.createdAt
+          ? new Date(bounty.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+          : null,
         lane,
         rewardTitle: LANE_TITLES[lane],
         daysLeft,
