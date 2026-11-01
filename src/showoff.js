@@ -1357,9 +1357,16 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
 // per variant as the note, rank by combined total, and the raid's
 // one collection log strip. Raids carry no luck score.
 async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, ownerId) {
-  const raidDef = CMP_RAID_COMBINED.find((r) => r.key === key);
+  const raidDef = combinedDef(key);
   const bossName = raidDef ? raidDef.name : entry.name;
   const cols = entry.cols.map((c) => ({ label: raidColLabel(c), metric: c.metric }));
+  // Paired bosses list the variant column first; put the base
+  // boss first on the card.
+  const baseMetric = CMP_COMBINED_BASE_METRIC[key];
+  if (baseMetric) {
+    cols.sort((x, y) => (x.metric === baseMetric ? 0 : 1)
+      - (y.metric === baseMetric ? 0 : 1));
+  }
   const kcOf = (stats, m) => (stats && stats.kc && typeof stats.kc[m] === 'number' ? stats.kc[m] : null);
   const totalOf = (stats) => {
     let sum = 0;
@@ -1408,7 +1415,7 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
     b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: null },
     leader, note: parts.join(' · '),
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: 'raids', catPage: 0 }) };
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: raidDef && raidDef.cat ? raidDef.cat : 'raids', catPage: 0 }) };
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${parts.length ? ` (${parts.join(' · ')})` : ''}` };
 }
 
@@ -1433,9 +1440,10 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (sa.notFound) return { content: `Could not find the RuneScape name **${aName}**.` };
   if (sb.notFound) return { content: `Could not find the RuneScape name **${bName}**.` };
-  // Combined raid entries from the Raids menu: one card over every
+  // Combined entries (raids from the Raids menu, plus the
+  // folded Gauntlet and wilderness pairs): one card over every
   // variant column instead of a separate card per variant.
-  if ((key === 'toa' || key === 'cox' || key === 'tob') && entry.cols.length > 1) {
+  if (combinedDef(key) && entry.cols.length > 1) {
     return compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, ownerId ?? userId);
   }
   const rankOf = (rsn) => {
@@ -1861,6 +1869,27 @@ const CMP_RAID_COMBINED = [
 const CMP_RAID_MEMBER_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm',
   'tob', 'tob_hard', 'fractured_archive', 'tfa']);
 
+// Non-raid bosses folded into one picker entry the same way
+// (Alex, Nov 1, 2026): the Gauntlet pair and the wilderness
+// pairs. One entry opens a combined card over both columns
+// instead of listing the halves separately (or, for ToA's
+// alias keys, leaking a second entry into Solo).
+const CMP_COMBINED_EXTRA = [
+  { key: 'gauntlet', name: 'The Gauntlet', cat: 'solo' },
+  { key: 'callisto', name: 'Callisto and Artio', cat: 'solo' },
+  { key: 'venenatis', name: 'Venenatis and Spindel', cat: 'solo' },
+  { key: 'vetion', name: "Vet'ion and Calvar'ion", cat: 'solo' },
+];
+const CMP_COMBINED_EXTRA_KEYS = new Set(['gauntlet', 'cg', 'callisto',
+  'venenatis', 'vetion']);
+const CMP_COMBINED_BASE_METRIC = { callisto: 'callisto',
+  venenatis: 'venenatis', vetion: 'vetion' };
+
+function combinedDef(key) {
+  return CMP_RAID_COMBINED.find((r) => r.key === key)
+    || CMP_COMBINED_EXTRA.find((r) => r.key === key) || null;
+}
+
 function raidColLabel(col) {
   if (col.label) return col.label;
   if (col.metric.endsWith('_expert')) return 'Expert';
@@ -1884,6 +1913,7 @@ function bossCatalog() {
   const byMetric = new Map();
   for (const key of Object.keys(KC_KEYS)) {
     if (CMP_RAID_MEMBER_KEYS.has(key)) continue; // raids built below
+    if (CMP_COMBINED_EXTRA_KEYS.has(key)) continue; // folded below
     const entry = kcEntry(key);
     if (!entry || !entry.cols || !entry.cols.length) continue;
     const variantKey = key === 'cg' || /(_expert|_cm|_hard)$/.test(key);
@@ -1891,6 +1921,10 @@ function bossCatalog() {
       ? entry.cols[entry.cols.length - 1] : entry.cols[0];
     if (byMetric.has(col.metric)) continue;
     if (NON_KC_SCORES.has(col.metric)) continue;
+    // Raid alias keys (tombs, tombs_of_amascut) resolve to a
+    // raid metric: the raid's combined entry already covers
+    // them, so they must not leak into Solo as a second entry.
+    if (RAID_METRICS.includes(col.metric)) continue;
     let total = 0;
     try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
     if (total > 0) byMetric.set(col.metric, { key, name: entry.name, total });
@@ -1909,6 +1943,15 @@ function bossCatalog() {
       try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
     }
     byCat.raids.push({ key: r.key, name: r.name, total });
+  }
+  for (const r of CMP_COMBINED_EXTRA) {
+    const entry = kcEntry(r.key);
+    if (!entry || !entry.cols || !entry.cols.length) continue;
+    let total = 0;
+    for (const col of entry.cols) {
+      try { for (const row of kcStandings(col.metric)) total += row.kc; } catch { /* cache only */ }
+    }
+    byCat[r.cat].push({ key: r.key, name: r.name, total });
   }
   for (const list of Object.values(byCat)) {
     list.sort((x, y) => String(x.name).localeCompare(String(y.name)));
