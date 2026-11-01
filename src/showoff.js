@@ -1756,9 +1756,13 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     // counters missing just means no chips on the card).
     let aScores = {};
     let bScores = {};
+    let fa = null;
+    let fb = null;
+    let sta = null;
+    let stb = null;
     const tab0 = gap.tab || gbp.tab;
     if (tab0) {
-      const [fa, fb, sta, stb] = await Promise.all([
+      [fa, fb, sta, stb] = await Promise.all([
         getClogPageWithItems(aName, tab0, pageTitle).catch(() => null),
         getClogPageWithItems(bName, tab0, pageTitle).catch(() => null),
         getStats(aName).catch(() => null),
@@ -1784,7 +1788,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     // skill card of their own (Bloodhound, Pet Penance Queen,
     // Lil' Creator, Chompy chick) and boss pets alike.
     let pagePets = null;
-    const pageTab = gap.tab || gbp.tab;
+    const pageTab = tab0;
     if (pageTab) {
       const full = await getClogPageWithItems(aName, pageTab, pageTitle).catch(() => null);
       if (full && Array.isArray(full.items)) {
@@ -1802,12 +1806,69 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
         }
       }
     }
+    // Game-style grids (Alex, Nov 1, 2026): the whole page
+    // for each player, obtained in colour and missing dark,
+    // the way the in-game log shows it. Built from the full
+    // page fetches above; when those fail the card service
+    // falls back to the item rows.
+    let grids = null;
+    if (fa && fb && Array.isArray(fa.items) && Array.isArray(fb.items)) {
+      const gridFor = async (full, scores) => Promise.all(
+        (full.items || []).map(async (it) => {
+          let icon = null;
+          const p = await getItemIcon(it.id, it.name).catch(() => null);
+          if (p) {
+            try { icon = fs.readFileSync(p).toString('base64'); } catch { icon = null; }
+          }
+          return {
+            icon,
+            qty: it.quantity || 0,
+            has: (it.quantity || 0) > 0,
+            score: scores[it.id] != null ? scores[it.id] : null,
+          };
+        }));
+      grids = {
+        a: await gridFor(fa, aScores),
+        b: await gridFor(fb, bScores),
+      };
+    }
+    // The page's counter line, worded the way the in-game
+    // header shows it, where that wording is known: clue
+    // completions, boss kills, raid completions.
+    const counterLine = (st) => {
+      if (!st || st.notFound || !st.kc) return null;
+      const num = (n) => n.toLocaleString('en-US');
+      if (pageTab === 'Clues') {
+        const tier = pageTitle.split(' ')[0];
+        const n = st.kc[`clue_scrolls_${tier.toLowerCase()}`];
+        return typeof n === 'number'
+          ? `${tier} clues completed: ${num(n)}` : null;
+      }
+      const key = Object.keys(CLOG_PAGES).find(
+        (k) => CLOG_PAGES[k][1] === pageTitle);
+      if (!key) return null;
+      const ent = kcEntry(key);
+      if (!ent || ent.cols.length !== 1) return null;
+      const metric = ent.cols[0].metric;
+      const n = st.kc[metric];
+      if (typeof n !== 'number') return null;
+      if (pageTab === 'Bosses' && metric !== 'wintertodt') {
+        return `${pageTitle} kills: ${num(n)}`;
+      }
+      if (pageTab === 'Raids') {
+        return `${pageTitle} completions: ${num(n)}`;
+      }
+      return null;
+    };
     const card = await fetchCard('/compare-clog', {
       mode: 'page', page: pageTitle,
       a: { rsn: aName, got: gap.obtained || 0, total: gap.total || gbp.total || 0 },
       b: { rsn: bName, got: gbp.obtained || 0, total: gbp.total || gap.total || 0 },
       items, moreCount: Math.max(0, all.length - shown.length),
       pets: pagePets,
+      grids,
+      counterA: counterLine(sta),
+      counterB: counterLine(stb),
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-clog.png' })], components };
     return { content: `${pageTitle}: ${aName} ${gap.obtained || 0} - ${gbp.obtained || 0} ${bName}`, components };
