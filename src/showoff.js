@@ -239,7 +239,7 @@ async function loadClogItems(res) {
   // render as dark silhouettes, the way the game log shows them.
   // Entries carry their item id so callers pair scores by id,
   // never by position.
-  return Promise.all((res.items || []).slice(0, 49).map(async (it) => {
+  return Promise.all((res.items || []).slice(0, 250).map(async (it) => {
     let icon = null;
     let iconB64 = null;
     const p = await getItemIcon(it.id, it.name).catch(() => null);
