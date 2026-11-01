@@ -111,7 +111,7 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention, lan
   if (winners > 1) lines.push(`**Winners:** First ${winners} hunters to prove it. First takes the title.`);
   const pl = proofLine(proof);
   if (pl) lines.push(pl);
-  lines.push(``, `First to return with proof claims the title. The kill must be fresh.`);
+  lines.push(``, `First to return with the drop claims the title.`);
   const embed = new EmbedBuilder()
     .setColor(ZAMORAK_RED)
     .setTitle('📜 Bounty Contract Available')
@@ -172,7 +172,7 @@ async function fetchPoster(bounty, hunters, statusText) {
         daysLeft,
         proofText: posterProofText(bounty.proof),
         hunters,
-        bottomLine: { text: 'First back with fresh proof takes the title.', kind: 'voice' },
+        bottomLine: { text: 'First back with the drop takes the title.', kind: 'voice' },
         statusText: statusText || null,
         image: bounty.image ? await thumbB64(bounty.image) : null,
       }),
@@ -385,7 +385,7 @@ async function postCommand(interaction) {
       '━━━━━━ ⛧ ━━━━━━',
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
       `⛧ **A new contract: ${contract.name}** ⛧`,
-      'Fresh only: get it while the contract is live and bring back proof. First hunter back takes the title.',
+      'Get it while the contract is live. First hunter back with the drop takes the title.',
       `Reward: <@&${role.id}>`,
       `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
     ]
