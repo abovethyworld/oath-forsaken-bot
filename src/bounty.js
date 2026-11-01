@@ -7,6 +7,7 @@
 const {
   SlashCommandBuilder,
   EmbedBuilder,
+  AttachmentBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -115,6 +116,99 @@ function bountyEmbed({ target, location, threat, days, image, rewardMention, lan
     .setTimestamp();
   if (image) embed.setThumbnail(image);
   return embed;
+}
+
+const CARD_API = 'https://oathforsaken.cc/api/cards';
+const thumbCache = new Map();
+
+async function thumbB64(url) {
+  if (thumbCache.has(url)) return thumbCache.get(url);
+  let out = null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (res.ok) out = Buffer.from(await res.arrayBuffer()).toString('base64');
+  } catch {
+    out = null;
+  }
+  thumbCache.set(url, out);
+  return out;
+}
+
+function posterProofText(proof) {
+  if (!proof || !proof.type) return null;
+  const label = { drop: 'Drop', kc: 'KC', xp: 'XP', clog: 'Collection log' }[proof.type] || proof.type;
+  const amount = proof.amount ? ` x${proof.amount}` : '';
+  return `Proof: ${label}: ${proof.target}${amount}, fresh after you claim.`;
+}
+
+// Wanted-poster render from the card service. Null on any failure;
+// callers fall back to the text embed so posting never breaks.
+async function fetchPoster(bounty, hunters, statusText) {
+  try {
+    const lane = bountyLane(bounty);
+    const daysLeft = bounty.expiresAt
+      ? Math.max(0, Math.ceil((bounty.expiresAt - Date.now()) / DAY_MS))
+      : bounty.days;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const res = await fetch(CARD_API + '/bounty', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
+      body: JSON.stringify({
+        target: bounty.target,
+        location: bounty.location,
+        tier: bounty.threat,
+        lane,
+        rewardTitle: LANE_TITLES[lane],
+        daysLeft,
+        proofText: posterProofText(bounty.proof),
+        hunters,
+        statusText: statusText || null,
+        image: bounty.image ? await thumbB64(bounty.image) : null,
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+// Re-render a board post as a poster. Returns false when the render
+// failed and the caller should use the legacy embed edit instead.
+async function boardPosterEdit(msg, bounty, state, { statusText = null, close = false } = {}) {
+  const hunters = Object.values(state.claims || {}).filter(
+    (c) => c.bountyId === msg.id && c.status === 'pending'
+  ).length;
+  const png = await fetchPoster(bounty, hunters, statusText);
+  if (!png) return false;
+  const edit = { embeds: [], files: [new AttachmentBuilder(png, { name: 'bounty-poster.png' })] };
+  if (close) edit.components = [];
+  await msg.edit(edit);
+  return true;
+}
+
+async function refreshBoard(client, bountyId, state, opts = {}) {
+  const bounty = state.bounties[bountyId];
+  if (!bounty) return false;
+  try {
+    const chan = await client.channels.fetch(bounty.channelId).catch(() => null);
+    if (!chan || !chan.isTextBased()) return false;
+    const msg = await chan.messages.fetch(bountyId).catch(() => null);
+    if (!msg) return false;
+    return await boardPosterEdit(msg, bounty, state, opts);
+  } catch (err) {
+    console.warn('Bounty board refresh failed:', err.message);
+    return false;
+  }
 }
 
 function reviewButtons(threadId) {
@@ -233,8 +327,14 @@ async function postCommand(interaction) {
         b.active = false;
         try {
           const oldMsg = await channel.messages.fetch(id);
-          const oldEmbed = EmbedBuilder.from(oldMsg.embeds[0]).setFooter({ text: 'Contract closed.' });
-          await oldMsg.edit({ embeds: [oldEmbed], components: [] });
+          const applied = await boardPosterEdit(oldMsg, b, state, {
+            statusText: 'Contract closed',
+            close: true,
+          }).catch(() => false);
+          if (!applied && oldMsg.embeds[0]) {
+            const oldEmbed = EmbedBuilder.from(oldMsg.embeds[0]).setFooter({ text: 'Contract closed.' });
+            await oldMsg.edit({ embeds: [oldEmbed], components: [] });
+          }
         } catch (err) {
           console.warn('Bounty retire edit failed:', err.message);
         }
@@ -242,6 +342,27 @@ async function postCommand(interaction) {
     }
 
     const wikiUrl = `https://oldschool.runescape.wiki/w/${encodeURIComponent(contract.name.replace(/ /g, '_'))}`;
+    const nowTs = Date.now();
+    const record = {
+      channelId: channel.id,
+      target: contract.name,
+      location: contract.content,
+      threat: contract.tier,
+      lane,
+      winners,
+      proof,
+      poolId: contract.id,
+      days,
+      wiki: wikiUrl,
+      image: contract.thumbnail || null,
+      active: true,
+      winnerId: null,
+      winnerIds: [],
+      createdAt: nowTs,
+      expiresAt: nowTs + days * DAY_MS,
+      createdBy: interaction.user.id,
+    };
+    const poster = await fetchPoster(record, 0, null);
     const embed = bountyEmbed({
       target: contract.name,
       location: contract.content,
@@ -262,7 +383,9 @@ async function postCommand(interaction) {
               allowedMentions: { roles: [bountyConfig().notifyRoleId] },
             }
           : {}),
-        embeds: [embed],
+        ...(poster
+          ? { files: [new AttachmentBuilder(poster, { name: 'bounty-poster.png' })] }
+          : { embeds: [embed] }),
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -295,25 +418,7 @@ async function postCommand(interaction) {
       })
       .catch((err) => console.warn('Bounty button patch failed:', err.message));
 
-    state.bounties[msg.id] = {
-      channelId: channel.id,
-      target: contract.name,
-      location: contract.content,
-      threat: contract.tier,
-      lane,
-      winners,
-      proof,
-      poolId: contract.id,
-      days,
-      wiki: wikiUrl,
-      image: contract.thumbnail || null,
-      active: true,
-      winnerId: null,
-      winnerIds: [],
-      createdAt: Date.now(),
-      expiresAt: Date.now() + days * DAY_MS,
-      createdBy: interaction.user.id,
-    };
+    state.bounties[msg.id] = record;
     state.poolPosted[contract.name] = Date.now();
     saveState(state);
     await interaction.editReply({ content: `Bounty posted (${lane}): ${contract.name}` }).catch(() => {});
@@ -439,6 +544,7 @@ async function handleClaim(interaction, bountyId) {
       await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
       return;
     }
+    await refreshBoard(interaction.client, bountyId, state, {}).catch(() => {});
     await interaction.editReply({ content: `Claim opened: ${thread.url}` }).catch(() => {});
   });
 }
@@ -537,12 +643,17 @@ async function handleGrant(interaction, threadId) {
       try {
         const chan = await guild.channels.fetch(bounty.channelId).catch(() => null);
         const msg = chan ? await chan.messages.fetch(claim.bountyId).catch(() => null) : null;
-        if (msg && msg.embeds[0]) {
+        if (msg) {
           const names = bounty.winnerIds.map((id) => `<@${id}>`).join(', ');
-          const done = EmbedBuilder.from(msg.embeds[0]).setFooter({
-            text: `Claimed by ${winner.displayName}${winnersNow > 1 ? ` and ${winnersNow - 1} more` : ''}`,
-          });
-          await msg.edit({ embeds: [done], components: [] });
+          const stamp = `Claimed by ${winner.displayName}${winnersNow > 1 ? ` and ${winnersNow - 1} more` : ''}`;
+          const applied = await boardPosterEdit(msg, bounty, state, {
+            statusText: stamp,
+            close: true,
+          }).catch(() => false);
+          if (!applied && msg.embeds[0]) {
+            const done = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: stamp });
+            await msg.edit({ embeds: [done], components: [] });
+          }
           if (chan && chan.isTextBased()) {
             await chan
               .send(`🩸 Contract claimed. **${bounty.target}** falls to ${names}. A new contract will be nailed to the board soon.`)
@@ -631,6 +742,7 @@ async function handleReject(interaction, threadId) {
     }
     claim.status = 'rejected';
     saveState(state);
+    await refreshBoard(interaction.client, claim.bountyId, state, {}).catch(() => {});
     const thread = await interaction.guild.channels.fetch(threadId).catch(() => null);
     if (thread && thread.isThread()) {
       await thread.send('Claim rejected. Post better proof if you have it.').catch(() => {});
@@ -678,11 +790,16 @@ async function sweepExpiredBounties(client) {
             const chan = await client.channels.fetch(b.channelId).catch(() => null);
             if (chan && chan.isTextBased()) {
               const msg = await chan.messages.fetch(id).catch(() => null);
-              if (msg && msg.embeds[0]) {
-                const marked = EmbedBuilder.from(msg.embeds[0]).setFooter({
-                  text: 'Last call: this contract closes in under 48 hours.',
-                });
-                await msg.edit({ embeds: [marked] }).catch(() => {});
+              if (msg) {
+                const applied = await boardPosterEdit(msg, b, state, {
+                  statusText: 'Last call',
+                }).catch(() => false);
+                if (!applied && msg.embeds[0]) {
+                  const marked = EmbedBuilder.from(msg.embeds[0]).setFooter({
+                    text: 'Last call: this contract closes in under 48 hours.',
+                  });
+                  await msg.edit({ embeds: [marked] }).catch(() => {});
+                }
               }
               await chan
                 .send(`⏳ Last call on **${b.target}** (${bountyLane(b)} lane): the contract closes in under 48 hours.`)
@@ -725,9 +842,15 @@ async function sweepExpiredBounties(client) {
         const chan = await client.channels.fetch(b.channelId).catch(() => null);
         if (!chan || !chan.isTextBased()) continue;
         const msg = await chan.messages.fetch(id).catch(() => null);
-        if (msg && msg.embeds[0]) {
-          const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
-          await msg.edit({ embeds: [expired], components: [] });
+        if (msg) {
+          const applied = await boardPosterEdit(msg, b, state, {
+            statusText: 'Contract expired',
+            close: true,
+          }).catch(() => false);
+          if (!applied && msg.embeds[0]) {
+            const expired = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: 'Contract expired.' });
+            await msg.edit({ embeds: [expired], components: [] });
+          }
         }
         await chan.send(`${outcome} A new contract will be nailed to the board soon.`).catch(() => {});
       } catch (err) {
