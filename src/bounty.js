@@ -483,6 +483,29 @@ async function handleGrant(interaction, threadId) {
 
     claim.status = 'granted';
     claim.titleHolder = isFirstWinner;
+    // Winners log for the website hall: one record per grant, in order.
+    try {
+      const winnersFile = path.join(__dirname, '..', 'data', 'bounty-winners.json');
+      let log = [];
+      try {
+        const parsed = JSON.parse(fs.readFileSync(winnersFile, 'utf8'));
+        if (Array.isArray(parsed)) log = parsed;
+      } catch {}
+      log.push({
+        target: bounty.target,
+        lane,
+        tier: bounty.threat || null,
+        winnerId: winner.id,
+        winnerName: winner.displayName,
+        rsn: resolveRsn(winner.id) || null,
+        titleHolder: isFirstWinner,
+        proof: bounty.proof ? `${bounty.proof.type}: ${bounty.proof.target}` : 'screenshot',
+        at: Date.now(),
+      });
+      atomicWrite(winnersFile, log);
+    } catch (err) {
+      console.warn('Bounty winners log failed:', err.message);
+    }
     bounty.winnerIds.push(claim.claimerId);
     if (!bounty.winnerId) bounty.winnerId = claim.claimerId;
     const winnersNow = bounty.winnerIds.length;
