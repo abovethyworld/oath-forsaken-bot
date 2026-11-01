@@ -150,7 +150,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
-  setInterval(() => sweepExpiredBounties(client), 24 * 3600 * 1000);
+  setInterval(() => sweepExpiredBounties(client), 6 * 3600 * 1000);
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
   setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
   setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);
