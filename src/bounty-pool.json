@@ -1,0 +1,905 @@
+{
+ "generatedFrom": "bounty sheet Master tab",
+ "contracts": [
+  {
+   "id": 1,
+   "name": "Dragon Hunter Wand",
+   "content": "The Hueycoatl",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_hunter_wand_detail.png/1239px-Dragon_hunter_wand_detail.png?a3e16",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 2,
+   "name": "Hill Giant Club",
+   "content": "Obor",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Hill_giant_club_detail.png?53073",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 3,
+   "name": "Bryophyta's Essence",
+   "content": "Bryophyta",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bryophyta%27s_essence_detail.png/892px-Bryophyta%27s_essence_detail.png?e56c2",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 4,
+   "name": "Champion Scroll(s)",
+   "content": "Complete RNG",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zombie_champion_scroll_detail.png/1242px-Zombie_champion_scroll_detail.png?3964f",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 5,
+   "name": "Golden Tench",
+   "content": "Aerial Fishing",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Golden_tench_detail.png?27700",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 6,
+   "name": "Big Harpoonfish",
+   "content": "Tempoross",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Big_harpoonfish_detail.png?36d0f",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 7,
+   "name": "Any Tome (Fire or Water)",
+   "content": "Wintertodt / Tempoross",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Tome_of_fire_detail.png?b9bae",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 8,
+   "name": "Boss Jar(s)",
+   "content": "A selection of Bosses",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Jar_of_souls_detail.png/712px-Jar_of_souls_detail.png?7bdc6",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 9,
+   "name": "Revenant Weapon(s)",
+   "content": "Wilderness monsters",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Craw%27s_bow_%28u%29_detail.png/1290px-Craw%27s_bow_%28u%29_detail.png?bf1fd",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 10,
+   "name": "Draconic Visage",
+   "content": "Dragons",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Draconic_visage_detail.png/1007px-Draconic_visage_detail.png?6edab",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 11,
+   "name": "The Kalphite Queen's Head",
+   "content": "The Kalphite Queen",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Kq_head_detail.png?4a8ca",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 12,
+   "name": "Basilisk Jaw",
+   "content": "Basilisks",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Basilisk_jaw_detail.png?e3794",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 13,
+   "name": "Enhanced Crystal Weapon Seed",
+   "content": "The Corrupted Gauntlet",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Enhanced_crystal_weapon_seed_detail.png?48996",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 14,
+   "name": "Zalcano Shard",
+   "content": "Zalcano",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Zalcano_shard_detail.png/1177px-Zalcano_shard_detail.png?f52af",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 15,
+   "name": "Crystal Tool Seed",
+   "content": "Zalcano",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Crystal_tool_seed_detail.png/648px-Crystal_tool_seed_detail.png?d8a0b",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 16,
+   "name": "Voidwaker Pieces",
+   "content": "Wilderness monsters",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Voidwaker_gem_detail.png?fcc14",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 17,
+   "name": "Black Tourmaline Core",
+   "content": "Grotesque Guardians",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Black_tourmaline_core_detail.png?6db72",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 18,
+   "name": "Any Godsword Hilt",
+   "content": "God Wars Commanders",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ancient_hilt_detail.png/1311px-Ancient_hilt_detail.png?87a43",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 19,
+   "name": "Any Virtus Piece",
+   "content": "The Forgotten Four",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Virtus_mask_detail.png/789px-Virtus_mask_detail.png?379b8",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 20,
+   "name": "Tonalztics of Ralos",
+   "content": "The Colosseum",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tonalztics_of_ralos_detail.png/1418px-Tonalztics_of_ralos_detail.png?fa107",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 21,
+   "name": "Hydra's Claw",
+   "content": "Hydra",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Hydra%27s_claw_detail.png?994b3",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 22,
+   "name": "Doom Uniques (Cloth, Eye, Treads)",
+   "content": "Doom of Mokhaiotl",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Avernic_treads_detail.png?003ec",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 23,
+   "name": "Any Maggot King Unique",
+   "content": "The Maggot King",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Elder_venator_fang_detail.png?59cce",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 24,
+   "name": "Araxyte Fang",
+   "content": "Araxxor",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Araxyte_fang_detail.png?43deb",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 25,
+   "name": "Any Yama Unique",
+   "content": "Yama",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Oathplate_helm_detail.png/1016px-Oathplate_helm_detail.png?0b1a0",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 26,
+   "name": "Imbued Heart or Eternal Gem",
+   "content": "Varies",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Imbued_heart_detail.png?be01a",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 27,
+   "name": "Hallowfell",
+   "content": "The Mad Angel",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Hallowfell_detail.png/1259px-Hallowfell_detail.png?7f58d",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 28,
+   "name": "Belle's folly (tarnished)",
+   "content": "Shellbane Gryphon",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Belle%27s_folly_%28tarnished%29_detail.png/1138px-Belle%27s_folly_%28tarnished%29_detail.png?77da3",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 29,
+   "name": "1 Full Set of Barrows Gear",
+   "content": "Barrows",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dharok%27s_greataxe_detail.png/1276px-Dharok%27s_greataxe_detail.png?d8a0b",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 30,
+   "name": "Tormented Synapse",
+   "content": "Tormented Demons",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Tormented_synapse_detail.png/911px-Tormented_synapse_detail.png?27153",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 31,
+   "name": "Abyssal dye",
+   "content": "Guardians of the Rift",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_green_dye_detail.png/701px-Abyssal_green_dye_detail.png?e5674",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 32,
+   "name": "Element Staff Crown (either)",
+   "content": "Royal Titans",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Ice_element_staff_crown_detail.png/1139px-Ice_element_staff_crown_detail.png?db8f6",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 33,
+   "name": "Dragon Warhammer",
+   "content": "Lizardman Shamans",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dragon_warhammer_detail.png/1088px-Dragon_warhammer_detail.png?7f65a",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 34,
+   "name": "Any Dagannoth Ring",
+   "content": "Dagannoth Kings",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Berserker_ring_detail.png/1209px-Berserker_ring_detail.png?81f8b",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 35,
+   "name": "Bottomless compost bucket",
+   "content": "Hespori",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bottomless_compost_bucket_detail.png/888px-Bottomless_compost_bucket_detail.png?c1867",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 36,
+   "name": "Any Moons Item",
+   "content": "Moons of Peril",
+   "tier": "Easy",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dual_macuahuitl_detail.png/1190px-Dual_macuahuitl_detail.png?be5ad",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 37,
+   "name": "Abyssal protector",
+   "content": "Guardians of the Rift",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Abyssal_protector_%28follower%29.png/613px-Abyssal_protector_%28follower%29.png?bfcb7",
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 38,
+   "name": "Baby mole",
+   "content": "Giant Mole",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Baby_Mole_%28follower%29.png?c4d59",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 39,
+   "name": "Bran",
+   "content": "Royal Titans",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Bran_%28follower%29.png/802px-Bran_%28follower%29.png?68158",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 40,
+   "name": "Dom",
+   "content": "Doom of Mokhaiotl",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Dom_%28follower%29.png?e7157",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 41,
+   "name": "Gull (pet)",
+   "content": "Shellbane Gryphon",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Gull_%28follower%29.png/1281px-Gull_%28follower%29.png?8f09f",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 42,
+   "name": "Moxi",
+   "content": "Amoxliatl",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Moxi_%28follower%29.png/607px-Moxi_%28follower%29.png?19e22",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 43,
+   "name": "Muphin",
+   "content": "Phantom Muspah",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Muphin_%28follower%2C_ranged%29.png/1267px-Muphin_%28follower%2C_ranged%29.png?01b57",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 44,
+   "name": "Pet snakeling",
+   "content": "Zulrah",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Snakeling.png?f371a",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 45,
+   "name": "Prince black dragon",
+   "content": "King Black Dragon",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Prince_Black_Dragon.png?318e7",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 46,
+   "name": "Scurry",
+   "content": "Scurrius",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Scurry_%28follower%29.png/1230px-Scurry_%28follower%29.png?4de8a",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 47,
+   "name": "Sraracha",
+   "content": "Sarachnis",
+   "tier": "Extreme",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Sraracha_%28follower%29.png?e9085",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 48,
+   "name": "Yami",
+   "content": "Yama",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Yami_%28follower%29.png/1418px-Yami_%28follower%29.png?58add",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 49,
+   "name": "Youngllef",
+   "content": "The Gauntlet",
+   "tier": "Medium",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Youngllef_%28follower%29.png?fc90e",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 50,
+   "name": "Any of the Dagannoth Pets",
+   "content": "Dagannoth Kings",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dagannoth_Supreme_Jr..png/909px-Dagannoth_Supreme_Jr..png?4a144",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 51,
+   "name": "Any of the GWD Pets",
+   "content": "God Wars Dungeon",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Zilyana_Jr..png?fd984",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 52,
+   "name": "Any of the Forgotten Four's Pets",
+   "content": "Varies",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Wisp_%28follower%29.png/488px-Wisp_%28follower%29.png?d6646",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 53,
+   "name": "Any of the Raid Pets",
+   "content": "Raids (incl. The Fractured Archive)",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Olmlet_%28follower%29.png?24b14",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 54,
+   "name": "Any Slayer Pet",
+   "content": "Varies",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Hellpuppy_%28follower%29.png?b9d9d",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 55,
+   "name": "TzRek-Jad/Jal-nib-rek",
+   "content": "Fight Cave/Inferno",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/thumb/TzRek-Jad.png/1149px-TzRek-Jad.png?87507",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 56,
+   "name": "Any Wilderness Pet",
+   "content": "Wilderness monsters",
+   "tier": "Hard",
+   "thumbnail": "https://oldschool.runescape.wiki/images/Scorpia%27s_offspring_%28follower%29.png?dfe31",
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 57,
+   "name": "Any Corp Drop",
+   "content": "Corporeal Beast",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 58,
+   "name": "Any Zilyana Unique",
+   "content": "Commander Zilyana",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 59,
+   "name": "Any K'ril Unique",
+   "content": "K'ril Tsutsaroth",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 60,
+   "name": "Any Bandos Piece",
+   "content": "General Graardor",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 61,
+   "name": "Any Armadyl Piece",
+   "content": "Kree'arra",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 62,
+   "name": "Any Zulrah Unique",
+   "content": "Zulrah",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 63,
+   "name": "Any Nightmare Unique",
+   "content": "The Nightmare",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 64,
+   "name": "Build Any DT2 Ring",
+   "content": "The Forgotten Four",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 65,
+   "name": "Mole Slippers",
+   "content": "Beginner Treasure Trails",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 66,
+   "name": "Tackle Box or Fish Barrel",
+   "content": "Tempoross",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 67,
+   "name": "Dragon Pickaxe",
+   "content": "Chaos Elemental / Wilderness Bosses",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 68,
+   "name": "Any Araxxor Unique",
+   "content": "Araxxor",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 69,
+   "name": "Zenyte Shard",
+   "content": "Demonic Gorillas",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 70,
+   "name": "Granite Hammer",
+   "content": "Grotesque Guardians",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 71,
+   "name": "Holy Sandals",
+   "content": "Treasure Trails",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 72,
+   "name": "Trident of the Seas",
+   "content": "Kraken",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 73,
+   "name": "Build a Venator Bow",
+   "content": "Phantom Muspah",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 74,
+   "name": "Any ToA Unique",
+   "content": "Tombs of Amascut",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 75,
+   "name": "Black Mask",
+   "content": "Cave Horrors",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 76,
+   "name": "Occult Necklace",
+   "content": "Thermonuclear Smoke Devil",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 77,
+   "name": "Hallowed Ring",
+   "content": "Hallowed Sepulchre",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 78,
+   "name": "Abyssal Whip",
+   "content": "Abyssal Demons",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 79,
+   "name": "Any Nex Unique",
+   "content": "Nex",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 80,
+   "name": "Any ToB Unique",
+   "content": "Theatre of Blood",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 81,
+   "name": "Any CoX Unique",
+   "content": "Chambers of Xeric",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 82,
+   "name": "Any Fractured Archive Unique",
+   "content": "The Fractured Archive",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 83,
+   "name": "Build a Bludgeon",
+   "content": "Abyssal Sire",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 84,
+   "name": "Dizana's Quiver",
+   "content": "Colosseum",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 85,
+   "name": "Build a Ward",
+   "content": "Wilderness Bosses",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 86,
+   "name": "Skeletal Visage",
+   "content": "Vorkath",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 87,
+   "name": "Infernal Cape",
+   "content": "The Inferno",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 88,
+   "name": "Beef",
+   "content": "Brutus",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 89,
+   "name": "Smol Heredit or Jal-nib-rek",
+   "content": "Colosseum / Inferno",
+   "tier": "Easy",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 90,
+   "name": "Pet Chaos Elemental",
+   "content": "Chaos Elemental",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 91,
+   "name": "Huberte",
+   "content": "The Hueycoatl",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 92,
+   "name": "Smolcano",
+   "content": "Zalcano",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 93,
+   "name": "Aggy",
+   "content": "The Mad Angel",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 94,
+   "name": "Any Hunter Pet",
+   "content": "Hunter",
+   "tier": "Hard",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 95,
+   "name": "Phoenix",
+   "content": "Wintertodt",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 96,
+   "name": "Kalphite Princess",
+   "content": "The Kalphite Queen",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 97,
+   "name": "Vorki",
+   "content": "Vorkath",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 98,
+   "name": "Tiny Tempor",
+   "content": "Tempoross",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  },
+  {
+   "id": 99,
+   "name": "Maggot Marquess",
+   "content": "The Maggot King",
+   "tier": "Extreme",
+   "thumbnail": null,
+   "lane": "PvM",
+   "winners": 1
+  },
+  {
+   "id": 100,
+   "name": "Fox Whistle, Golden Pheasant Egg, or Petal Garland",
+   "content": "Forestry Events",
+   "tier": "Medium",
+   "thumbnail": null,
+   "lane": "Skilling",
+   "winners": 1
+  }
+ ]
+}

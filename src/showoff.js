@@ -16,6 +16,7 @@ const countersFor = (stats, rsn) => ({
   ...pluginCountersFor(rsn),
 });
 const { snapshotToday, baselineFor } = require('./gains');
+const { bountyAutocompleteChoices } = require('./bounty');
 const fs = require('fs');
 const path = require('path');
 
@@ -1678,7 +1679,9 @@ async function handleAutocomplete(interaction) {
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
-      : [];
+      : interaction.commandName === 'bounty'
+        ? bountyAutocompleteChoices(focused)
+        : [];
   await interaction.respond(choices).catch(() => {});
 }
 
