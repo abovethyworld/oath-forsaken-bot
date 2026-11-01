@@ -1,28 +1,34 @@
-// Drop luck for compare cards, in the Collection Log Luck model:
-// for each scored drop on a boss page, the binomial percentile of
-// the player's result at their KC. Scored drops are single-source,
-// fixed-rate items on one tracked KC counter (src/luck-data.json,
-// adapted from Collection Log Luck by peanubnutter, BSD 2-Clause -
-// see LICENSES/collection-log-luck.txt). Raids, team bosses, and
-// multi-source drops are not in the table, so they get no score.
-// Dupe-protected sets (pyromancer outfit, bludgeon pieces, Moons
-// armour) score as a set: any-piece rate, distinct pieces owned.
+// Drop luck, mirroring the Collection Log Luck plugin
+// (by peanubnutter, BSD 2-Clause - see
+// LICENSES/collection-log-luck.txt; the rate table in
+// src/luck-data.json is adapted from its data).
 //
-// Scoring started as ownership-only (v1); v2 makes the obtained
-// side count-aware (duplicates raise the luck percentile). The
-// displayed percents stay ownership-based everywhere.
+// Each scored drop gets a luck percentile, the plugin's
+// "overall luck": luck = P(X < yourCount), the share of
+// players drier than you; dryness = P(X > yourCount), the
+// share luckier than you; overall = (luck - dryness + 1) / 2.
+// 100 is spooned, 50 average, 0 the driest possible. A
+// missing item can never score above 50.
+//
+// Only items the plugin tracks get a score. Dupe-protected
+// sets (pyromancer outfit, bludgeon pieces, Moons armour)
+// score as one unit: any-piece rate, distinct pieces owned,
+// and every piece shows the set's score.
 
 const LUCK_DATA = require('./luck-data.json') || {};
 const TABLE = LUCK_DATA.items || {};
 const SETS_BY_METRIC = {};
 const SET_ITEM_IDS = new Set();
+const SET_BY_PIECE = {};
 for (const s of Object.values(LUCK_DATA.sets || {})) {
   (SETS_BY_METRIC[s.metric] = SETS_BY_METRIC[s.metric] || []).push(s);
-  for (const id of s.pieces) SET_ITEM_IDS.add(id);
+  for (const id of s.pieces) {
+    SET_ITEM_IDS.add(id);
+    SET_BY_PIECE[id] = s;
+  }
 }
 
-// P(X <= m) for X ~ Bin(n, p), by PMF recurrence from P(0). Only
-// used with small m (ownership means m is 0 or a capped quantity).
+// P(X <= m) for X ~ Bin(n, p), by PMF recurrence from P(0).
 function binomCdfLE(n, p, m) {
   if (m < 0) return 0;
   if (m >= n) return 1;
@@ -37,36 +43,74 @@ function binomCdfLE(n, p, m) {
   return Math.min(1, sum);
 }
 
-// luckForPage(kc, metric, pageItems): pageItems is the full clog
-// page list [{ id, qty }] (qty 0 = not obtained). Returns
-// { word, dry } or null when nothing on the page is scored or the
-// player has no KC. dry names the single driest missing drop when
-// at least half of players would have it by now.
+// The plugin percentile for one scored unit: n trials at
+// rate p, with qty obtained. Returns { score, luck, dryness }
+// with score an integer 0-100 and the shares as fractions.
+function scoreFor(n, p, qty) {
+  const q = Math.max(0, qty || 0);
+  const luck = q <= 0 ? 0 : binomCdfLE(n, p, Math.min(q - 1, 100));
+  const dryness = q <= 0
+    ? -Math.expm1(n * Math.log1p(-p)) // P(X >= 1)
+    : 1 - binomCdfLE(n, p, Math.min(q, 100));
+  const overall = (luck - dryness + 1) / 2;
+  return { score: Math.round(overall * 100), luck, dryness };
+}
+
+const qtyOfItem = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
+
+// scoreForSet(kc, set, qtyOf): the set scored as one unit.
+function scoreForSet(kc, s, qtyOf) {
+  const n = kc * (s.rolls || 1);
+  const p = s.rate * s.pieces.length; // any-piece rate
+  const owned = s.pieces.filter((id) => (qtyOf.get(id) || 0) > 0).length;
+  return { ...scoreFor(n, p, owned), owned };
+}
+
+// Per-item luck scores for a clog page: { itemId: score }.
+// Set pieces carry their set's score. Unscored items are
+// absent from the map.
+function itemLuckScores(kc, metric, pageItems) {
+  const out = {};
+  if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return out;
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qtyOfItem(it)]));
+  const seenSets = new Set();
+  for (const it of pageItems) {
+    const id = Number(it.id);
+    const s = SET_BY_PIECE[id];
+    if (s && s.metric === metric) {
+      if (!seenSets.has(s.name)) {
+        seenSets.add(s.name);
+        const sc = scoreForSet(kc, s, qtyOf);
+        for (const pid of s.pieces) out[pid] = sc.score;
+      }
+      continue;
+    }
+    const t = TABLE[String(id)];
+    if (!t || t.metric !== metric) continue;
+    out[id] = scoreFor(kc * (t.rolls || 1), t.rate, qtyOfItem(it)).score;
+  }
+  return out;
+}
+
+// luckForPage(kc, metric, pageItems): the page verdict.
+// Returns { word, dry } or null when nothing on the page is
+// scored or the player has no KC. dry names the single
+// driest missing drop in the plugin's phrasing, shown when
+// at least half of players would be luckier by now.
 function luckForPage(kc, metric, pageItems) {
   if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return null;
-  // Page items arrive as {qty} from some callers and {quantity}
-  // (raw RuneProfile shape) from others; accept both.
-  const qty = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
-  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qty(it)]));
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qtyOfItem(it)]));
   let scored = 0;
   let driest = null;
   let luckiest = null;
-  const kcText = kc.toLocaleString('en-US');
-  // Dupe-protected sets first: one scored unit per set.
   for (const s of SETS_BY_METRIC[metric] || []) {
     scored++;
-    const n = kc * (s.rolls || 1);
-    const p = s.rate * s.pieces.length; // any-piece rate
-    const owned = s.pieces.filter((id) => (qtyOf.get(id) || 0) > 0).length;
-    if (owned >= s.pieces.length) {
-      const fewer = binomCdfLE(n, p, s.pieces.length - 1);
-      if (!luckiest || fewer > luckiest.pct) luckiest = { name: s.name, pct: fewer };
+    const sc = scoreForSet(kc, s, qtyOf);
+    if (sc.owned >= s.pieces.length) {
+      if (!luckiest || sc.luck > luckiest.pct) luckiest = { name: s.name, pct: sc.luck };
     } else {
-      const dry = 1 - binomCdfLE(n, p, owned); // share with more pieces
-      const text = owned === 0
-        ? `${s.name} (${Math.round(dry * 100)}% of players have it by ${kcText} KC)`
-        : `${s.name} (${Math.round(dry * 100)}% of players have more pieces by ${kcText} KC)`;
-      if (!driest || dry > driest.pct) driest = { pct: dry, text };
+      const text = `${s.name} (${Math.round(sc.dryness * 100)}% luckier than you)`;
+      if (!driest || sc.dryness > driest.pct) driest = { pct: sc.dryness, text };
     }
   }
   for (const it of pageItems) {
@@ -74,18 +118,12 @@ function luckForPage(kc, metric, pageItems) {
     const t = TABLE[String(it.id)];
     if (!t || t.metric !== metric) continue;
     scored++;
-    const n = kc * (t.rolls || 1);
-    if (qty(it) > 0) {
-      // Count-aware (v2): fewer = P(X < qty), the share of
-      // players who would have fewer of this drop than the
-      // player does at this KC. qty 1 reduces to the v1
-      // ownership score P(X = 0); duplicates push it up.
-      const fewer = binomCdfLE(n, t.rate, Math.min(qty(it) - 1, 100));
-      if (!luckiest || fewer > luckiest.pct) luckiest = { name: t.name, pct: fewer };
+    const sc = scoreFor(kc * (t.rolls || 1), t.rate, qtyOfItem(it));
+    if (qtyOfItem(it) > 0) {
+      if (!luckiest || sc.luck > luckiest.pct) luckiest = { name: t.name, pct: sc.luck };
     } else {
-      const dry = -Math.expm1(n * Math.log1p(-t.rate)); // P(X >= 1)
-      const text = `${t.name} (${Math.round(dry * 100)}% of players have it by ${kcText} KC)`;
-      if (!driest || dry > driest.pct) driest = { pct: dry, text };
+      const text = `${t.name} (${Math.round(sc.dryness * 100)}% luckier than you)`;
+      if (!driest || sc.dryness > driest.pct) driest = { pct: sc.dryness, text };
     }
   }
   if (!scored) return null;
@@ -97,50 +135,37 @@ function luckForPage(kc, metric, pageItems) {
   return { word, dry };
 }
 
-// Full per-item breakdown for the !dry card: every scored drop
-// on the page with its luck percent, split into missing (driest
-// first) and obtained (luckiest first), plus the page verdict
-// from luckForPage. Percent semantics match the compare strip:
-// the share of players who have the item by this KC, so a low
-// percent on an obtained drop means it came early and a high
-// percent on a missing drop means dry. Sets appear once each,
-// with the set's first piece id for icon purposes.
+// Full per-item breakdown for the !dry card: every scored
+// drop on the page with its luck percentile, missing sorted
+// driest first (lowest score), obtained luckiest first
+// (highest score), plus the page verdict. Sets appear once
+// each with the set's first piece id for icon purposes.
 function dryReport(kc, metric, pageItems) {
   if (!kc || kc <= 0 || !metric || !Array.isArray(pageItems)) return null;
-  const qty = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
-  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qty(it)]));
+  const qtyOf = new Map(pageItems.map((it) => [Number(it.id), qtyOfItem(it)]));
   const missing = [];
   const obtained = [];
   let scored = 0;
   for (const s of SETS_BY_METRIC[metric] || []) {
     scored++;
-    const n = kc * (s.rolls || 1);
-    const p = s.rate * s.pieces.length; // any-piece rate
-    const owned = s.pieces.filter((id) => (qtyOf.get(id) || 0) > 0).length;
-    if (owned >= s.pieces.length) {
-      const havePct = 1 - binomCdfLE(n, p, s.pieces.length - 1);
-      obtained.push({ id: s.pieces[0], name: s.name, pct: Math.round(havePct * 100) });
-    } else {
-      const havePct = 1 - binomCdfLE(n, p, owned);
-      missing.push({
-        id: s.pieces[0], name: s.name, pct: Math.round(havePct * 100),
-        pieces: `${owned}/${s.pieces.length}`,
-      });
-    }
+    const sc = scoreForSet(kc, s, qtyOf);
+    const entry = { id: s.pieces[0], name: s.name, score: sc.score };
+    if (sc.owned >= s.pieces.length) obtained.push(entry);
+    else missing.push({ ...entry, pieces: `${sc.owned}/${s.pieces.length}` });
   }
   for (const it of pageItems) {
     if (SET_ITEM_IDS.has(Number(it.id))) continue; // scored as a set
     const t = TABLE[String(it.id)];
     if (!t || t.metric !== metric) continue;
     scored++;
-    const n = kc * (t.rolls || 1);
-    const havePct = Math.round(-Math.expm1(n * Math.log1p(-t.rate)) * 100);
-    if (qty(it) > 0) obtained.push({ id: Number(it.id), name: t.name, pct: havePct });
-    else missing.push({ id: Number(it.id), name: t.name, pct: havePct });
+    const sc = scoreFor(kc * (t.rolls || 1), t.rate, qtyOfItem(it));
+    const entry = { id: Number(it.id), name: t.name, score: sc.score };
+    if (qtyOfItem(it) > 0) obtained.push(entry);
+    else missing.push(entry);
   }
   if (!scored) return null;
-  missing.sort((x, y) => y.pct - x.pct);
-  obtained.sort((x, y) => x.pct - y.pct);
+  missing.sort((x, y) => x.score - y.score);
+  obtained.sort((x, y) => y.score - x.score);
   const verdict = luckForPage(kc, metric, pageItems);
   return { word: verdict ? verdict.word : 'on pace', missing, obtained };
 }
@@ -161,21 +186,7 @@ function scoredIdsForMetric(metric) {
     .map(([id]) => Number(id));
 }
 
-// Per-item luck percentages for the Draft 4 strip: for each
-// scored item, the share of players (percent) who have it by
-// this KC. Set pieces score as a set, so they get no individual
-// percent. Returns { itemId: pct }.
-function itemLuckPcts(kc, metric, pageItems) {
-  const out = {};
-  if (!kc || kc <= 0 || !metric) return out;
-  for (const it of pageItems || []) {
-    if (SET_ITEM_IDS.has(it.id)) continue;
-    const t = TABLE[it.id];
-    if (!t || t.metric !== metric) continue;
-    const trials = kc * (t.rolls || 1);
-    out[it.id] = Math.round((1 - Math.pow(1 - t.rate, trials)) * 100);
-  }
-  return out;
-}
-
-module.exports = { luckForPage, binomCdfLE, scoredIdsForMetric, itemLuckPcts, dryReport, scoredMetricSet };
+module.exports = {
+  luckForPage, binomCdfLE, scoredIdsForMetric, dryReport, scoredMetricSet,
+  itemLuckScores, scoreFor,
+};
