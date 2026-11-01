@@ -732,6 +732,16 @@ function clogPageForCommand(key) {
   return CLOG_PAGES[key] || null;
 }
 
+// Clue tiers fold their (Rare) page into the tier page on
+// !clog (Alex, Nov 1, 2026): one card, tier items first, the
+// rare items after, counts combined. Asking for a (Rare) page
+// by name still shows that page on its own.
+const CLOG_RARE_SIBLING = {
+  'Hard Treasure Trails': 'Hard Treasure Trails (Rare)',
+  'Elite Treasure Trails': 'Elite Treasure Trails (Rare)',
+  'Master Treasure Trails': 'Master Treasure Trails (Rare)',
+};
+
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
 async function clogPayload(key, rsn, userId) {
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
@@ -758,6 +768,18 @@ async function clogPayload(key, rsn, userId) {
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
+  const rareTitle = CLOG_RARE_SIBLING[page[1]];
+  if (rareTitle) {
+    const rare = await getClogPageWithItems(rsn, page[0], rareTitle)
+      .catch(() => null);
+    if (rare && !rare.notFound && Array.isArray(rare.items)) {
+      const have = new Set((res.items || []).map((it) => it.id));
+      res.items = [...(res.items || []),
+        ...rare.items.filter((it) => !have.has(it.id))];
+      res.obtained = (res.obtained || 0) + (rare.obtained || 0);
+      res.total = (res.total || 0) + (rare.total || 0);
+    }
+  }
   const drawn = await loadClogItems(res);
   // A boss page and its KC are one combined card: when this page's
   // activity has kill counts, post the KC card with this page as its
@@ -1703,7 +1725,11 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId);
   const owner = ownerId ?? userId;
   const [pa, pb] = await Promise.all([clogPagesOf(aName), clogPagesOf(bName)]);
-  const components = await compareComponents('clogs', aName, bName, ui.bossKey || null, owner, ui);
+  // The card's shared state slot carries the clog page title in
+  // this view, so menu page flips and player swaps keep the
+  // page the card is showing.
+  const components = await compareComponents('clogs', aName, bName,
+    ui.page || ui.bossKey || null, owner, ui);
   if (!pa || !pb) {
     const missing = !pa ? aName : bName;
     return {
@@ -1711,7 +1737,8 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
       components,
     };
   }
-  const pageTitle = ui.page && (pa[ui.page] || pb[ui.page]) ? ui.page : null;
+  const pageTitle = ui.page && (pa[ui.page] || pb[ui.page]) ? ui.page
+    : (ui.bossKey && (pa[ui.bossKey] || pb[ui.bossKey]) ? ui.bossKey : null);
   if (pageTitle) {
     const gap = pa[pageTitle] || { obtained: 0, total: 0, items: [] };
     const gbp = pb[pageTitle] || { obtained: 0, total: 0, items: [] };
@@ -1967,9 +1994,15 @@ async function clogPagesOf(name) {
   return wrap && wrap.pages ? wrap.pages : null;
 }
 
-async function clogMenuOptions(a, b) {
+// Select menus cap at 25 options; two slots go to the page
+// navigation entries, like the boss list (Alex, Nov 1, 2026:
+// every page either player has progress on is pickable, not
+// just the top 25).
+const CMP_CLOG_PAGE_SIZE = 23;
+
+async function clogMenuOptions(a, b, page = 0) {
   const [pa, pb] = await Promise.all([clogPagesOf(a), clogPagesOf(b)]);
-  if (!pa || !pb) return [];
+  if (!pa || !pb) return { options: [], page: 0 };
   const totals = new Map();
   for (const pages of [pa, pb]) {
     for (const [title, page] of Object.entries(pages)) {
@@ -1985,9 +2018,18 @@ async function clogMenuOptions(a, b) {
   const ordered = petsEntry
     ? [petsEntry, ...entries.filter(([t]) => t !== 'All Pets')]
     : entries;
-  return ordered
-    .slice(0, 25)
-    .map(([title]) => ({ label: String(title).slice(0, 100), value: String(title).slice(0, 100) }));
+  const pages = Math.max(1, Math.ceil(ordered.length / CMP_CLOG_PAGE_SIZE));
+  const cur = Math.max(0, Math.min(page || 0, pages - 1));
+  const options = [];
+  if (cur > 0) options.push({ label: '← Previous pages', value: `page:${cur - 1}` });
+  for (const [title] of ordered.slice(
+    cur * CMP_CLOG_PAGE_SIZE, cur * CMP_CLOG_PAGE_SIZE + CMP_CLOG_PAGE_SIZE)) {
+    options.push({
+      label: String(title).slice(0, 100), value: String(title).slice(0, 100),
+    });
+  }
+  if (cur < pages - 1) options.push({ label: 'More pages →', value: `page:${cur + 1}` });
+  return { options, page: cur };
 }
 
 async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
@@ -2052,13 +2094,13 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
           .addOptions(options)));
     }
   } else if (view === 'clogs') {
-    const options = await clogMenuOptions(a, b);
-    if (options.length) {
+    const menu = await clogMenuOptions(a, b, ui.clogPage || 0);
+    if (menu.options.length) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`cmpclog:${enc}`)
+          .setCustomId(`cmpclog:list:${menu.page}:${enc}`)
           .setPlaceholder('Pick a collection log page...')
-          .addOptions(options)));
+          .addOptions(menu.options)));
     }
   }
   // Quick picks: the owner's other saved RSNs (from /link), one tap to
@@ -2308,7 +2350,11 @@ async function handleCompareSkillSelect(interaction) {
 }
 
 async function handleCompareClogSelect(interaction) {
-  const pair = decodePair(interaction.customId.slice('cmpclog:'.length));
+  const parts = interaction.customId.split(':');
+  const isList = parts[1] === 'list';
+  // Legacy cards: cmpclog:<enc>. Current: cmpclog:list:<page>:<enc>.
+  const pair = decodePair(isList
+    ? parts[parts.length - 1] : parts.slice(1).join(':'));
   if (!pair) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
@@ -2318,6 +2364,14 @@ async function handleCompareClogSelect(interaction) {
   if (!value) return;
   const state = compareStateOf(interaction);
   await interaction.deferUpdate().catch(() => {});
+  if (value.startsWith('page:')) {
+    // Menu page flip: same card, same clog page, new menu slice.
+    const nextPage = parseInt(value.slice(5), 10) || 0;
+    await editCompareMessage(interaction, await compareClogsPayload(
+      pair.a, pair.b, null, pair.owner,
+      { bossKey: state.bossKey, clogPage: nextPage }));
+    return;
+  }
   await editCompareMessage(interaction, await compareClogsPayload(
     pair.a, pair.b, null, pair.owner, { bossKey: state.bossKey, page: value }));
 }
