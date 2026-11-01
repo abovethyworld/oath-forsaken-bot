@@ -1994,42 +1994,43 @@ async function clogPagesOf(name) {
   return wrap && wrap.pages ? wrap.pages : null;
 }
 
-// Select menus cap at 25 options; two slots go to the page
-// navigation entries, like the boss list (Alex, Nov 1, 2026:
-// every page either player has progress on is pickable, not
-// just the top 25).
-const CMP_CLOG_PAGE_SIZE = 23;
+// The compare clog picker mirrors the in-game collection log
+// (Alex, Nov 1, 2026): pick a tab first (Bosses, Raids,
+// Clues, Minigames, Other), then a page inside it, A to Z like
+// the game. Only pages either player has progress on are
+// listed. Select menus cap at 25 options, so a long tab pages
+// inside itself the same way the boss list does.
+const CLOG_TABS = [
+  { id: 'bosses', label: 'Bosses' },
+  { id: 'raids', label: 'Raids' },
+  { id: 'clues', label: 'Clues' },
+  { id: 'minigames', label: 'Minigames' },
+  { id: 'other', label: 'Other' },
+];
+const CMP_CLOG_PAGE_SIZE = 22;
 
-async function clogMenuOptions(a, b, page = 0) {
+async function clogPickerData(a, b) {
   const [pa, pb] = await Promise.all([clogPagesOf(a), clogPagesOf(b)]);
-  if (!pa || !pb) return { options: [], page: 0 };
-  const totals = new Map();
+  if (!pa || !pb) return null;
+  const got = new Map();
   for (const pages of [pa, pb]) {
     for (const [title, page] of Object.entries(pages)) {
-      totals.set(title, (totals.get(title) || 0) + (page.obtained || 0));
+      const cur = got.get(title) || { got: 0, tab: page.tab || 'Other' };
+      cur.got += page.obtained || 0;
+      got.set(title, cur);
     }
   }
-  const entries = [...totals.entries()]
-    .filter(([, got]) => got > 0)
-    .sort((x, y) => y[1] - x[1]);
-  // All Pets is pinned first (Alex, Oct 31, 2026): pets get their
-  // own spot in the picker instead of fighting for the top 25.
-  const petsEntry = entries.find(([t]) => t === 'All Pets');
-  const ordered = petsEntry
-    ? [petsEntry, ...entries.filter(([t]) => t !== 'All Pets')]
-    : entries;
-  const pages = Math.max(1, Math.ceil(ordered.length / CMP_CLOG_PAGE_SIZE));
-  const cur = Math.max(0, Math.min(page || 0, pages - 1));
-  const options = [];
-  if (cur > 0) options.push({ label: '← Previous pages', value: `page:${cur - 1}` });
-  for (const [title] of ordered.slice(
-    cur * CMP_CLOG_PAGE_SIZE, cur * CMP_CLOG_PAGE_SIZE + CMP_CLOG_PAGE_SIZE)) {
-    options.push({
-      label: String(title).slice(0, 100), value: String(title).slice(0, 100),
-    });
+  const byTab = new Map(CLOG_TABS.map((t) => [t.id, []]));
+  for (const [title, info] of got) {
+    if (info.got <= 0) continue;
+    const tabId = CLOG_TABS.some((t) => t.label === info.tab)
+      ? info.tab.toLowerCase() : 'other';
+    byTab.get(tabId).push(title);
   }
-  if (cur < pages - 1) options.push({ label: 'More pages →', value: `page:${cur + 1}` });
-  return { options, page: cur };
+  for (const list of byTab.values()) {
+    list.sort((x, y) => x.localeCompare(y));
+  }
+  return byTab;
 }
 
 async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
@@ -2094,13 +2095,47 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
           .addOptions(options)));
     }
   } else if (view === 'clogs') {
-    const menu = await clogMenuOptions(a, b, ui.clogPage || 0);
-    if (menu.options.length) {
-      rows.push(new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`cmpclog:list:${menu.page}:${enc}`)
-          .setPlaceholder('Pick a collection log page...')
-          .addOptions(menu.options)));
+    const byTab = await clogPickerData(a, b);
+    if (byTab) {
+      const tab = CLOG_TABS.find((t) => t.id === ui.clogTab) || null;
+      if (!tab) {
+        const tabs = CLOG_TABS.filter((t) => byTab.get(t.id).length);
+        if (tabs.length) {
+          rows.push(new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(`cmpclog:menu:${enc}`)
+              .setPlaceholder('Pick a tab...')
+              .addOptions(tabs.map((t) => ({
+                label: t.label,
+                value: `tab:${t.id}`,
+                description: `${byTab.get(t.id).length} pages`,
+              })))));
+        }
+      } else {
+        const list = byTab.get(tab.id);
+        const page = Math.max(0, Math.min(ui.clogPage || 0,
+          Math.ceil(list.length / CMP_CLOG_PAGE_SIZE) - 1));
+        const slice = list.slice(page * CMP_CLOG_PAGE_SIZE,
+          page * CMP_CLOG_PAGE_SIZE + CMP_CLOG_PAGE_SIZE);
+        const options = [{ label: '← All tabs', value: 'back' }];
+        if (page > 0) {
+          options.push({ label: '← Previous pages', value: `page:${page - 1}` });
+        }
+        for (const title of slice) {
+          options.push({
+            label: String(title).slice(0, 100),
+            value: String(title).slice(0, 100),
+          });
+        }
+        if ((page + 1) * CMP_CLOG_PAGE_SIZE < list.length) {
+          options.push({ label: 'More pages →', value: `page:${page + 1}` });
+        }
+        rows.push(new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`cmpclog:list:${tab.id}:${page}:${enc}`)
+            .setPlaceholder(`Pick a page (${tab.label})...`)
+            .addOptions(options)));
+      }
     }
   }
   // Quick picks: the owner's other saved RSNs (from /link), one tap to
@@ -2351,9 +2386,10 @@ async function handleCompareSkillSelect(interaction) {
 
 async function handleCompareClogSelect(interaction) {
   const parts = interaction.customId.split(':');
-  const isList = parts[1] === 'list';
-  // Legacy cards: cmpclog:<enc>. Current: cmpclog:list:<page>:<enc>.
-  const pair = decodePair(isList
+  const kind = parts[1];
+  // Legacy cards: cmpclog:<enc>. Current: cmpclog:menu:<enc>
+  // and cmpclog:list:<tab>:<page>:<enc>.
+  const pair = decodePair(kind === 'menu' || kind === 'list'
     ? parts[parts.length - 1] : parts.slice(1).join(':'));
   if (!pair) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
@@ -2364,12 +2400,32 @@ async function handleCompareClogSelect(interaction) {
   if (!value) return;
   const state = compareStateOf(interaction);
   await interaction.deferUpdate().catch(() => {});
-  if (value.startsWith('page:')) {
-    // Menu page flip: same card, same clog page, new menu slice.
-    const nextPage = parseInt(value.slice(5), 10) || 0;
+  if (kind === 'menu') {
+    const tab = value.startsWith('tab:') ? value.slice(4) : null;
     await editCompareMessage(interaction, await compareClogsPayload(
       pair.a, pair.b, null, pair.owner,
-      { bossKey: state.bossKey, clogPage: nextPage }));
+      { bossKey: state.bossKey, clogTab: tab, clogPage: 0 }));
+    return;
+  }
+  if (kind === 'list') {
+    const tab = parts[2];
+    const menuPage = parseInt(parts[3], 10) || 0;
+    if (value === 'back') {
+      await editCompareMessage(interaction, await compareClogsPayload(
+        pair.a, pair.b, null, pair.owner,
+        { bossKey: state.bossKey, clogTab: null, clogPage: 0 }));
+    } else if (value.startsWith('page:')) {
+      // Menu page flip inside the tab: same card, new slice.
+      await editCompareMessage(interaction, await compareClogsPayload(
+        pair.a, pair.b, null, pair.owner,
+        { bossKey: state.bossKey, clogTab: tab,
+          clogPage: parseInt(value.slice(5), 10) || 0 }));
+    } else {
+      await editCompareMessage(interaction, await compareClogsPayload(
+        pair.a, pair.b, null, pair.owner,
+        { bossKey: state.bossKey, page: value,
+          clogTab: tab, clogPage: menuPage }));
+    }
     return;
   }
   await editCompareMessage(interaction, await compareClogsPayload(
