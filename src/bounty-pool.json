@@ -46,8 +46,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Ten races keep a champion, and their rarest drop is his challenge, fought in the cellar of the Champions' Guild.",
+   "winLine": "The challenge is issued, and the scroll is in hand."
   },
   {
    "id": 5,
