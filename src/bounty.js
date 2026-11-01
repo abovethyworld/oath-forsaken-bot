@@ -167,6 +167,7 @@ async function fetchPoster(bounty, hunters, statusText) {
         target: bounty.target,
         location: bounty.location,
         tier: bounty.threat,
+        hunterWord: bounty.pet ? 'pet hunter' : (lane === 'Skilling' ? 'skiller' : 'hunter'),
         postedText: bounty.createdAt
           ? new Date(bounty.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
           : null,
@@ -362,6 +363,7 @@ async function postCommand(interaction) {
       winners,
       proof,
       poolId: contract.id,
+      pet: contract.pet || false,
       days,
       wiki: wikiUrl,
       image: contract.thumbnail || null,
