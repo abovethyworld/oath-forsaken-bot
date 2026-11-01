@@ -400,7 +400,7 @@ async function postCommand(interaction) {
               .setCustomId('bounty:claim:pending')
               .setLabel('Claim Bounty')
               .setStyle(ButtonStyle.Success)
-              .setEmoji('⚔️'),
+              .setEmoji({ id: '1558477037537329182', name: 'zamorak' }),
             new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
           ),
         ],
@@ -419,7 +419,7 @@ async function postCommand(interaction) {
               .setCustomId(`bounty:claim:${msg.id}`)
               .setLabel('Claim Bounty')
               .setStyle(ButtonStyle.Success)
-              .setEmoji('⚔️'),
+              .setEmoji({ id: '1558477037537329182', name: 'zamorak' }),
             new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
           ),
         ],
