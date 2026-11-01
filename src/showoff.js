@@ -732,15 +732,6 @@ function clogPageForCommand(key) {
   return CLOG_PAGES[key] || null;
 }
 
-// Clue tiers fold their (Rare) page into the tier page on
-// !clog (Alex, Nov 1, 2026): one card, tier items first, the
-// rare items after, counts combined. Asking for a (Rare) page
-// by name still shows that page on its own.
-const CLOG_RARE_SIBLING = {
-  'Hard Treasure Trails': 'Hard Treasure Trails (Rare)',
-  'Elite Treasure Trails': 'Elite Treasure Trails (Rare)',
-  'Master Treasure Trails': 'Master Treasure Trails (Rare)',
-};
 
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
 async function clogPayload(key, rsn, userId) {
@@ -768,18 +759,6 @@ async function clogPayload(key, rsn, userId) {
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
-  const rareTitle = CLOG_RARE_SIBLING[page[1]];
-  if (rareTitle) {
-    const rare = await getClogPageWithItems(rsn, page[0], rareTitle)
-      .catch(() => null);
-    if (rare && !rare.notFound && Array.isArray(rare.items)) {
-      const have = new Set((res.items || []).map((it) => it.id));
-      res.items = [...(res.items || []),
-        ...rare.items.filter((it) => !have.has(it.id))];
-      res.obtained = (res.obtained || 0) + (rare.obtained || 0);
-      res.total = (res.total || 0) + (rare.total || 0);
-    }
-  }
   const drawn = await loadClogItems(res);
   // A boss page and its KC are one combined card: when this page's
   // activity has kill counts, post the KC card with this page as its
