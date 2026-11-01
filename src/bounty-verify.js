@@ -1,13 +1,13 @@
-// Bounty proof checker. A claim stores a snapshot of the claimant's
-// numbers at claim time; the Done button in the proof thread re-reads
-// the same sources and measures from the claim forward, so an item or
-// KC gained before claiming never counts. Checks run in a fixed order:
-// the plugin drops log (strongest, server-timestamped), then collection
-// log appearance, then Wise Old Man KC/XP deltas. The result is
-// evidence for staff; a human still presses Grant.
+// Bounty proof checker. There is no sign-up: a hunter gets the drop
+// while a contract is live, screenshots it, and opens a proof thread.
+// The anchor is the contract's post date, not a claim. The Done button
+// checks two timestamped feeds for the drop after that date: the
+// plugin drops log (server-timestamped) and the clan chat feed
+// (TrackScape relay of the in-game broadcasts). The collection log
+// shows the item is owned but cannot date it, so it is supporting
+// evidence only. The result advises staff; a human still grants.
 const fs = require('fs');
 const path = require('path');
-const { getStats } = require('./wom');
 const { getClogPages } = require('./runeprofile');
 const { getRsn } = require('./teams');
 
@@ -19,9 +19,9 @@ const LUCK = (() => {
   }
 })();
 
-// Item name -> item ids, from the luck table (814 scored items). Items
+// Item name -> item ids, from the luck table (scored items). Items
 // outside the table cannot be matched in the drops log by id; the
-// collection log check matches those by name instead.
+// feed and collection log checks match those by name instead.
 const NAME_TO_IDS = new Map();
 for (const [id, entry] of Object.entries(LUCK.items || {})) {
   if (!entry || typeof entry.name !== 'string') continue;
@@ -47,50 +47,7 @@ function slugFor(rsn) {
     .replace(/^-+|-+$/g, '');
 }
 
-const normKey = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-
-// WOM metric keys a proof target refers to: the exact key plus its
-// mode variants (tombs_of_amascut covers tombs_of_amascut_expert), or,
-// with no exact key, any key containing the target (or contained by
-// it).
-function kcKeysFor(stats, target) {
-  const kc = (stats && stats.kc) || {};
-  const keys = Object.keys(kc);
-  const t = normKey(target);
-  if (!t) return [];
-  if (keys.includes(t)) return keys.filter((k) => k === t || k.startsWith(`${t}_`));
-  return keys.filter((k) => k.includes(t) || t.includes(k));
-}
-
-function kcTotal(stats, keys) {
-  const kc = (stats && stats.kc) || {};
-  return keys.reduce((sum, k) => sum + (typeof kc[k] === 'number' ? kc[k] : 0), 0);
-}
-
-// XP for a proof target: a skill name, or overall (sum of all skills).
-function xpFor(stats, target) {
-  const skills = (stats && stats.skills) || {};
-  const t = normKey(target);
-  if (!t) return null;
-  if (t === 'overall' || t === 'total') {
-    let sum = 0;
-    let any = false;
-    for (const [k, v] of Object.entries(skills)) {
-      if (k === 'overall') continue;
-      if (v && typeof v.xp === 'number') {
-        sum += v.xp;
-        any = true;
-      }
-    }
-    const overall = skills.overall && typeof skills.overall.xp === 'number' ? skills.overall.xp : null;
-    return any || overall != null ? { label: 'Overall', xp: overall != null ? overall : sum } : null;
-  }
-  const entry = skills[t];
-  if (entry && typeof entry.xp === 'number') return { label: target, xp: entry.xp };
-  return null;
-}
-
-// First drop of any target item strictly after the claim time. Entries
+// First drop of any target item strictly after the given time. Entries
 // are plugin drop log lines: {source, kind, items:[{id, qty}], at}.
 function findDropSince(entries, ids, sinceMs) {
   if (!ids.length) return null;
@@ -125,6 +82,21 @@ function readDropEntries(rsn) {
   }
 }
 
+// A clan chat feed line proves the drop when it names both the player
+// and the item after the post date. Feed lines are { text, at } with
+// the relay message's content and embeds flattened into text.
+function findFeedHit(lines, rsn, targetName, sinceMs) {
+  const who = String(rsn || '').trim().toLowerCase();
+  const what = String(targetName || '').trim().toLowerCase();
+  if (!who || !what) return null;
+  for (const line of lines || []) {
+    if (!line || !(line.at > sinceMs)) continue;
+    const text = String(line.text || '').toLowerCase();
+    if (text.includes(who) && text.includes(what)) return { at: line.at, text: String(line.text) };
+  }
+  return null;
+}
+
 // Does the obtained-items set (RuneProfile full log parse) contain the
 // target, by id when known, else by name?
 function clogHasInPages(pages, targetName, ids) {
@@ -145,96 +117,51 @@ async function clogHasNow(rsn, targetName, ids) {
   return clogHasInPages(res.pages, targetName, ids);
 }
 
-// Snapshot the claimant's numbers for this proof target. Never throws:
-// a failed source records a note and the claim proceeds regardless.
-async function takeSnapshot(rsn, proof) {
-  const snap = { at: Date.now(), rsn: rsn || null };
-  if (!proof || !proof.type) return snap;
-  if (!rsn) {
-    snap.note = 'no linked RSN';
-    return snap;
-  }
-  try {
-    if (proof.type === 'kc') {
-      const stats = await getStats(rsn);
-      const keys = stats ? kcKeysFor(stats, proof.target) : [];
-      if (stats && keys.length) snap.kc = { keys, total: kcTotal(stats, keys) };
-      else snap.note = 'no Wise Old Man KC found for that target';
-    } else if (proof.type === 'xp') {
-      const stats = await getStats(rsn);
-      const entry = stats ? xpFor(stats, proof.target) : null;
-      if (entry) snap.xp = entry;
-      else snap.note = 'no Wise Old Man XP found for that target';
-    } else if (proof.type === 'drop' || proof.type === 'clog') {
-      const ids = itemIdsForName(proof.target);
-      snap.clogHas = await clogHasNow(rsn, proof.target, ids);
-      if (snap.clogHas === null) snap.note = 'collection log unavailable at claim time';
-    }
-  } catch (err) {
-    snap.note = `snapshot failed: ${err.message}`;
-  }
-  return snap;
-}
-
-function snapshotLine(snapshot, proof) {
-  if (!proof || !proof.type) return null;
-  if (!snapshot) return 'Snapshot failed. Staff can still judge a screenshot.';
-  if (!snapshot.rsn) {
-    return 'No RSN is linked to your Discord, so the proof checker has nothing to measure. /connect links it. Screenshots still work.';
-  }
-  if (snapshot.kc) return `Snapshot at claim: ${proof.target} KC ${snapshot.kc.total}. Gains count from here.`;
-  if (snapshot.xp) return `Snapshot at claim: ${snapshot.xp.label} XP ${snapshot.xp.xp.toLocaleString()}. Gains count from here.`;
-  if (snapshot.clogHas === true) {
-    return `Heads up: the collection log already shows ${proof.target} from before this claim. A fresh one has to land after the claim.`;
-  }
-  if (snapshot.clogHas === false) return `Snapshot at claim: ${proof.target} is not in the collection log yet.`;
-  if (snapshot.note) return `Snapshot: ${snapshot.note}. The checker will compare what it can.`;
-  return null;
-}
-
 const fmtDate = (ms) => new Date(ms).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
 
-// Run the checks for one claim. Returns { status, lines } where status
-// is 'proven', 'not', or 'unknown' (a source could not settle it).
-async function verifyProof({ rsn, proof, snapshot, claimedAt }) {
+// Run the checks for one proof thread. postedAt is the contract's
+// post time: the drop has to land after it. Returns { status, lines }
+// where status is 'proven', 'not', or 'unknown'.
+async function verifyProof({ rsn, proof, postedAt, feedLines }) {
   const lines = [];
-  if (!proof || !proof.type) return { status: 'unknown', lines: ['This contract has no proof target.'] };
+  if (!proof || !proof.type) return { status: 'unknown', lines: ['This contract has no proof target. Staff judge the screenshot.'] };
   if (!rsn) {
     return {
       status: 'unknown',
-      lines: ['No RSN is linked to the claimant\u2019s Discord, so nothing can be checked automatically. /connect links it.'],
+      lines: ['No RSN is linked to this Discord account, so the feeds cannot be matched by name. /connect links it. Staff can still judge the screenshot.'],
     };
   }
-  const need = proof.amount && proof.amount > 0 ? proof.amount : 1;
+
+  if (proof.type === 'kc' || proof.type === 'xp') {
+    return {
+      status: 'unknown',
+      lines: [`${proof.type === 'kc' ? 'KC' : 'XP'} contracts are judged on the screenshot and the clan feeds. The checker only auto-checks drops.`],
+    };
+  }
 
   if (proof.type === 'drop' || proof.type === 'clog') {
     const ids = itemIdsForName(proof.target);
     // 1. Plugin drops log.
     const entries = readDropEntries(rsn);
-    const hit = findDropSince(entries, ids, claimedAt);
+    const hit = findDropSince(entries, ids, postedAt);
     if (hit) {
-      lines.push(`Plugin drop log: item ${hit.id} dropped from ${hit.source} at ${fmtDate(hit.at)}, after the claim.`);
+      lines.push(`Plugin drop log: ${proof.target} dropped from ${hit.source} at ${fmtDate(hit.at)}, after the contract was posted.`);
       return { status: 'proven', lines };
     }
-    if (!ids.length) {
-      lines.push(`Drops log: ${proof.target} is not in the scored item table, so the log cannot be matched by item.`);
-    } else if (!entries.length) {
-      lines.push('Drops log: no plugin drops recorded for this player yet.');
-    } else {
-      lines.push(`Drops log: no ${proof.target} since the claim.`);
+    // 2. Clan chat feed.
+    const feedHit = findFeedHit(feedLines, rsn, proof.target, postedAt);
+    if (feedHit) {
+      lines.push(`Clan chat feed: "${feedHit.text.slice(0, 180)}" at ${fmtDate(feedHit.at)}, after the contract was posted.`);
+      return { status: 'proven', lines };
     }
-    // 2. Collection log appearance.
+    if (ids.length && !entries.length) lines.push('Drops log: no plugin drops recorded for this player yet.');
+    else if (ids.length) lines.push(`Drops log: no ${proof.target} since the contract was posted.`);
+    else lines.push(`Drops log: ${proof.target} is not in the scored item table, so the log cannot be matched by item.`);
+    lines.push('Clan chat feed: no broadcast naming this player and item since the post date.');
+    // 3. Collection log appearance (supporting only, cannot date it).
     const hasNow = await clogHasNow(rsn, proof.target, ids).catch(() => null);
-    if (hasNow === true && snapshot && snapshot.clogHas === false) {
-      lines.push(`Collection log: ${proof.target} was missing at claim time and is in the log now.`);
-      return { status: 'proven', lines };
-    }
-    if (hasNow === true && snapshot && snapshot.clogHas === true) {
-      lines.push(`Collection log: ${proof.target} is in the log, but it was already there at claim time. It does not prove this claim.`);
-      return { status: 'not', lines };
-    }
     if (hasNow === true) {
-      lines.push(`Collection log: ${proof.target} is in the log now, but there is no claim-time snapshot to prove it landed after the claim.`);
+      lines.push(`Collection log: ${proof.target} is in the log now, but the log cannot show when it landed. Judge the screenshot against the post date.`);
       return { status: 'unknown', lines };
     }
     if (hasNow === false) lines.push(`Collection log: ${proof.target} is not in the log yet.`);
@@ -242,44 +169,11 @@ async function verifyProof({ rsn, proof, snapshot, claimedAt }) {
     return { status: hasNow === false ? 'not' : 'unknown', lines };
   }
 
-  if (proof.type === 'kc') {
-    const stats = await getStats(rsn).catch(() => null);
-    if (!stats) return { status: 'unknown', lines: ['Wise Old Man lookup failed. Try again in a bit.'] };
-    const keys = snapshot && snapshot.kc ? snapshot.kc.keys : kcKeysFor(stats, proof.target);
-    if (!keys.length) return { status: 'unknown', lines: [`No Wise Old Man KC matches "${proof.target}".`] };
-    const nowTotal = kcTotal(stats, keys);
-    if (!snapshot || !snapshot.kc) {
-      lines.push(`${proof.target} KC is ${nowTotal} now, but this claim has no snapshot to measure from.`);
-      return { status: 'unknown', lines };
-    }
-    const delta = nowTotal - snapshot.kc.total;
-    lines.push(`${proof.target} KC: ${snapshot.kc.total} at claim, ${nowTotal} now (+${delta}). Needs +${need}.`);
-    return { status: delta >= need ? 'proven' : 'not', lines };
-  }
-
-  if (proof.type === 'xp') {
-    const stats = await getStats(rsn).catch(() => null);
-    if (!stats) return { status: 'unknown', lines: ['Wise Old Man lookup failed. Try again in a bit.'] };
-    const entry = xpFor(stats, proof.target);
-    if (!entry) return { status: 'unknown', lines: [`No Wise Old Man XP matches "${proof.target}".`] };
-    if (!snapshot || !snapshot.xp) {
-      lines.push(`${entry.label} XP is ${entry.xp.toLocaleString()} now, but this claim has no snapshot to measure from.`);
-      return { status: 'unknown', lines };
-    }
-    const delta = entry.xp - snapshot.xp.xp;
-    lines.push(
-      `${entry.label} XP: ${snapshot.xp.xp.toLocaleString()} at claim, ${entry.xp.toLocaleString()} now (+${delta.toLocaleString()}). Needs +${need.toLocaleString()}.`
-    );
-    return { status: delta >= need ? 'proven' : 'not', lines };
-  }
-
   return { status: 'unknown', lines: [`Unknown proof type: ${proof.type}.`] };
 }
 
 module.exports = {
-  takeSnapshot,
-  snapshotLine,
   verifyProof,
   resolveRsn: (userId) => getRsn(userId),
-  _internals: { itemIdsForName, slugFor, kcKeysFor, kcTotal, xpFor, findDropSince, clogHasInPages },
+  _internals: { itemIdsForName, slugFor, findDropSince, findFeedHit, clogHasInPages },
 };

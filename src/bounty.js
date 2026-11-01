@@ -1,6 +1,9 @@
 // Bounty board: staff posts contracts from the bounty pool (synced from
-// the bounty sheet), members claim with proof in a private thread, staff
-// grants or rejects. Two lanes run at once, PvM and Skilling, each with
+// the bounty sheet). No sign-up: anyone hunts, gets the drop while the
+// contract is live, and opens a proof thread with a screenshot. The bot
+// checks the timestamped feeds (plugin drops log, clan chat relay) for
+// the drop after the post date and advises; staff cross-check and
+// grant or reject. Two lanes run at once, PvM and Skilling, each with
 // its own title role: the first winner of a contract takes the lane
 // title, and a contract can allow several winners (the sheet's Winners
 // column) before it closes.
@@ -17,7 +20,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
-const { takeSnapshot, snapshotLine, verifyProof, resolveRsn } = require('./bounty-verify');
+const { verifyProof, resolveRsn } = require('./bounty-verify');
 const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, getRoleById, clampDesc, DAY_MS } = require('./utils');
 
@@ -91,7 +94,7 @@ function proofLine(proof) {
   if (!proof || !proof.type) return null;
   const label = { drop: 'Drop', kc: 'KC', xp: 'XP', clog: 'Collection log' }[proof.type] || proof.type;
   const amount = proof.amount ? ` x${proof.amount}` : '';
-  return `**Proof:** ${label}: ${proof.target}${amount} (fresh, after you claim)`;
+  return `**Proof:** ${label}: ${proof.target}${amount} (the drop must land after the post date)`;
 }
 
 function bountyEmbed({ target, location, threat, days, image, rewardMention, lane, winners, proof }) {
@@ -144,7 +147,7 @@ function posterProofText(proof) {
   if (!proof || !proof.type) return null;
   const label = { drop: 'Drop', kc: 'KC', xp: 'XP', clog: 'Collection log' }[proof.type] || proof.type;
   const amount = proof.amount ? ` x${proof.amount}` : '';
-  return `Proof: ${label}: ${proof.target}${amount}, fresh after you claim.`;
+  return `Proof: ${label}: ${proof.target}${amount}, must land after the post date.`;
 }
 
 // Wanted-poster render from the card service. Null on any failure;
@@ -380,6 +383,9 @@ async function postCommand(interaction) {
     });
     const postContent = [
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
+      `⛧ **A new contract: ${contract.name}** ⛧`,
+      'Fresh only: get it while the contract is live and bring back proof. First hunter back takes the title.',
+      `Reward: **${LANE_TITLES[lane]}**`,
       `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
     ]
       .filter(Boolean)
@@ -398,7 +404,7 @@ async function postCommand(interaction) {
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()
               .setCustomId('bounty:claim:pending')
-              .setLabel('Claim Bounty')
+              .setLabel('Submit Proof')
               .setStyle(ButtonStyle.Success)
               .setEmoji({ id: '1558477037537329182', name: 'zamorak' }),
             new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
@@ -417,7 +423,7 @@ async function postCommand(interaction) {
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()
               .setCustomId(`bounty:claim:${msg.id}`)
-              .setLabel('Claim Bounty')
+              .setLabel('Submit Proof')
               .setStyle(ButtonStyle.Success)
               .setEmoji({ id: '1558477037537329182', name: 'zamorak' }),
             new ButtonBuilder().setLabel('Wiki Link').setStyle(ButtonStyle.Link).setURL(wikiUrl).setEmoji('📖')
@@ -451,7 +457,7 @@ async function handleClaim(interaction, bountyId) {
   );
   if (existing) {
     await interaction
-      .reply({ content: 'You already have an open claim. Post your proof in your thread.', ephemeral: true })
+      .reply({ content: 'You already have an open proof thread. Post your proof there.', ephemeral: true })
       .catch(() => {});
     return;
   }
@@ -478,7 +484,7 @@ async function handleClaim(interaction, bountyId) {
     );
     if (dup) {
       await interaction
-        .reply({ content: 'You already have an open claim. Post your proof in your thread.', ephemeral: true })
+        .reply({ content: 'You already have an open proof thread. Post your proof there.', ephemeral: true })
         .catch(() => {});
       return;
     }
@@ -498,10 +504,10 @@ async function handleClaim(interaction, bountyId) {
       .fetch(config.tickets.panelChannelId)
       .catch(() => null);
     if (!contactChannel || !contactChannel.threads) {
-      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
+      await interaction.editReply({ content: 'Could not open a proof thread. Tell staff.' }).catch(() => {});
       return;
     }
-    const name = `Bounty Claim - ${interaction.user.displayName}`.slice(0, 100);
+    const name = `Bounty Proof - ${interaction.user.displayName}`.slice(0, 100);
     let thread;
     try {
       thread = await contactChannel.threads.create({
@@ -509,7 +515,7 @@ async function handleClaim(interaction, bountyId) {
         autoArchiveDuration: CLAIM_ARCHIVE_MIN,
         type: ChannelType.PrivateThread,
         invitable: false,
-        reason: `Bounty claim by ${interaction.user.tag}`,
+        reason: `Bounty proof by ${interaction.user.tag}`,
       });
     } catch {
       thread = await contactChannel.threads
@@ -517,7 +523,7 @@ async function handleClaim(interaction, bountyId) {
         .catch(() => null);
     }
     if (!thread) {
-      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
+      await interaction.editReply({ content: 'Could not open a proof thread. Tell staff.' }).catch(() => {});
       return;
     }
     await thread.members.add(interaction.user.id).catch(() => {});
@@ -525,35 +531,24 @@ async function handleClaim(interaction, bountyId) {
     const claim = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
     state.claims[thread.id] = claim;
     saveState(state);
-    // Snapshot the claimant's numbers now; proof is measured from the
-    // claim forward. A failed snapshot never blocks the claim.
-    if (bounty.proof) {
-      const snapshot = await takeSnapshot(resolveRsn(interaction.user.id), bounty.proof).catch(() => null);
-      if (snapshot) {
-        claim.snapshot = snapshot;
-        saveState(state);
-      }
-    }
     try {
       const pl = proofLine(bounty.proof);
-      const sl = bounty.proof ? snapshotLine(claim.snapshot, bounty.proof) : null;
       await thread.send({
         content:
-          `<@${interaction.user.id}> would like to claim the bounty!\n` +
-          `Post your proof here. TrackScape screenshot or in-game capture. Fresh kills only.` +
+          `<@${interaction.user.id}> is submitting proof for **${bounty.target}**.\n` +
+          `Post your screenshot here. The drop has to be from after the contract was posted.` +
           (pl ? `\n${pl.replace(/\*\*/g, '')}` : '') +
-          (sl ? `\n${sl}` : '') +
-          (bounty.proof ? `\nWhen you have it, press Done and the bot checks for you. Staff make the final call.` : ''),
+          `\nPress Done - Check My Proof and the bot checks the clan feeds for the drop. Staff cross-check and make the final call.`,
         components: reviewButtons(thread.id),
       });
     } catch {
       delete state.claims[thread.id];
       saveState(state);
-      await interaction.editReply({ content: 'Could not open a claim thread. Tell staff.' }).catch(() => {});
+      await interaction.editReply({ content: 'Could not open a proof thread. Tell staff.' }).catch(() => {});
       return;
     }
     await refreshBoard(interaction.client, bountyId, state, {}).catch(() => {});
-    await interaction.editReply({ content: `Claim opened: ${thread.url}` }).catch(() => {});
+    await interaction.editReply({ content: `Proof thread opened: ${thread.url}` }).catch(() => {});
   });
 }
 
@@ -664,7 +659,7 @@ async function handleGrant(interaction, threadId) {
           }
           if (chan && chan.isTextBased()) {
             await chan
-              .send(`🩸 Contract claimed. **${bounty.target}** falls to ${names}. A new contract will be nailed to the board soon.`)
+              .send(`🩸 Contract complete. **${bounty.target}** falls to ${names}. A new contract will be nailed to the board soon.`)
               .catch(() => {});
           }
         }
@@ -697,6 +692,41 @@ async function handleGrant(interaction, threadId) {
   });
 }
 
+
+// Flatten recent clan chat relay messages (TrackScape) into text lines
+// the proof checker can search. Pages back until it covers the time
+// since the contract was posted, capped so a long contract stays cheap.
+async function fetchFeedLines(client, sinceMs) {
+  const channelId = config.channels && config.channels.clanChat;
+  if (!channelId) return [];
+  const chan = await client.channels.fetch(channelId).catch(() => null);
+  if (!chan || !chan.isTextBased()) return [];
+  const lines = [];
+  let before;
+  for (let page = 0; page < 6; page += 1) {
+    const batch = await chan.messages
+      .fetch({ limit: 100, ...(before ? { before } : {}) })
+      .catch(() => null);
+    if (!batch || !batch.size) break;
+    let oldest = Infinity;
+    for (const m of batch.values()) {
+      oldest = Math.min(oldest, m.createdTimestamp);
+      const parts = [m.content || ''];
+      for (const e of m.embeds || []) {
+        if (e.title) parts.push(e.title);
+        if (e.description) parts.push(e.description);
+        if (e.author && e.author.name) parts.push(e.author.name);
+        if (e.footer && e.footer.text) parts.push(e.footer.text);
+        for (const f of e.fields || []) parts.push(`${f.name} ${f.value}`);
+      }
+      lines.push({ text: parts.filter(Boolean).join(' | '), at: m.createdTimestamp });
+    }
+    if (oldest <= sinceMs) break;
+    before = batch.last().id;
+  }
+  return lines;
+}
+
 // The Done button: run the proof checker and post the verdict into the
 // thread as evidence. Staff still grant or reject.
 async function handleDone(interaction, threadId) {
@@ -718,21 +748,22 @@ async function handleDone(interaction, threadId) {
     return;
   }
   await interaction.deferReply();
-  const rsn = (claim.snapshot && claim.snapshot.rsn) || resolveRsn(claim.claimerId);
+  const rsn = resolveRsn(claim.claimerId);
+  const feedLines = await fetchFeedLines(interaction.client, bounty.createdAt);
   const result = await verifyProof({
     rsn,
     proof: bounty.proof,
-    snapshot: claim.snapshot || null,
-    claimedAt: claim.createdAt,
+    postedAt: bounty.createdAt,
+    feedLines,
   }).catch((err) => ({ status: 'unknown', lines: [`Checker failed: ${err.message}`] }));
   const header =
     result.status === 'proven'
-      ? '✅ **Proof check: proven.**'
+      ? '✅ **Proof check: the bot believes this is good.**'
       : result.status === 'not'
-        ? '❌ **Proof check: not yet.**'
+        ? '❌ **Proof check: not found.**'
         : '⚠️ **Proof check: could not confirm.**';
   await interaction
-    .editReply({ content: `${header}\n${result.lines.join('\n')}\nStaff make the final call.` })
+    .editReply({ content: `${header}\n${result.lines.join('\n')}\nStaff cross-check and make the final call.` })
     .catch(() => {});
 }
 
@@ -753,9 +784,9 @@ async function handleReject(interaction, threadId) {
     await refreshBoard(interaction.client, claim.bountyId, state, {}).catch(() => {});
     const thread = await interaction.guild.channels.fetch(threadId).catch(() => null);
     if (thread && thread.isThread()) {
-      await thread.send('Claim rejected. Post better proof if you have it.').catch(() => {});
+      await thread.send('Proof rejected. Post better proof if you have it.').catch(() => {});
     }
-    await interaction.reply({ content: 'Claim rejected.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Proof rejected.', ephemeral: true }).catch(() => {});
   });
 }
 
@@ -818,7 +849,7 @@ async function sweepExpiredBounties(client) {
               const thread = await client.channels.fetch(threadId).catch(() => null);
               if (thread && thread.isThread()) {
                 await thread
-                  .send(`<@${c.claimerId}> Last call: this contract closes in under 48 hours. Press Done if you have the proof.`)
+                  .send(`<@${c.claimerId}> Last call: this contract closes in under 48 hours. Press Done - Check My Proof if you have the proof.`)
                   .catch(() => {});
               }
             }
@@ -844,8 +875,8 @@ async function sweepExpiredBounties(client) {
         winners > 0
           ? `⌛ The contract on **${b.target}** closed with ${winners} winner${winners === 1 ? '' : 's'} on the board.`
           : pendingCount > 0
-            ? `⌛ The contract on **${b.target}** expired mid-grind: ${pendingCount} open claim${pendingCount === 1 ? '' : 's'} never proved in time.`
-            : `⌛ The contract on **${b.target}** expired with no claim.`;
+            ? `⌛ The contract on **${b.target}** expired mid-grind: ${pendingCount} proof thread${pendingCount === 1 ? '' : 's'} never proved in time.`
+            : `⌛ The contract on **${b.target}** expired with no proof sent in.`;
       try {
         const chan = await client.channels.fetch(b.channelId).catch(() => null);
         if (!chan || !chan.isTextBased()) continue;
