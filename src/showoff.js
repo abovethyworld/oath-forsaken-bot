@@ -2035,11 +2035,13 @@ async function clogPagesOf(name) {
 }
 
 // The compare clog picker mirrors the in-game collection log
-// (Alex, Nov 1, 2026): pick a tab first (Bosses, Raids,
-// Clues, Minigames, Other), then a page inside it, A to Z like
-// the game. Only pages either player has progress on are
-// listed. Select menus cap at 25 options, so a long tab pages
-// inside itself the same way the boss list does.
+// (Alex, Nov 1, 2026): pick a tab first, then a page inside
+// it, A to Z like the game. Bosses and Raids are NOT listed:
+// those pages live under the Boss view, whose cards carry
+// their kills and log strips. Only pages either player has
+// progress on are listed. Select menus cap at 25 options, so
+// a long tab pages inside itself the same way the boss list
+// does.
 const CLOG_TABS = [
   { id: 'bosses', label: 'Bosses' },
   { id: 'raids', label: 'Raids' },
@@ -2063,6 +2065,11 @@ async function clogPickerData(a, b) {
   const byTab = new Map(CLOG_TABS.map((t) => [t.id, []]));
   for (const [title, info] of got) {
     if (info.got <= 0) continue;
+    // Boss and raid pages live under the Boss view (Alex,
+    // Nov 1, 2026): the Boss cards already carry their kills
+    // and log strips, so the Clogs picker is non-boss pages
+    // only: Clues, Minigames, Other.
+    if (info.tab === 'Bosses' || info.tab === 'Raids') continue;
     const tabId = CLOG_TABS.some((t) => t.label === info.tab)
       ? info.tab.toLowerCase() : 'other';
     byTab.get(tabId).push(title);
@@ -2154,7 +2161,8 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
   } else if (view === 'clogs') {
     const byTab = await clogPickerData(a, b);
     if (byTab) {
-      const tab = CLOG_TABS.find((t) => t.id === ui.clogTab) || null;
+      const tab = CLOG_TABS.find(
+        (t) => t.id === ui.clogTab && byTab.get(t.id).length) || null;
       if (!tab) {
         const tabs = CLOG_TABS.filter((t) => byTab.get(t.id).length);
         if (tabs.length) {
