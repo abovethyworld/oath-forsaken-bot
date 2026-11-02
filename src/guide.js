@@ -87,7 +87,7 @@ function homeEmbed(user) {
   const rsns = linkedRsns(user.id);
   const status = rsns.length
     ? `Your linked accounts: ${rsns.join(', ')}`
-    : 'You are not linked yet. See Clan plugin setup below, it takes two minutes.';
+    : 'You are not linked yet. The Setup topic covers it, it takes two minutes.';
   const topicList = (content.topics || []).map((t) => `**${t.title}**`).join(' · ');
   return new EmbedBuilder()
     .setTitle('⛧ Bot Guide ⛧')
@@ -142,7 +142,7 @@ const commands = [
           .setDescription('Jump straight to a topic')
           .setRequired(false)
           .addChoices(
-            { name: 'Clan plugin setup', value: 'setup' },
+            { name: 'Setup', value: 'setup' },
             { name: 'Cards', value: 'cards' },
             { name: 'Compare', value: 'compare' },
             { name: 'Bounties', value: 'bounties' },
