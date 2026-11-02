@@ -1024,8 +1024,7 @@ async function handleProfileCommand(message, args) {
 // the compare card's menu: tab buttons plus a picker per tab, view
 // controls open to everyone. Design: files/leaderboard-design-draft-
 // 2026-11-02.md in the clan goal (drafted with Alex, Nov 1-2 2026).
-// Ranked set = the website population (ladder-data.json on the site;
-// see rankedNames). Numbers come
+// Ranked set = the website population (see rankedNames). Numbers come
 // straight from the caches (WOM / RuneProfile); a member appears on a
 // board only when they have a number for it (no invented zeros), and KC
 // is whatever WOM returns, so WOM's own ranking cutoffs apply.
@@ -1062,43 +1061,31 @@ function lbDecode(s) {
   return st;
 }
 
-// The ranked set is the website's own population file: the exporter
-// builds ladder-data.json from the WOM group plus its extra members and
-// verified friends, which is a wider set than the bot's raw input files
-// (IronVale is an exporter extra member; some friends are verified on the
-// site before they ever link an RSN here). Cached in memory; the bot's
-// wom-group.json + friends.json are the fallback if the site is down.
-let lbNamesCache = { at: 0, names: null };
+// The ranked set mirrors the site exporter's allowed set (export_site_
+// data.py is the source of truth): the WOM group file, the exporter's
+// EXTRA_MEMBERS, its EXTRA_FRIENDS (verified friends who have not linked
+// an RSN here yet), and the friends file. It deliberately does NOT read
+// ladder-data.json: that file only holds players the exporter's own
+// cache has complete records for, which runs smaller than the roster.
+const LB_EXTRA_MEMBERS = ['IronVale'];
+const LB_EXTRA_FRIENDS = ['ksen', 'merryshake', 'brez', 'm o u z'];
 async function rankedNames() {
-  if (lbNamesCache.names && Date.now() - lbNamesCache.at < 10 * 60 * 1000) {
-    return lbNamesCache.names;
-  }
-  let names = null;
+  const names = [];
+  const seen = new Set();
+  const push = (rsn) => {
+    const n = String(rsn || '').trim();
+    const key = n.toLowerCase();
+    if (n && !seen.has(key)) { seen.add(key); names.push(n); }
+  };
+  const dataDir = path.join(__dirname, '..', 'data');
   try {
-    const res = await fetch('https://oathforsaken.cc/ladder-data.json');
-    if (res.ok) {
-      const data = await res.json();
-      const list = Object.values(data.players || {}).map((p) => p.rsn).filter(Boolean);
-      if (list.length) names = list;
-    }
-  } catch { /* fall through to the local files */ }
-  if (!names) {
-    names = [];
-    const seen = new Set();
-    const push = (rsn) => {
-      const n = String(rsn || '').trim();
-      const key = n.toLowerCase();
-      if (n && !seen.has(key)) { seen.add(key); names.push(n); }
-    };
-    const dataDir = path.join(__dirname, '..', 'data');
-    try {
-      for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
-    } catch { /* file not published yet */ }
-    try {
-      for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
-    } catch { /* file not published yet */ }
-  }
-  if (names.length) lbNamesCache = { at: Date.now(), names };
+    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
+  } catch { /* file not published yet */ }
+  for (const n of LB_EXTRA_MEMBERS) push(n);
+  for (const n of LB_EXTRA_FRIENDS) push(n);
+  try {
+    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
+  } catch { /* file not published yet */ }
   return names;
 }
 
