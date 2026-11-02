@@ -11,6 +11,8 @@
       "short": [
         "Stats and KC need nothing. The bot looks your name up on Wise Old Man.",
         "Link your RSN: press **Link RSN** under the guide post in #bot-guide and type your RSN. Commands use your name when you leave it blank.",
+        "Press **Account Type** under the guide post to set the mode for each of your accounts.",
+        "Group iron modes can't be detected. Those have to be picked by hand.",
         "Your collection log needs RuneProfile:",
         "1. Open your RuneLite client.",
         "2. Open the Plugin Hub (bottom of the plugin list).",
@@ -64,9 +66,9 @@
       "images": [],
       "short": [
         "Every card command has a text version. Type it in any channel, or in a DM.",
-        "`!kc zulrah` \u00b7 `!clog` \u00b7 `!skills`",
-        "`!dry zulrah` \u00b7 `!gains` \u00b7 `!compare`",
-        "`!pb` \u00b7 `!profile` \u00b7 `!leaderboard`",
+        "`!kc zulrah` · `!clog` · `!skills`",
+        "`!dry zulrah` · `!gains` · `!compare`",
+        "`!pb` · `!profile` · `!leaderboard`",
         "Boss names work alone: `!toa`, `!zulrah`. Same card `/kc` posts.",
         "Shortcuts: `!log` = clog, `!lvl` = skills. Plain names work: `!kc nightmare`."
       ],

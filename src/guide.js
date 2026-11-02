@@ -13,6 +13,7 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 const { ZAMORAK_RED } = require('./utils');
+const { getRsnEntry, getStatedBadge } = require('./teams');
 
 const CONTENT_FILE = path.join(__dirname, '..', 'data', 'guide-content.json');
 const MEMBERS_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'members');
@@ -85,9 +86,14 @@ function guideButton(topicId) {
 function homeEmbed(user) {
   const content = loadContent();
   const rsns = linkedRsns(user.id);
-  const status = rsns.length
+  let status = rsns.length
     ? `Your linked accounts: ${rsns.join(', ')}`
     : 'No RSN linked yet. The Link RSN button is under the guide post in #bot-guide.';
+  const linkEntry = getRsnEntry(user.id);
+  const unstated = linkEntry.rsns.filter((r) => !getStatedBadge(user.id, r));
+  if (linkEntry.rsns.length && unstated.length) {
+    status += `\nAccount type not set for ${unstated.join(', ')}. The Account Type button is under the guide post in #bot-guide.`;
+  }
   const topicList = (content.topics || []).map((t) => `**${t.title}**`).join(' · ');
   return new EmbedBuilder()
     .setTitle('⛧ Bot Guide ⛧')
