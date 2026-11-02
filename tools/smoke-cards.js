@@ -271,6 +271,27 @@ async function t(name, fn, needFile = true) {
       flat(ixG.last).some((c) => c.id.startsWith('lbg:pm:')));
   }
 
+  // ── K. Bridges, clue dry, per-command cooldown ──────
+  const kcZ = await S.kcPayload('zulrah', 'IronVale', GAVIN);
+  ok('kc card has the Dry bridge', flat(kcZ).some((c) => c.id.startsWith('bridge:dry:zulrah:')));
+  const kcT = await S.kcPayload('toa', 'IronVale', GAVIN);
+  ok('kc card has no Dry bridge for unscored ToA', !flat(kcT).some((c) => c.id.startsWith('bridge:')));
+  const dryZ = await S.dryPayload('zulrah', 'IronVale', GAVIN);
+  ok('dry card has the KC bridge', flat(dryZ).some((c) => c.id.startsWith('bridge:kc:zulrah:')));
+  let bridged = null;
+  await S.handleBridgeButton({ customId: 'bridge:dry:zulrah:IronVale', user: { id: GAVIN },
+    update: async (p) => { bridged = p; }, reply: async (p) => { bridged = p; } });
+  ok('bridge press swaps KC into dry', !!(bridged && bridged.files));
+  const dryHard = await S.dryPayload('clue:hard', 'IronVale', GAVIN);
+  ok('dry renders for hard clues', hasFile(dryHard),
+    dryHard && dryHard.content ? dryHard.content.slice(0, 80) : '');
+  ok('clue dry card has the Clues bridge',
+    !!(dryHard && dryHard.components) && flat(dryHard).some((c) => c.id.startsWith('bridge:clues:')));
+  const u2 = '999000111';
+  S.noteUse(u2, 'kc');
+  ok('cooldown blocks the same family', S.checkCooldown(u2, 'kc').wait > 0);
+  ok('cooldown leaves other families free', S.checkCooldown(u2, 'compare').wait === 0);
+
   // ── J. Profile-luck file (writer runs at startup + 6h) ──
   let luckOk = false, luckWhy = '';
   try {

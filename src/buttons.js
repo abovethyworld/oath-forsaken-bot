@@ -9,7 +9,7 @@ const { handleEventButton } = require('./calendar');
 const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
-const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLbSwapButton, handleLbBackButton, handleGainsButton } = require('./showoff');
+const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLbSwapButton, handleLbBackButton, handleGainsButton, handleBridgeButton } = require('./showoff');
 const { handleWipeButton } = require('./wipe');
 const config = require('./config');
 
@@ -43,6 +43,7 @@ async function routeButton(interaction) {
   if (kind === 'lbswap') return handleLbSwapButton(interaction);
   if (kind === 'lbback') return handleLbBackButton(interaction);
   if (kind === 'gains') return handleGainsButton(interaction);
+  if (kind === 'bridge') return handleBridgeButton(interaction);
   if (kind === 'lbopen') {
     await interaction.reply({
       content: 'That button predates the board update. Run the command again for the new one.',
