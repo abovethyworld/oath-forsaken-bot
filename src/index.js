@@ -152,8 +152,8 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
   setInterval(() => sweepExpiredBounties(client), 6 * 3600 * 1000);
-  setInterval(() => { refreshProfileLuck().catch(() => {}); }, 6 * 3600 * 1000);
-  refreshProfileLuck().catch(() => {});
+  setInterval(() => { refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message)); }, 6 * 3600 * 1000);
+  refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message));
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
   setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
   setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);
