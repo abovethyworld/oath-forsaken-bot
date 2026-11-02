@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
@@ -270,7 +270,6 @@ client.on(Events.MessageCreate, async (message) => {
     else if (cmd === 'clog') await handleClogCommand(message, parts.slice(1));
     else if (cmd === 'profile') await handleProfileCommand(message, parts.slice(1));
     else if (cmd === 'leaderboard') await handleLeaderboardCommand(message, parts.slice(1));
-    else if (cmd === 'tfa') await handleTfaCommand(message, parts.slice(1));
     else if (cmd === 'pb') await handlePbCommand(message, parts.slice(1));
     else if (cmd === 'skills') await handleSkillsCommand(message, parts.slice(1));
     else if (cmd === 'compare') await handleCompareCommand(message, parts.slice(1));
@@ -279,8 +278,8 @@ client.on(Events.MessageCreate, async (message) => {
     else if (cmd === 'log') await handleClogCommand(message, parts.slice(1));
     else if (cmd === 'lvl' || cmd === 'levels') await handleSkillsCommand(message, parts.slice(1));
     // Boss shortcut: !toa, !zulrah, !vork and friends show that boss's KC
-    // card, the way members already expect !tfa to. Real commands above
-    // always win; this only fires for an exact boss key.
+    // card. Real commands above always win; this only fires for an exact
+    // boss key.
     else if (kcEntry(cmd)) await handleKcCommand(message, [cmd, ...parts.slice(1)]);
   } catch (err) {
     console.error(`Show-off command ${cmd} failed:`, err.message);
