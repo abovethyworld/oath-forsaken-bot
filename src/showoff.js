@@ -3245,17 +3245,6 @@ async function handlePbCommand(message, args) {
   await replyPayload(message, rsn, pbPayload(activity, rsn, message.author.id));
 }
 
-// !tfa [name]: the Fractured Archive combined card, shorthand for
-// !kc tfa with its clog strip.
-async function handleTfaCommand(message, args) {
-  const cd = checkCooldown(message.author.id, 'tfa');
-  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  const { rsn, error, payload } = resolveName(args, message.author.id);
-  if (error) { await message.reply(error).catch(() => {}); return; }
-  if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await kcPayload('tfa', rsn, message.author.id)).catch(() => {});
-}
-
 async function handleLeaderboardCommand(message, args) {
   const cd = checkCooldown(message.author.id, 'leaderboard');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
@@ -4381,19 +4370,6 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
-      .setName('tfa')
-      .setDescription("Show a player's Fractured Archive card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
-    run: async (interaction) => {
-      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
-      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
-      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, () => kcPayload('tfa', rsn, interaction.user.id));
-    },
-  },
-  {
-    data: new SlashCommandBuilder()
       .setName('leaderboard')
       .setDescription('Clan leaderboards: total XP, boss KC, skills, collection log, gains, driest')
       .addStringOption((o) => o.setName('board')
@@ -4428,4 +4404,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
