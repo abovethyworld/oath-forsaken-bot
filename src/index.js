@@ -159,6 +159,17 @@ client.once(Events.ClientReady, async (c) => {
   // every 24h. One paced pass over the ranked players only.
   setTimeout(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 180 * 1000);
   setInterval(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 24 * 3600 * 1000);
+  // Event-loop watchdog: a starved loop misses Discord's
+  // 3-second interaction window (the /dry failure, Nov 2,
+  // 2026). Log lag loudly so a slow builder is visible in
+  // the journal instead of silent.
+  let lastTick = Date.now();
+  setInterval(() => {
+    const now = Date.now();
+    const lag = now - lastTick - 30 * 1000;
+    if (lag > 3000) console.error(`[watchdog] Event loop lagged ${(lag / 1000).toFixed(1)}s`);
+    lastTick = now;
+  }, 30 * 1000);
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
   setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
   setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);

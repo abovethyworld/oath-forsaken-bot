@@ -47,9 +47,12 @@ function fakeIx(customId, messageComponents, userId) {
   return ix;
 }
 const hasFile = (p) => !!(p && p.files && p.files[0]);
+const timings = [];
 async function t(name, fn, needFile = true) {
   let p = null, threw = null;
+  const started = Date.now();
   try { p = await fn(); } catch (e) { threw = e; }
+  timings.push({ name, ms: Date.now() - started });
   ok(name, !threw && (needFile ? hasFile(p) : (hasFile(p) || typeof (p && p.content) === 'string')),
     threw ? threw.message : (p && p.content ? String(p.content).slice(0, 100) : 'no file/content'));
   return p;
@@ -344,13 +347,27 @@ async function t(name, fn, needFile = true) {
   ok('ensureSynced no-ops for a warm name', warmSeed === false);
 
   // ── L. Dry list + driest board ──
+  const dlStarted = Date.now();
   const dl = await S.dryListPayload('IronVale', null, 'all');
+  timings.push({ name: 'dry list (section L)', ms: Date.now() - dlStarted });
   ok('dry list renders for IronVale', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
   ok('dry list carries category buttons', !!dl && (dl.components || []).length >= 1);
   const dlb = await S.dryListPayload('IronVale', null, 'Bosses');
   ok('dry list Bosses category renders', !!(dlb && dlb.files));
   const drb = await S.leaderboardPayload(null, 'driest');
   ok('driest board renders', !!(drb && drb.files), JSON.stringify(drb && drb.content || ''));
+
+  // Timing guard (Nov 2, 2026): a payload builder that burns
+  // seconds of CPU starves Discord's 3-second interaction
+  // acknowledgement and the command dies with "Unknown
+  // interaction" while looking fine in tests. Any timed build
+  // over the budget fails the sweep.
+  const slowest = timings.slice().sort((a, b) => b.ms - a.ms)[0];
+  if (slowest) console.log(` slowest build: ${slowest.name} ${slowest.ms}ms`);
+  for (const tm of timings) {
+    if (tm.ms > 4000) ok(`timing budget: ${tm.name}`, false, `${tm.ms}ms > 4000ms`);
+  }
+  ok('timing budget: all builds under 4s', timings.every((tm) => tm.ms <= 4000));
 
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
   if (fails.length) console.log('FAILURES:', fails.join(' ;; '));

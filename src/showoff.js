@@ -3282,8 +3282,13 @@ async function slashReply(interaction, payloadPromise) {
   // A thunk defers the payload build itself until after the
   // defer lands, so a heavy build can never starve the
   // interaction's 3-second acknowledgement window.
+  const buildStarted = Date.now();
   const payload = await (typeof payloadPromise === 'function'
     ? payloadPromise() : payloadPromise);
+  const buildMs = Date.now() - buildStarted;
+  if (buildMs > 2500) {
+    console.error(`[slashReply] Slow build: /${interaction.commandName} took ${buildMs}ms`);
+  }
   // Defer failed (usually an expired interaction): editReply would fail
   // too, so bail instead of answering into the void.
   if (!deferred) return;
@@ -4263,7 +4268,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+      await slashReply(interaction, () => kcPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
   {
@@ -4277,7 +4282,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+      await slashReply(interaction, () => clogPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
   {
@@ -4290,7 +4295,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, profilePayload(rsn, interaction.user.id));
+      await slashReply(interaction, () => profilePayload(rsn, interaction.user.id));
     },
   },
   {
@@ -4303,7 +4308,7 @@ const commands = [
       const pair = await resolveComparePair(interaction);
       if (!pair) return;
       if (await slashCooldown(interaction, 'player_b')) return;
-      await slashReply(interaction, compareOverallPayload(pair.a, pair.b, interaction.user.id));
+      await slashReply(interaction, () => compareOverallPayload(pair.a, pair.b, interaction.user.id));
     },
   },
   {
@@ -4319,9 +4324,9 @@ const commands = [
       if (await slashCooldown(interaction, 'skill')) return;
       const skFold = String(interaction.options.getString('skill') || '').toLowerCase().replace(/[^a-z]/g, '');
       const skill = skFold ? (SKILL_ALIASES[skFold] || (SKILL_ORDER.includes(skFold) ? skFold : null)) : null;
-      await slashReply(interaction, skill
+      await slashReply(interaction, () => (skill
         ? skillPayload(rsn, skill, interaction.user.id)
-        : skillsPayload(rsn, interaction.user.id));
+        : skillsPayload(rsn, interaction.user.id)));
     },
   },
   {
@@ -4335,7 +4340,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, pbPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+      await slashReply(interaction, () => pbPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
   {
@@ -4354,7 +4359,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'period')) return;
-      await slashReply(interaction, gainsPayload(rsn, interaction.options.getString('period') || 'week', interaction.user.id));
+      await slashReply(interaction, () => gainsPayload(rsn, interaction.options.getString('period') || 'week', interaction.user.id));
     },
   },
   {
@@ -4384,7 +4389,7 @@ const commands = [
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, kcPayload('tfa', rsn, interaction.user.id));
+      await slashReply(interaction, () => kcPayload('tfa', rsn, interaction.user.id));
     },
   },
   {
@@ -4397,7 +4402,7 @@ const commands = [
         .setRequired(false)),
     run: async (interaction) => {
       if (await slashCooldown(interaction, 'board')) return;
-      await slashReply(interaction, leaderboardPayload(interaction.user.id,
+      await slashReply(interaction, () => leaderboardPayload(interaction.user.id,
         interaction.options.getString('board')));
     },
   },
