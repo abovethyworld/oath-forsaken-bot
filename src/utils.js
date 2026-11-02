@@ -59,7 +59,7 @@ function buildInitiateWelcome(userId) {
     `<@${userId}> has joined Oath Forsaken.\n\n` +
     `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
     `• Drop an intro in <#${introduceId}> so we can get to meet you\n` +
-    `• Grab your roles in <#${rolesId}>\n` +
+    `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
     `• Hit **Link RSN** in <#${botGuideId}> so the clan bot knows your name\n` +
     `• Ping <@&${staffId}> when you're ready for a clan chat invite`
   );
@@ -78,8 +78,8 @@ function buildGuestWelcome(userId) {
     `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
     `<@${userId}>\n\n` +
     `The door's open. Come see what the forsaken built.\n\n` +
-    `• Introduce yourself in <#${introduceId}>\n` +
-    `• Grab your roles in <#${rolesId}>\n` +
+    `• Drop an intro in <#${introduceId}>\n` +
+    `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
     `• Guest in the clan chat any time: type **OathForsaken** in the guest clan tab\n` +
     `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
   );
