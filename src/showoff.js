@@ -299,23 +299,64 @@ function skillRank(rsn, skillKey) {
   return idx >= 0 ? idx + 1 : null;
 }
 
-// Leaderboard jump button (Alex, Nov 2, 2026): any card that
-// shows a clan rank carries the matching board under it. Anyone
-// can press it; the board posts in the channel.
-function lbButtonRow(boardArg) {
+// Leaderboard swap button (Alex, Nov 2, 2026): any card that
+// shows a clan rank carries one. Pressing it swaps the card
+// itself into the matching board, compare-style, with a Back
+// button that restores the card. The backId encodes how to
+// rebuild the card the board replaced.
+function lbSwapRow(boardArg, backId) {
   return new ActionRowBuilder().addComponents(new ButtonBuilder()
-    .setCustomId(`lbopen:${boardArg}`)
+    .setCustomId(`lbswap:${boardArg}:${backId}`)
     .setLabel('Leaderboard')
     .setStyle(ButtonStyle.Danger));
 }
 
-async function handleLbOpenButton(interaction) {
-  const arg = interaction.customId.split(':').slice(1).join(':');
-  await interaction.deferReply().catch(() => {});
-  const payload = await leaderboardPayload(interaction.user.id, arg || null);
-  await interaction.editReply({
+function lbBackRow(backId) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`lbback:${backId}`)
+    .setLabel('Back')
+    .setStyle(ButtonStyle.Secondary));
+}
+
+async function handleLbSwapButton(interaction) {
+  const parts = interaction.customId.split(':');
+  let boardArg;
+  let backSegs;
+  if (parts[1] === 'overall') { boardArg = 'overall'; backSegs = parts.slice(2); }
+  else { boardArg = `${parts[1]}:${parts[2]}`; backSegs = parts.slice(3); }
+  const payload = await leaderboardPayload(interaction.user.id, boardArg);
+  const components = [...(payload.components || []), lbBackRow(backSegs.join(':'))];
+  await interaction.update({
     content: payload.content || '',
     files: payload.files || [],
+    attachments: [],
+    components,
+  }).catch(() => {});
+}
+
+async function handleLbBackButton(interaction) {
+  const parts = interaction.customId.split(':');
+  const kind = parts[1];
+  const un = (s) => String(s || '').replace(/_/g, ' ');
+  let payload = null;
+  if (kind === 'kc') {
+    payload = await kcPayload(parts[2], un(parts[3]), interaction.user.id);
+  } else if (kind === 'skills') {
+    payload = await skillsPayload(un(parts[2]), interaction.user.id);
+  } else if (kind === 'skill') {
+    payload = await skillPayload(un(parts[3]), parts[2], interaction.user.id);
+  } else if (kind === 'cmpboss') {
+    const pair = decodePair(parts[3]);
+    if (pair) payload = await compareViewRender('boss', parts[2], pair.a, pair.b, pair.owner);
+  } else if (kind === 'cmpskill') {
+    const pair = decodePair(parts[3]);
+    if (pair) payload = await compareSkillsPayload(pair.a, pair.b, interaction.user.id, pair.owner, { skill: parts[2] });
+  }
+  if (!payload) return;
+  await interaction.update({
+    content: payload.content || '',
+    files: payload.files || [],
+    attachments: [],
     components: payload.components || [],
   }).catch(() => {});
 }
@@ -487,7 +528,7 @@ async function kcPayload(activity, rsn, userId) {
   if (card) {
     return {
       files: [new AttachmentBuilder(card, { name: 'kc.png' })],
-      components: body.rank ? [lbButtonRow(`boss:${activity}`)] : [],
+      components: body.rank ? [lbSwapRow(`boss:${activity}`, `kc:${activity}:${rsn.replace(/ /g, '_')}`)] : [],
     };
   }
   return CARD_DOWN;
@@ -1603,6 +1644,16 @@ async function lbUpdate(interaction, st) {
   const msg = { content: payload.content || '', components: payload.components || [] };
   if (payload.files) { msg.files = payload.files; msg.attachments = []; }
   else { msg.files = []; msg.attachments = []; }
+  // A board swapped in from a card carries that card's Back
+  // button on the message; keep it across board flips.
+  const rows = (interaction.message && interaction.message.components) || [];
+  for (const row of rows) {
+    for (const comp of row.components || []) {
+      if (comp.customId && comp.customId.startsWith('lbback:')) {
+        msg.components = [...msg.components, lbBackRow(comp.customId.slice('lbback:'.length))];
+      }
+    }
+  }
   await interaction.update(msg).catch(() => {});
 }
 
@@ -1819,7 +1870,7 @@ async function skillsPayload(rsn, userId) {
   if (card) {
     return {
       files: [new AttachmentBuilder(card, { name: 'skills.png' })],
-      components: rank ? [lbButtonRow('overall')] : [],
+      components: rank ? [lbSwapRow('overall', `skills:${rsn.replace(/ /g, '_')}`)] : [],
     };
   }
   return CARD_DOWN;
@@ -1920,7 +1971,7 @@ async function skillPayload(rsn, skillKey, userId) {
   if (card) {
     return {
       files: [new AttachmentBuilder(card, { name: 'skill.png' })],
-      components: rank ? [lbButtonRow(`skill:${skillKey}`)] : [],
+      components: rank ? [lbSwapRow(`skill:${skillKey}`, `skill:${skillKey}:${rsn.replace(/ /g, '_')}`)] : [],
     };
   }
   return CARD_DOWN;
@@ -2190,7 +2241,7 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     });
     const components = await compareComponents('skills', aName, bName,
       ui.bossKey || null, ownerId ?? userId, ui);
-    components.push(lbButtonRow(`skill:${picked}`));
+    components.push(lbSwapRow(`skill:${picked}`, `cmpskill:${picked}:${encodePair(aName, bName, ownerId ?? userId)}`));
     if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skill.png' })], components };
     return { content: `**${ai ? ai.name : picked}** - ${aName}: ${ai ? ai.level ?? '-' : '-'} · ${bName}: ${bi ? bi.level ?? '-' : '-'}`, components };
   }
@@ -2270,7 +2321,7 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
   });
   if (card) {
     const components = await compareComponents('boss', aName, bName, key, ownerId, { cat: raidDef && raidDef.cat ? raidDef.cat : 'raids', catPage: 0 });
-    components.push(lbButtonRow(`boss:${key}`));
+    components.push(lbSwapRow(`boss:${key}`, `cmpboss:${key}:${encodePair(aName, bName, ownerId)}`));
     return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components };
   }
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${parts.length ? ` (${parts.join(' · ')})` : ''}` };
@@ -2325,7 +2376,7 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   });
   if (card) {
     const components = await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 });
-    components.push(lbButtonRow(`boss:${key}`));
+    components.push(lbSwapRow(`boss:${key}`, `cmpboss:${key}:${encodePair(aName, bName, ownerId ?? userId)}`));
     return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components };
   }
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
@@ -2519,7 +2570,21 @@ async function slashCooldown(interaction) {
 // { name, value } pairs filtered by what the member has typed.
 function kcAutocompleteChoices(focused) {
   const q = String(focused || '').toLowerCase();
-  const all = Object.entries(KC_KEYS).map(([value, a]) => ({ name: a.name, value }));
+  // One row per boss: variant singles (ToA Expert, CoX CM,
+  // Hard Mode ToB) fold into the combined card's row, and alias
+  // keys share a row under the boss's plain name.
+  const seen = new Set();
+  const all = [];
+  for (const [value] of Object.entries(KC_KEYS)) {
+    const entry = kcEntry(value);
+    if (!entry) continue;
+    const name = String(entry.name)
+      .replace(/^Hard Mode /, '')
+      .replace(/ (Normal|Expert|CM|Challenge Mode)$/, '');
+    if (seen.has(name)) continue;
+    seen.add(name);
+    all.push({ name, value });
+  }
   return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
 }
 
@@ -3585,4 +3650,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbOpenButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
