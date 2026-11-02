@@ -2,8 +2,8 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getStats, combatLevel, kcStandings } = require('./wom');
-const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
+const { getStats, getCachedStats, combatLevel, kcStandings } = require('./wom');
+const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
@@ -1019,34 +1019,455 @@ async function handleProfileCommand(message, args) {
 
 // Leaderboard rows from cached clog totals (instant); missing profiles get a
 // background refresh so the next call is fuller, never a slow first call.
-function leaderboardRows() {
-  const links = loadRsnLinks();
-  const rsns = [];
-  for (const entry of Object.values(links || {})) {
-    const name = entry && Array.isArray(entry.rsns) ? entry.active : entry && entry.rsn;
-    if (name && !rsns.includes(name)) rsns.push(name);
+// ---- Leaderboards ------------------------------------------------------
+// One card, five boards (Overall / PvM / Skills / Clogs / Gains), wearing
+// the compare card's menu: tab buttons plus a picker per tab, view
+// controls open to everyone. Design: files/leaderboard-design-draft-
+// 2026-11-02.md in the clan goal (drafted with Alex, Nov 1-2 2026).
+// Ranked set = the website population: WOM group members (data/
+// wom-group.json) plus Friend of the Clan role holders with a linked RSN
+// (data/friends.json); friends.js keeps both files current. Numbers come
+// straight from the caches (WOM / RuneProfile); a member appears on a
+// board only when they have a number for it (no invented zeros), and KC
+// is whatever WOM returns, so WOM's own ranking cutoffs apply.
+
+const LB_PAGE_SIZE = 25; // paging machinery exists from day one; the
+// flips only render once a board outgrows one page.
+const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains'];
+
+function lbDefaultState() {
+  return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 7 };
+}
+function lbEncode(st) { return Buffer.from(JSON.stringify(st), 'utf8').toString('base64url'); }
+function lbDecode(s) {
+  try {
+    const st = JSON.parse(Buffer.from(String(s || ''), 'base64url').toString('utf8'));
+    if (st && LB_VIEWS.includes(st.v)) return { ...lbDefaultState(), ...st };
+  } catch { /* fall through to defaults */ }
+  return lbDefaultState();
+}
+
+function rankedNames() {
+  const names = [];
+  const seen = new Set();
+  const push = (rsn) => {
+    const n = String(rsn || '').trim();
+    const key = n.toLowerCase();
+    if (n && !seen.has(key)) { seen.add(key); names.push(n); }
+  };
+  const dataDir = path.join(__dirname, '..', 'data');
+  try {
+    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
+  } catch { /* file not published yet */ }
+  try {
+    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
+  } catch { /* file not published yet */ }
+  return names;
+}
+
+// Account-type badge (same icon set the party board uses). WOM's record
+// for the account decides; group types fold to their badge family.
+function lbBadgeId(accountType) {
+  const t = String(accountType || '').toLowerCase();
+  if (!t) return null;
+  if (t.includes('hardcore') && t.includes('group')) return 'hcgim';
+  if (t.includes('group')) return 'gim';
+  if (t.includes('hardcore')) return 'hc';
+  if (t.includes('ultimate')) return 'ult';
+  if (t.includes('ironman')) return 'ironman';
+  if (t.includes('regular')) return 'main';
+  return null;
+}
+const lbBadgeCache = new Map();
+function lbBadgeIcon(accountType) {
+  const id = lbBadgeId(accountType);
+  if (!id) return null;
+  if (!lbBadgeCache.has(id)) {
+    let b64 = null;
+    try {
+      b64 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'party-board',
+        'badge-icons', `${id}.png`)).toString('base64');
+    } catch { /* icon missing: the row just has no badge */ }
+    lbBadgeCache.set(id, b64);
   }
+  return lbBadgeCache.get(id);
+}
+
+// Cache-first data access; misses and stale entries warm in the
+// background and join the board on the next render.
+function lbStats(rsn) {
+  const hit = getCachedStats(rsn);
+  if (!hit) { getStats(rsn).catch(() => null); return null; }
+  if (!hit.fresh) getStats(rsn).catch(() => null);
+  return hit.stats && !hit.stats.notFound ? hit.stats : null;
+}
+function lbClogPage(rsn, tab, title) {
+  const hit = getCachedClogPage(rsn, tab, title);
+  if (!hit) { getClogPageWithItems(rsn, tab, title).catch(() => null); return null; }
+  if (!hit.fresh) getClogPageWithItems(rsn, tab, title).catch(() => null);
+  return hit.notFound ? null : hit;
+}
+function lbClogTotal(rsn) {
+  const hit = getCachedClogTotal(rsn);
+  if (!hit) { getClogTotal(rsn).catch(() => null); return null; }
+  if (!hit.fresh) getClogTotal(rsn).catch(() => null);
+  return hit.notFound ? null : hit;
+}
+
+const fmtNum = (n) => Math.round(n).toLocaleString('en-US');
+
+function lbBuildBoard(st) {
+  const names = rankedNames();
   const rows = [];
-  for (const rsn of rsns) {
-    const hit = getCachedClogTotal(rsn);
-    if (hit && !hit.notFound) rows.push({ name: rsn, obtained: hit.obtained, total: hit.total });
-    else getClogTotal(rsn).catch(() => null); // warm in the background
+  if (st.v === 'overall') {
+    for (const rsn of names) {
+      const s = lbStats(rsn);
+      const xp = s && s.skills && s.skills.overall ? s.skills.overall.xp : null;
+      if (typeof xp !== 'number') continue;
+      rows.push({ name: rsn, badge: lbBadgeIcon(s.accountType), value: xp, valueText: fmtNum(xp) });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    return { title: 'Total XP', unit: 'XP', rows };
   }
-  rows.sort((x, y) => y.obtained - x.obtained);
+  if (st.v === 'skills') {
+    const key = st.k || 'attack';
+    const dataKey = key === 'runecraft' ? 'runecrafting' : key;
+    for (const rsn of names) {
+      const s = lbStats(rsn);
+      const sk = s && s.skills ? s.skills[dataKey] : null;
+      if (!sk || typeof sk.xp !== 'number') continue;
+      rows.push({
+        name: rsn, badge: lbBadgeIcon(s.accountType), level: sk.level,
+        value: sk.xp, valueText: `${fmtNum(sk.xp)} XP`,
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    return { title: key.charAt(0).toUpperCase() + key.slice(1), unit: 'XP', rows };
+  }
+  if (st.v === 'pvm') {
+    const key = st.k || 'zulrah';
+    const entry = kcEntry(key);
+    if (!entry) return { title: 'PvM', unit: 'KC', rows: [] };
+    const page = clogPageForCommand(key);
+    for (const rsn of names) {
+      const s = lbStats(rsn);
+      if (!s) continue;
+      const counters = countersFor(s, rsn);
+      const present = entry.cols.map((c) => c.metric)
+        .filter((m) => typeof counters[m] === 'number');
+      if (!present.length) continue; // WOM does not rank them here
+      const value = present.reduce((sum, m) => sum + counters[m], 0);
+      let sub = null;
+      if (page) {
+        const c = lbClogPage(rsn, page[0], page[1]);
+        sub = c ? `${c.obtained} / ${c.total} clog` : 'no clog';
+      }
+      rows.push({
+        name: rsn, badge: lbBadgeIcon(s.accountType), sub,
+        value, valueText: `${fmtNum(value)} KC`,
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    return { title: entry.name, unit: 'KC', rows };
+  }
+  if (st.v === 'clogs') {
+    if (!st.k || st.k === 'total') {
+      for (const rsn of names) {
+        const s = lbStats(rsn);
+        const c = lbClogTotal(rsn);
+        if (!c) continue;
+        rows.push({
+          name: rsn, badge: lbBadgeIcon(s ? s.accountType : null),
+          value: c.obtained, valueText: `${fmtNum(c.obtained)} / ${fmtNum(c.total)}`,
+          frac: c.total ? c.obtained / c.total : 0,
+        });
+      }
+      rows.sort((a, b) => b.value - a.value);
+      return { title: 'Collection Log', unit: 'items', rows };
+    }
+    const tab = (Object.values(CLOG_PAGES).find((p) => p[1] === st.k) || [])[0];
+    if (!tab) return { title: st.k, unit: 'items', rows: [] };
+    for (const rsn of names) {
+      const s = lbStats(rsn);
+      const c = lbClogPage(rsn, tab, st.k);
+      if (!c) continue;
+      rows.push({
+        name: rsn, badge: lbBadgeIcon(s ? s.accountType : null),
+        value: c.obtained, valueText: `${fmtNum(c.obtained)} / ${fmtNum(c.total)}`,
+        frac: c.total ? c.obtained / c.total : 0,
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    return { title: st.k, unit: 'items', rows };
+  }
+  // gains
+  snapshotToday();
+  const base = baselineFor(st.gd || 7);
+  if (!base || base.isToday) {
+    return { unavailable: 'Gains tracking just started. The first real boards land tomorrow.' };
+  }
+  for (const rsn of names) {
+    const s = lbStats(rsn);
+    const prev = base.snap[rsn.toLowerCase()];
+    if (!s || !prev) continue;
+    let gain = 0;
+    if (st.gk === 'kc') {
+      for (const [m, v] of Object.entries(s.kc || {})) {
+        if (typeof v !== 'number' || NON_KC_SCORES.has(m)) continue;
+        gain += Math.max(0, v - ((prev.kc || {})[m] || 0));
+      }
+    } else {
+      gain = Math.max(0, (((s.skills || {}).overall || {}).xp || 0) - ((prev.xp || {}).overall || 0));
+    }
+    if (gain <= 0) continue;
+    rows.push({
+      name: rsn, badge: lbBadgeIcon(s.accountType), value: gain,
+      valueText: st.gk === 'kc' ? `+${fmtNum(gain)} KC` : `+${fmtNum(gain)} XP`,
+    });
+  }
+  rows.sort((a, b) => b.value - a.value);
+  return {
+    title: st.gk === 'kc' ? 'KC Gained' : 'XP Gained',
+    note: `Last ${base.spanDays} days`, unit: st.gk === 'kc' ? 'KC' : 'XP', rows,
+  };
+}
+
+function lbComponents(st, pages) {
+  const enc = lbEncode(st);
+  const tabBtn = (v, label) => new ButtonBuilder()
+    .setCustomId(`lbtab:${v}:${enc}`)
+    .setLabel(label)
+    .setStyle(st.v === v ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(st.v === v);
+  const rows = [new ActionRowBuilder().addComponents(
+    tabBtn('overall', 'Overall'), tabBtn('pvm', 'PvM'), tabBtn('skills', 'Skills'),
+    tabBtn('clogs', 'Clogs'), tabBtn('gains', 'Gains'))];
+  if (st.v === 'pvm') {
+    const catalog = bossCatalog();
+    if (!st.cat || !catalog.byCat[st.cat]) {
+      const cats = CMP_CATEGORIES.filter((c) => catalog.byCat[c.id].length);
+      if (cats.length) {
+        rows.push(new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`lbpick:${enc}`)
+            .setPlaceholder('Pick a category...')
+            .addOptions(cats.map((c) => ({ label: c.label, value: `cat:${c.id}` })))));
+      }
+    } else {
+      const list = catalog.byCat[st.cat];
+      const page = Math.max(0, Math.min(st.cp || 0, Math.ceil(list.length / CMP_PAGE_SIZE) - 1));
+      const slice = list.slice(page * CMP_PAGE_SIZE, page * CMP_PAGE_SIZE + CMP_PAGE_SIZE);
+      const options = [{ label: '← All categories', value: 'back' }];
+      if (page > 0) options.push({ label: '← Previous bosses', value: `page:${page - 1}` });
+      for (const o of slice) options.push({ label: String(o.name).slice(0, 100), value: o.key });
+      if ((page + 1) * CMP_PAGE_SIZE < list.length) {
+        options.push({ label: 'More bosses →', value: `page:${page + 1}` });
+      }
+      const catLabel = (CMP_CATEGORIES.find((c) => c.id === st.cat) || {}).label || 'Bosses';
+      rows.push(new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`lbpick:${enc}`)
+          .setPlaceholder(`Pick a boss (${catLabel})...`)
+          .addOptions(options)));
+    }
+  } else if (st.v === 'skills') {
+    const options = [...SKILL_ORDER].sort((a, b) => a.localeCompare(b)).map((key) => ({
+      label: key.charAt(0).toUpperCase() + key.slice(1), value: key, default: key === st.k,
+    }));
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`lbpick:${enc}`)
+        .setPlaceholder('Pick a skill...')
+        .addOptions(options.slice(0, 25))));
+  } else if (st.v === 'clogs') {
+    if (!st.ctab) {
+      const tabs = [...new Set(Object.values(CLOG_PAGES).map((p) => p[0]))].sort();
+      rows.push(new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`lbpick:${enc}`)
+          .setPlaceholder('Pick a section, or the whole log...')
+          .addOptions([
+            { label: 'Total (whole log)', value: 'total' },
+            ...tabs.map((t) => ({ label: t, value: `tab:${t}` })),
+          ])));
+    } else {
+      const titles = [...new Set(Object.values(CLOG_PAGES)
+        .filter((p) => p[0] === st.ctab).map((p) => p[1]))].sort();
+      const size = 22;
+      const page = Math.max(0, Math.min(st.cpg || 0, Math.ceil(titles.length / size) - 1));
+      const options = [{ label: '← All sections', value: 'tabs' }];
+      if (page > 0) options.push({ label: '← Previous pages', value: `pg:${page - 1}` });
+      for (const t of titles.slice(page * size, page * size + size)) {
+        options.push({ label: t.slice(0, 100), value: `page:${t}` });
+      }
+      if ((page + 1) * size < titles.length) {
+        options.push({ label: 'More pages →', value: `pg:${page + 1}` });
+      }
+      rows.push(new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`lbpick:${enc}`)
+          .setPlaceholder(`Pick a page (${st.ctab})...`)
+          .addOptions(options.slice(0, 25))));
+    }
+  } else if (st.v === 'gains') {
+    const gBtn = (what, label, active) => new ButtonBuilder()
+      .setCustomId(`lbg:${what}:${enc}`)
+      .setLabel(label)
+      .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setDisabled(active);
+    rows.push(new ActionRowBuilder().addComponents(
+      gBtn('xp', 'XP', st.gk === 'xp'), gBtn('kc', 'KC', st.gk === 'kc'),
+      gBtn('d7', '7 days', st.gd === 7), gBtn('d30', '30 days', st.gd === 30)));
+  }
+  if (pages > 1) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`lbpage:prev:${enc}`).setLabel('◀ Prev')
+        .setStyle(ButtonStyle.Secondary).setDisabled(st.p <= 0),
+      new ButtonBuilder().setCustomId(`lbpage:noop:${enc}`)
+        .setLabel(`Page ${st.p + 1} of ${pages}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
+      new ButtonBuilder().setCustomId(`lbpage:next:${enc}`).setLabel('Next ▶')
+        .setStyle(ButtonStyle.Secondary).setDisabled(st.p >= pages - 1)));
+  }
   return rows;
 }
 
-async function leaderboardPayload(userId) {
+async function lbView(st, userId) {
+  const board = lbBuildBoard(st);
+  const components = lbComponents(st, 1);
+  if (board.unavailable) return { content: board.unavailable, components };
+  const rows = board.rows;
+  if (!rows.length) {
+    return { content: 'No ranked members have numbers for this board yet.', components };
+  }
+  const top = rows[0].value;
+  for (const r of rows) if (r.frac == null) r.frac = top > 0 ? r.value / top : 0;
+  const viewer = userId ? getRsn(userId) : null;
+  if (viewer) {
+    const i = rows.findIndex((r) => r.name.toLowerCase() === viewer.toLowerCase());
+    if (i >= 0) {
+      rows[i].mine = true;
+      if (i > 0 && rows[i - 1].value > rows[i].value) {
+        rows[i].gap = `${fmtNum(rows[i - 1].value - rows[i].value)} ${board.unit} behind ${rows[i - 1].name}`;
+      }
+    }
+  }
+  const pages = Math.max(1, Math.ceil(rows.length / LB_PAGE_SIZE));
+  st.p = Math.min(st.p || 0, pages - 1);
+  const slice = rows.slice(st.p * LB_PAGE_SIZE, st.p * LB_PAGE_SIZE + LB_PAGE_SIZE);
+  const card = await fetchCard('/leaderboard', {
+    title: board.title, note: board.note || null, rows: slice,
+    page: st.p, pages, pageSize: LB_PAGE_SIZE,
+  });
+  if (!card) return CARD_DOWN;
+  return {
+    files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })],
+    components: lbComponents(st, pages),
+  };
+}
+
+function lbStateForArg(arg) {
+  const st = lbDefaultState();
+  if (!arg) return st;
+  const raw = String(arg).trim();
+  const q = raw.toLowerCase();
+  if (q.startsWith('boss:')) { st.v = 'pvm'; st.k = q.slice(5); return st; }
+  if (q.startsWith('skill:')) { st.v = 'skills'; st.k = q.slice(6); return st; }
+  if (q.startsWith('clog:')) { st.v = 'clogs'; st.k = raw.slice(5); return st; }
+  if (q === 'clogtotal') { st.v = 'clogs'; st.k = 'total'; return st; }
+  if (q === 'overall' || q === 'total xp' || q === 'xp') return st;
+  if (q === 'gains' || q === 'gained') { st.v = 'gains'; return st; }
+  if (q === 'clog' || q === 'clogs' || q === 'collection log' || q === 'total') {
+    st.v = 'clogs'; st.k = 'total'; return st;
+  }
+  const key = q.replace(/['’]/g, '').replace(/\s+/g, '_');
+  if (kcEntry(key)) { st.v = 'pvm'; st.k = key; return st; }
+  if (SKILL_ORDER.includes(key)) { st.v = 'skills'; st.k = key; return st; }
+  const page = clogPageForCommand(key);
+  if (page) { st.v = 'clogs'; st.k = page[1]; return st; }
+  const byTitle = Object.values(CLOG_PAGES).find((p) => p[1].toLowerCase() === q);
+  if (byTitle) { st.v = 'clogs'; st.k = byTitle[1]; return st; }
+  return st;
+}
+
+async function leaderboardPayload(userId, boardArg) {
   // Served from cache, but it fires background warming lookups, so it
   // counts as a use like the other commands.
   if (userId) noteUse(userId);
-  const rows = leaderboardRows();
-  if (!rows.length) {
-    return { content: 'No ranked profiles yet. Link an RSN and use `!clog total` once, or wait a minute and try again.' };
+  if (!rankedNames().length) {
+    return { content: 'No ranked profiles yet. The roster syncs from Wise Old Man and the friends list; try again in a bit.' };
   }
-  const card = await fetchCard('/leaderboard', { rows });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })] };
-  return CARD_DOWN;
+  return lbView(lbStateForArg(boardArg), userId);
+}
+
+async function lbUpdate(interaction, st) {
+  const payload = await lbView(st, interaction.user.id);
+  const msg = { content: payload.content || '', components: payload.components || [] };
+  if (payload.files) { msg.files = payload.files; msg.attachments = []; }
+  else { msg.files = []; msg.attachments = []; }
+  await interaction.update(msg).catch(() => {});
+}
+
+async function handleLeaderboardButton(interaction) {
+  const parts = interaction.customId.split(':');
+  const kind = parts[0];
+  const st = lbDecode(parts[parts.length - 1]);
+  if (kind === 'lbtab') {
+    st.v = parts[1];
+    st.p = 0;
+    if (st.v === 'pvm' && !st.k) st.k = 'zulrah';
+    if (st.v === 'skills' && !st.k) st.k = 'attack';
+    if (st.v === 'clogs' && !st.k) st.k = 'total';
+  } else if (kind === 'lbg') {
+    if (parts[1] === 'xp') st.gk = 'xp';
+    else if (parts[1] === 'kc') st.gk = 'kc';
+    else if (parts[1] === 'd7') st.gd = 7;
+    else if (parts[1] === 'd30') st.gd = 30;
+    st.p = 0;
+  } else if (kind === 'lbpage') {
+    if (parts[1] === 'prev') st.p = Math.max(0, (st.p || 0) - 1);
+    else if (parts[1] === 'next') st.p = (st.p || 0) + 1;
+    else return;
+  } else return;
+  await lbUpdate(interaction, st);
+}
+
+async function handleLeaderboardSelect(interaction) {
+  const st = lbDecode(interaction.customId.split(':')[1]);
+  const value = interaction.values[0];
+  if (st.v === 'pvm') {
+    if (value.startsWith('cat:')) { st.cat = value.slice(4); st.cp = 0; }
+    else if (value === 'back') st.cat = null;
+    else if (value.startsWith('page:')) st.cp = parseInt(value.slice(5), 10) || 0;
+    else { st.k = value; st.p = 0; }
+  } else if (st.v === 'skills') {
+    st.k = value; st.p = 0;
+  } else if (st.v === 'clogs') {
+    if (value === 'total') { st.k = 'total'; st.ctab = null; st.p = 0; }
+    else if (value.startsWith('tab:')) { st.ctab = value.slice(4); st.cpg = 0; }
+    else if (value === 'tabs') st.ctab = null;
+    else if (value.startsWith('pg:')) st.cpg = parseInt(value.slice(3), 10) || 0;
+    else if (value.startsWith('page:')) { st.k = value.slice(5); st.p = 0; }
+  }
+  await lbUpdate(interaction, st);
+}
+
+function lbAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  const all = [
+    { name: 'Total XP', value: 'overall' },
+    { name: 'Collection Log (total)', value: 'clogtotal' },
+    { name: 'Gains', value: 'gains' },
+  ];
+  const catalog = bossCatalog();
+  for (const list of Object.values(catalog.byCat)) {
+    for (const o of list) all.push({ name: o.name, value: `boss:${o.key}` });
+  }
+  for (const key of SKILL_ORDER) {
+    all.push({ name: key.charAt(0).toUpperCase() + key.slice(1), value: `skill:${key}` });
+  }
+  const titles = [...new Set(Object.values(CLOG_PAGES).map((p) => p[1]))].sort();
+  for (const t of titles) all.push({ name: `${t} (collection log)`, value: `clog:${t}` });
+  return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
 }
 
 const PLUGIN_MEMBERS_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'members');
@@ -1718,10 +2139,10 @@ async function handleTfaCommand(message, args) {
   await message.reply(await kcPayload('tfa', rsn, message.author.id)).catch(() => {});
 }
 
-async function handleLeaderboardCommand(message) {
+async function handleLeaderboardCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  await message.reply(await leaderboardPayload(message.author.id)).catch(() => {});
+  await message.reply(await leaderboardPayload(message.author.id, (args || []).join(' '))).catch(() => {});
 }
 
 // ---- slash commands (same payloads as the !-commands) --------------------
@@ -1785,7 +2206,9 @@ async function handleAutocomplete(interaction) {
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
-      : interaction.commandName === 'bounty'
+      : interaction.commandName === 'leaderboard'
+        ? lbAutocompleteChoices(focused)
+        : interaction.commandName === 'bounty'
         ? bountyAutocompleteChoices(focused)
         : [];
   await interaction.respond(choices).catch(() => {});
@@ -2794,12 +3217,17 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('leaderboard')
-      .setDescription('Collection log leaderboard for linked clan members'),
+      .setDescription('Clan leaderboards: total XP, boss KC, skills, collection log, gains')
+      .addStringOption((o) => o.setName('board')
+        .setDescription('Jump straight to a board: a boss, skill, or collection log page')
+        .setAutocomplete(true)
+        .setRequired(false)),
     run: async (interaction) => {
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, leaderboardPayload(interaction.user.id));
+      await slashReply(interaction, leaderboardPayload(interaction.user.id,
+        interaction.options.getString('board')));
     },
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
