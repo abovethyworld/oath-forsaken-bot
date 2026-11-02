@@ -1091,8 +1091,18 @@ async function clogPayload(key, rsn, userId) {
       };
       const luck = luckForPage(counters,
         (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
-      const combined = await fetchCard('/kc', kcCardBody(rsn, kcEnt, st, strip, luck, null));
-      if (combined) return { files: [new AttachmentBuilder(combined, { name: 'clog.png' })] };
+      const body = kcCardBody(rsn, kcEnt, st, strip, luck, null);
+      const combined = await fetchCard('/kc', body);
+      if (combined) {
+        return {
+          files: [new AttachmentBuilder(combined, { name: 'clog.png' })],
+          // The same card !kc posts, so it carries the same
+          // Leaderboard swap when it shows a rank.
+          components: body.rank
+            ? [lbSwapRow(`boss:${key}`, `kc:${key}:${rsn.replace(/ /g, '_')}`)]
+            : [],
+        };
+      }
     }
   }
   const st2 = await getStats(rsn).catch(() => null);
@@ -3150,7 +3160,10 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
   const bossBtn = new ButtonBuilder()
     .setCustomId(`cmp:bossbase:${bossKey || '-'}:${enc}`)
     .setLabel('PvM')
-    .setStyle(view === 'bossbase' ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    // The PvM tab covers both PvM views, so it lights on a boss
+    // card too. It stays clickable there: pressing it is how you
+    // get back to the base page.
+    .setStyle(view === 'bossbase' || view === 'boss' ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(view === 'bossbase');
   const rows = [new ActionRowBuilder().addComponents(
     viewBtn('overall', 'Overall'), bossBtn,
