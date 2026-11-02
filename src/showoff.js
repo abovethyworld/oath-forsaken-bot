@@ -41,19 +41,23 @@ function pruneCooldownMaps(now) {
   }
 }
 
-function checkCooldown(userId, now = Date.now()) {
+// The cooldown is per command family (Nov 2, 2026): running
+// /kc no longer blocks a /compare right after. Buttons never
+// consume it; only a real lookup firing inside a payload does.
+function checkCooldown(userId, family, now = Date.now()) {
   pruneCooldownMaps(now);
-  const last = lastUseAt.get(userId) || 0;
+  const key = `${userId}:${family || 'card'}`;
+  const last = lastUseAt.get(key) || 0;
   const waitMs = COOLDOWN_MS - (now - last);
   if (waitMs <= 0) return { wait: 0, notify: false };
-  const notified = lastNotifyAt.get(userId) || 0;
+  const notified = lastNotifyAt.get(key) || 0;
   const notify = now - notified >= COOLDOWN_MS;
-  if (notify) lastNotifyAt.set(userId, now);
+  if (notify) lastNotifyAt.set(key, now);
   return { wait: Math.ceil(waitMs / 1000), notify };
 }
 
-function noteUse(userId, now = Date.now()) {
-  lastUseAt.set(userId, now);
+function noteUse(userId, family, now = Date.now()) {
+  lastUseAt.set(`${userId}:${family || 'card'}`, now);
 }
 
 function cooldownText(wait) {
@@ -331,6 +335,38 @@ function lbBackRow(backId) {
     .setStyle(ButtonStyle.Secondary));
 }
 
+// Card bridges (Nov 2, 2026): a boss's KC card and dry card
+// swap into each other on the same message, the way cards swap
+// into boards. The clue dry card bridges to the clue summary
+// card instead; it has no single KC card.
+function bridgeRow(target, key, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  const label = target === 'dry' ? 'Dry card' : target === 'clues' ? 'Clues card' : 'KC card';
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`bridge:${target}:${key}:${enc}`)
+      .setLabel(label)
+      .setStyle(ButtonStyle.Danger));
+}
+
+async function handleBridgeButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const target = parts[1];
+  const key = parts[2];
+  const rsn = String(parts.slice(3).join(':') || '').replace(/_/g, ' ');
+  if (!rsn) return;
+  let payload = null;
+  if (target === 'kc') payload = await kcPayload(key, rsn, interaction.user.id);
+  else if (target === 'dry') payload = await dryPayload(key, rsn, interaction.user.id);
+  else if (target === 'clues') payload = await clogPayload('clues', rsn, interaction.user.id);
+  else return;
+  if (payload && payload.files) {
+    await interaction.update(payload).catch(() => {});
+  } else if (payload) {
+    await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
+  }
+}
+
 async function handleLbSwapButton(interaction) {
   const parts = interaction.customId.split(':');
   let boardArg;
@@ -520,7 +556,7 @@ async function kcPayload(activity, rsn, userId) {
   if (!entry) {
     return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(KC_KEYS).join(', ')}` };
   }
-  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  if (userId) noteUse(userId, 'kc'); // a real lookup fires: start the cooldown
   let st;
   try {
     st = await getStats(rsn);
@@ -539,9 +575,12 @@ async function kcPayload(activity, rsn, userId) {
   const body = kcCardBody(rsn, entry, st, cl.clog, cl.luck, null);
   const card = await fetchCard('/kc', body);
   if (card) {
+    const rows = [];
+    if (body.rank) rows.push(lbSwapRow(`boss:${activity}`, `kc:${activity}:${rsn.replace(/ /g, '_')}`));
+    if (dryScoredKeys().some((k) => kcEntry(k).name === entry.name)) rows.push(bridgeRow('dry', activity, rsn));
     return {
       files: [new AttachmentBuilder(card, { name: 'kc.png' })],
-      components: body.rank ? [lbSwapRow(`boss:${activity}`, `kc:${activity}:${rsn.replace(/ /g, '_')}`)] : [],
+      components: rows,
     };
   }
   return CARD_DOWN;
@@ -573,18 +612,24 @@ function dryAutocompleteChoices(focused) {
   const q = String(focused || '').toLowerCase();
   return dryScoredKeys()
     .map((value) => ({ name: kcEntry(value).name, value }))
+    .concat(CLUE_TIERS.map(([label]) => ({
+      name: `${label} Clue Scrolls`, value: `clue:${label.toLowerCase()}`,
+    })))
     .filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q))
     .slice(0, 25);
 }
 
 async function dryPayload(activity, rsn, userId) {
+  if (activity && String(activity).startsWith('clue:')) {
+    return dryCluePayload(String(activity).slice(5), rsn, userId);
+  }
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
     return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${dryScoredKeys().join(', ')}` };
   }
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'dry');
   let st;
   try {
     st = await getStats(rsn);
@@ -629,13 +674,85 @@ async function dryPayload(activity, rsn, userId) {
     missing: await withIcons(report.missing),
     obtained: await withIcons(report.obtained),
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'dry.png' })] };
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'dry.png' })],
+      components: [bridgeRow('kc', activity, rsn)],
+    };
+  }
+  return CARD_DOWN;
+}
+
+// !dry hard clues: one tier of the clue log, scored like a
+// boss page (the tier's completions are the counter). The
+// summary card already proves the scoring; this is the full
+// dry report for a single tier.
+async function dryCluePayload(tierKey, rsn, userId) {
+  const t = CLUE_TIERS.find((x) => x[2] === tierKey);
+  if (!t) return { content: 'Pick a tier: `!dry beginner clues`, `!dry easy clues`, `!dry medium clues`, `!dry hard clues`, `!dry elite clues`, or `!dry master clues`.' };
+  const [label, title, , metric] = t;
+  const name = `${label} Clue Scrolls`;
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
+  if (userId) noteUse(userId, 'dry');
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const kc = st.kc ? st.kc[metric] : null;
+  if (!kc) return { content: `**${rsn}** has not completed any ${label.toLowerCase()} clues yet, so there is no luck to check.` };
+  const res = await getClogPageWithItems(rsn, 'Clues', title).catch(() => null);
+  if (!res || res.notFound) {
+    const prof = await getProfile(rsn).catch(() => null);
+    if (prof && !prof.notFound && prof.account) {
+      return { content: `The ${name} page is not synced for **${rsn}** yet. Their collection log total is in, but this page has not been read. Open the Collection Log in game, go to the ${title} page, then press the RuneProfile button in the top-left.` };
+    }
+    return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score. ${CLOG_SYNC_STEPS}` };
+  }
+  const report = dryReport(countersFor(st, rsn),
+    (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
+  if (!report) return { content: `No scored drops could be checked for ${name} on **${rsn}** yet.` };
+  const withIcons = async (list) => Promise.all(list.map(async (e) => ({
+    ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
+  })));
+  const card = await fetchCard('/dry', {
+    boss: name, metric, rsn, kc, word: report.word,
+    badge: cardBadgeFor(rsn, st.accountType),
+    missing: await withIcons(report.missing),
+    obtained: await withIcons(report.obtained),
+  });
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'dry.png' })],
+      components: [bridgeRow('clues', '-', rsn)],
+    };
+  }
   return CARD_DOWN;
 }
 
 async function handleDryCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'dry');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const joined = args.join(' ').toLowerCase();
+  if (/\bclues?\b|\bscrolls?\b/.test(joined)) {
+    const t = CLUE_TIERS.find(([label]) => joined.includes(label.toLowerCase()));
+    if (!t) {
+      await message.reply({ content: 'Pick a tier: `!dry beginner clues`, `!dry easy clues`, `!dry medium clues`, `!dry hard clues`, `!dry elite clues`, or `!dry master clues`.' }).catch(() => {});
+      return;
+    }
+    const drop = new Set(['clue', 'clues', 'scroll', 'scrolls',
+      ...CLUE_TIERS.map(([label]) => label.toLowerCase())]);
+    const rest = args.filter((a) => !drop.has(String(a).toLowerCase()));
+    const r = resolveName(rest, message.author.id);
+    if (r.error) { await message.reply(r.error).catch(() => {}); return; }
+    if (r.payload) { await message.reply(r.payload).catch(() => {}); return; }
+    await message.reply(await dryCluePayload(t[2], r.rsn, message.author.id)).catch(() => {});
+    return;
+  }
   const activity = takeActivity(args, KC_KEYS);
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
@@ -675,7 +792,7 @@ async function gainsPayload(rsn, periodIn, userId) {
   const period = gainsPeriod(periodIn);
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'gains');
   let st;
   try {
     st = await getStats(rsn);
@@ -719,7 +836,7 @@ async function handleGainsButton(interaction) {
 }
 
 async function handleGainsCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'gains');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   let period = 'week';
   const rest = [];
@@ -738,7 +855,7 @@ async function handleGainsCommand(message, args) {
 }
 
 async function handleKcCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'kc');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const activity = takeActivity(args, KC_KEYS);
   const { rsn, error, payload } = resolveName(args, message.author.id);
@@ -1024,7 +1141,7 @@ try {
 } catch { /* rates missing: summary renders without the rarest tiles */ }
 
 async function clueSummaryPayload(rsn, userId) {
-  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
   const st = await getStats(rsn).catch(() => null);
   const kc = st && !st.notFound && st.kc ? st.kc : {};
   const rows = [];
@@ -1074,7 +1191,7 @@ async function clogPayload(key, rsn, userId) {
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   if (key === 'clues' || key === 'scrolls') return clueSummaryPayload(rsn, userId);
   if (key === 'total') {
-    if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+    if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
     const res = await getClogSummary(rsn).catch(() => null);
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
@@ -1091,7 +1208,7 @@ async function clogPayload(key, rsn, userId) {
       ? 'Wilderness Agility has no collection log page to show.'
       : `No collection log page for \`${key}\`. Every boss, raid, clue, minigame, and other page works: try the boss or page name, or \`total\` for the whole log.` };
   }
-  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
   if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
   if (res.notFound) return { content: RP_GUIDE };
@@ -1154,7 +1271,7 @@ async function clogPayload(key, rsn, userId) {
 }
 
 async function handleClogCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'clog');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const key = takeActivity(args, CLOG_PAGES);
   const { rsn, error, payload } = resolveName(args, message.author.id);
@@ -1274,7 +1391,7 @@ async function refreshProfileLuck() {
 async function profilePayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
-  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  if (userId) noteUse(userId, 'profile'); // a real lookup fires: start the cooldown
   const site = await siteCardPayload(rsn);
   if (site) return site;
   const prof = await getProfile(rsn).catch(() => null);
@@ -1304,7 +1421,7 @@ async function profilePayload(rsn, userId) {
 }
 
 async function handleProfileCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'profile');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
@@ -1787,7 +1904,7 @@ function lbStateForArg(arg) {
 async function leaderboardPayload(userId, boardArg, scoped = false) {
   // Served from cache, but it fires background warming lookups, so it
   // counts as a use like the other commands.
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'leaderboard');
   if (!(await rankedNames()).length) {
     return { content: 'No ranked profiles yet. The roster syncs from the website list; try again in a bit.' };
   }
@@ -1925,7 +2042,7 @@ async function pbPayload(activity, rsn, userId) {
   if (!all.length) {
     return { content: `No personal bests synced for **${rsn}** yet. PBs come from the clan plugin. This feature works when our clan plugin is live.` };
   }
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'pb');
   if (activity) {
     const entry = kcEntry(activity);
     const targets = new Set([normName(activity)]);
@@ -1986,7 +2103,7 @@ const SKILL_ORDER = [
 async function skillsPayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
-  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  if (userId) noteUse(userId, 'skills'); // a real lookup fires: start the cooldown
   let st;
   try {
     st = await getStats(rsn);
@@ -2062,7 +2179,7 @@ function takeSkill(args) {
 async function skillPayload(rsn, skillKey, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'skills');
   let st;
   try {
     st = await getStats(rsn);
@@ -2140,7 +2257,7 @@ async function skillPayload(rsn, skillKey, userId) {
 }
 
 async function handleSkillsCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'skills');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const sk = takeSkill(args);
   if (sk) {
@@ -2229,7 +2346,7 @@ function abbrXp(n) {
 }
 
 async function compareOverallPayload(aName, bName, userId, ownerId, ui = {}) {
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'compare');
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
@@ -2349,7 +2466,7 @@ async function skillDiffSections(aName, bName, skillKey, kcMapA, kcMapB) {
 }
 
 async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'compare');
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
@@ -2490,7 +2607,7 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
 }
 
 async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'compare');
   const entry = kcEntry(key);
   if (!entry) return { content: `I do not track a boss or activity called **${key}**.` };
   const [sa, sb] = await Promise.all([
@@ -2561,7 +2678,7 @@ const RAID_METRICS = ['tombs_of_amascut', 'tombs_of_amascut_expert', 'chambers_o
 const SKILLING_METRICS = ['wintertodt', 'tempoross', 'guardians_of_the_rift', 'zalcano'];
 
 async function compareBossBasePayload(aName, bName, userId, ownerId, ui = {}) {
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'compare');
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
@@ -2638,7 +2755,7 @@ function compareNames(rest, userId) {
 }
 
 async function handleCompareCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'compare');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const joined = args.join(' ').trim();
   const usage = 'Usage: `!compare <name>` (vs your linked RSN), `!compare <name> vs <name>`, `!compare skills <name> vs <name>`, or `!compare <boss> <name> vs <name>`.';
@@ -2670,7 +2787,7 @@ async function handleCompareCommand(message, args) {
 }
 
 async function handlePbCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'pb');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const activity = takeOptionalActivity(args);
   const { rsn, error, payload } = resolveName(args, message.author.id);
@@ -2682,7 +2799,7 @@ async function handlePbCommand(message, args) {
 // !tfa [name]: the Fractured Archive combined card, shorthand for
 // !kc tfa with its clog strip.
 async function handleTfaCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'tfa');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
@@ -2691,7 +2808,7 @@ async function handleTfaCommand(message, args) {
 }
 
 async function handleLeaderboardCommand(message, args) {
-  const cd = checkCooldown(message.author.id);
+  const cd = checkCooldown(message.author.id, 'leaderboard');
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
   await message.reply(await leaderboardPayload(message.author.id, (args || []).join(' '))).catch(() => {});
 }
@@ -2720,8 +2837,8 @@ async function slashReply(interaction, payloadPromise) {
 // Returns true when the interaction was answered with a cooldown notice.
 // Check only: the cooldown starts inside the payload builders, when the
 // lookup actually fires.
-async function slashCooldown(interaction) {
-  const cd = checkCooldown(interaction.user.id);
+async function slashCooldown(interaction, family) {
+  const cd = checkCooldown(interaction.user.id, family);
   if (!cd.wait) return false;
   await interaction.reply({ content: cooldownText(cd.wait), ephemeral: true }).catch(() => {});
   return true;
@@ -2808,7 +2925,7 @@ function decodePair(enc) {
 }
 
 async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
-  if (userId) noteUse(userId);
+  if (userId) noteUse(userId, 'compare');
   const owner = ownerId ?? userId;
   const [pa, pb] = await Promise.all([clogPagesOf(aName), clogPagesOf(bName)]);
   // The card's shared state slot carries the clog page title in
@@ -3686,7 +3803,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, kcPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
@@ -3700,7 +3817,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, clogPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
@@ -3713,7 +3830,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, profilePayload(rsn, interaction.user.id));
     },
   },
@@ -3726,7 +3843,7 @@ const commands = [
     run: async (interaction) => {
       const pair = await resolveComparePair(interaction);
       if (!pair) return;
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player_b')) return;
       await slashReply(interaction, compareOverallPayload(pair.a, pair.b, interaction.user.id));
     },
   },
@@ -3740,7 +3857,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'skill')) return;
       const skFold = String(interaction.options.getString('skill') || '').toLowerCase().replace(/[^a-z]/g, '');
       const skill = skFold ? (SKILL_ALIASES[skFold] || (SKILL_ORDER.includes(skFold) ? skFold : null)) : null;
       await slashReply(interaction, skill
@@ -3758,7 +3875,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, pbPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
@@ -3777,7 +3894,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'period')) return;
       await slashReply(interaction, gainsPayload(rsn, interaction.options.getString('period') || 'week', interaction.user.id));
     },
   },
@@ -3791,7 +3908,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, dryPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
     },
   },
@@ -3804,7 +3921,7 @@ const commands = [
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'player')) return;
       await slashReply(interaction, kcPayload('tfa', rsn, interaction.user.id));
     },
   },
@@ -3817,7 +3934,7 @@ const commands = [
         .setAutocomplete(true)
         .setRequired(false)),
     run: async (interaction) => {
-      if (await slashCooldown(interaction)) return;
+      if (await slashCooldown(interaction, 'board')) return;
       await slashReply(interaction, leaderboardPayload(interaction.user.id,
         interaction.options.getString('board')));
     },
@@ -3844,4 +3961,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
