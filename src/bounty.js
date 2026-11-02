@@ -22,7 +22,7 @@ const path = require('path');
 const config = require('./config');
 const { verifyProof, resolveRsn } = require('./bounty-verify');
 const { atomicWrite } = require('./store');
-const { isStaff, ZAMORAK_RED, getRoleById, clampDesc, DAY_MS } = require('./utils');
+const { isStaff, ZAMORAK_RED, getRoleById, DAY_MS } = require('./utils');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bounties.json');
 const CLAIM_ARCHIVE_MIN = 4320; // 3 days
@@ -117,29 +117,6 @@ function proofLine(proof) {
   return `**Proof:** ${label}: ${proof.target}${amount} (the drop must land after the post date)`;
 }
 
-function bountyEmbed({ target, location, threat, days, image, rewardMention, lane, winners, proof }) {
-  const lines = [
-    `Chaos demands tribute. A new contract is nailed to the board.`,
-    ``,
-    `**Target:** ${target}`,
-    `**Location:** ${location}`,
-    `**Threat Level:** ${threat}`,
-    `**Lane:** ${lane}`,
-    `**Time Limit:** ${days} day${days === 1 ? '' : 's'}`,
-    `**Reward:** ${rewardMention}`,
-  ];
-  if (winners > 1) lines.push(`**Winners:** First ${winners} hunters to prove it. First takes the title.`);
-  const pl = proofLine(proof);
-  if (pl) lines.push(pl);
-  lines.push(``, `First back with the drop takes the title.`);
-  const embed = new EmbedBuilder()
-    .setColor(ZAMORAK_RED)
-    .setTitle('📜 Bounty Contract Available')
-    .setDescription(clampDesc(lines.join('\n')))
-    .setTimestamp();
-  if (image) embed.setThumbnail(image);
-  return embed;
-}
 
 const CARD_API = 'https://oathforsaken.cc/api/cards';
 const thumbCache = new Map();
@@ -398,17 +375,6 @@ async function postCommand(interaction) {
       createdBy: interaction.user.id,
     };
     const poster = await fetchPoster(record, 0, null);
-    const embed = bountyEmbed({
-      target: contract.name,
-      location: contract.content,
-      threat: contract.tier,
-      days,
-      image: contract.thumbnail,
-      rewardMention: `<@&${role.id}>`,
-      lane,
-      winners,
-      proof,
-    });
     const postContent = [
       '━━━━━━ ⛧ ━━━━━━',
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
@@ -429,7 +395,7 @@ async function postCommand(interaction) {
           : {}),
         ...(poster
           ? { files: [new AttachmentBuilder(poster, { name: 'bounty-poster.png' })] }
-          : { embeds: [embed] }),
+          : {}),
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()

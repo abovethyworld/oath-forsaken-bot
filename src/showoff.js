@@ -512,9 +512,9 @@ async function gainsPayload(rsn, days, userId) {
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
   const base = baselineFor(days || 7);
-  if (!base) return { content: 'Gains tracking just started. Check back tomorrow.' };
+  if (!base) return { content: 'Gains tracking just started. First real numbers land tomorrow.' };
   if (base.isToday) {
-    return { content: 'Gains tracking started today, so there is no baseline to compare against yet. First real numbers land tomorrow.' };
+    return { content: 'Gains tracking just started. First real numbers land tomorrow.' };
   }
   const prev = base.snap[rsn.toLowerCase()];
   if (!prev) {
@@ -1287,7 +1287,7 @@ function lbBuildBoard(st, names) {
   snapshotToday();
   const base = baselineFor(st.gd || 7);
   if (!base || base.isToday) {
-    return { unavailable: 'Gains tracking just started. The first real boards land tomorrow.' };
+    return { unavailable: 'Gains tracking just started. First real numbers land tomorrow.' };
   }
   for (const rsn of names) {
     const s = lbStats(rsn);
