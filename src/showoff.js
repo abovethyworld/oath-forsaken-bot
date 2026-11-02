@@ -1649,8 +1649,9 @@ async function lbUpdate(interaction, st) {
   const rows = (interaction.message && interaction.message.components) || [];
   for (const row of rows) {
     for (const comp of row.components || []) {
-      if (comp.customId && comp.customId.startsWith('lbback:')) {
-        msg.components = [...msg.components, lbBackRow(comp.customId.slice('lbback:'.length))];
+      const cid = comp.customId || (comp.data && comp.data.custom_id);
+      if (cid && cid.startsWith('lbback:')) {
+        msg.components = [...msg.components, lbBackRow(cid.slice('lbback:'.length))];
       }
     }
   }
