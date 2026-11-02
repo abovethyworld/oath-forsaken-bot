@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, kcEntry, refreshProfileLuck } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
@@ -154,6 +154,11 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => sweepExpiredBounties(client), 6 * 3600 * 1000);
   setInterval(() => { refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message)); }, 6 * 3600 * 1000);
   refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message));
+  // Daily WOM update + gains warm-up: first run a few minutes
+  // after boot (also covers the post-restart empty cache), then
+  // every 24h. One paced pass over the ranked players only.
+  setTimeout(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 180 * 1000);
+  setInterval(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 24 * 3600 * 1000);
   setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
   setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
   setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);

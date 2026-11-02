@@ -372,4 +372,121 @@ async function getCompetition(competitionId) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, CACHE_MS, NOTFOUND_MS };
+// ---- Player gains (WOM deltas) ----
+// WOM computes day/week/month/year gains from its own snapshot
+// history. Normalized once at fetch time and kept in a small
+// file cache: the gains card reads fresh entries (1h TTL), the
+// clan board reads totals at any age, and the daily sync job
+// keeps both warm.
+const GAINS_PERIODS = ['day', 'week', 'month', 'year'];
+const GAINS_FILE = path.join(__dirname, '..', 'data', 'wom-gains.json');
+const GAINS_TTL_MS = 3600 * 1000;
+
+function loadGains() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(GAINS_FILE, 'utf8'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeGains(json) {
+  const d = (json && json.data) || {};
+  const title = (k) => k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const skills = [];
+  let totalXp = 0;
+  for (const [key, v] of Object.entries(d.skills || {})) {
+    const g = v && v.experience ? v.experience.gained : null;
+    if (typeof g !== 'number') continue;
+    if (key === 'overall') { totalXp = Math.max(0, g); continue; }
+    if (g > 0) {
+      skills.push({
+        skill: key === 'runecrafting' ? 'runecraft' : key,
+        name: title(key), xp: g,
+      });
+    }
+  }
+  skills.sort((a, b) => b.xp - a.xp);
+  const bosses = [];
+  let totalKc = 0;
+  for (const [key, v] of Object.entries(d.bosses || {})) {
+    const g = v && v.kills ? v.kills.gained : null;
+    if (typeof g !== 'number' || g <= 0) continue;
+    bosses.push({ metric: key, name: title(key), kc: g });
+    totalKc += g;
+  }
+  bosses.sort((a, b) => b.kc - a.kc);
+  return {
+    totalXp, totalKc, skills, bosses,
+    startsAt: json.startsAt || null, endsAt: json.endsAt || null,
+  };
+}
+
+// One player's normalized gains for a period: fresh file entry
+// when under the TTL, else one paced live call. A failed call
+// serves the stale entry rather than nothing.
+async function getPlayerGains(username, period) {
+  if (!GAINS_PERIODS.includes(period)) return null;
+  const key = String(username || '').toLowerCase().trim();
+  if (!key) return null;
+  const store = loadGains();
+  const hit = store[key] && store[key][period];
+  if (hit && Date.now() - hit.at < GAINS_TTL_MS) return hit.data;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/players/${encodeURIComponent(key)}/gained?period=${period}`);
+      if (res.status === 404) return null;
+      if (!res.ok) return hit ? hit.data : null;
+      const data = normalizeGains(await res.json());
+      const fresh = loadGains();
+      if (!fresh[key]) fresh[key] = {};
+      fresh[key][period] = { at: Date.now(), data };
+      fs.mkdirSync(path.dirname(GAINS_FILE), { recursive: true });
+      atomicWrite(GAINS_FILE, fresh);
+      return data;
+    } catch (err) {
+      console.warn(`WOM gains lookup failed for ${key}:`, err.message);
+      return hit ? hit.data : null;
+    }
+  });
+}
+
+// Synchronous totals read for board rendering, any cache age.
+// { xp, kc } | null when the player has no cached gains.
+function getGainsTotals(username, period) {
+  const store = loadGains();
+  const hit = store[String(username || '').toLowerCase().trim()];
+  const e = hit && hit[period];
+  if (!e || !e.data) return null;
+  return { xp: e.data.totalXp || 0, kc: e.data.totalKc || 0 };
+}
+
+// Ask WOM to refresh a player's snapshot from the hiscores
+// (POST /players/update). True when WOM accepted it. The
+// response seeds the stats cache, so every WOM-fed card gets
+// the fresher numbers, not just gains.
+async function updatePlayer(username) {
+  const key = String(username || '').toLowerCase().trim();
+  if (!key) return false;
+  return paced(async () => {
+    try {
+      const res = await womFetch('POST', '/players/update', { username: key });
+      if (!res.ok) return false;
+      const player = await res.json().catch(() => null);
+      const stats = player ? parseStats(player) : null;
+      if (stats) {
+        const fresh = loadCache();
+        fresh[key] = { fetchedAt: Date.now(), stats };
+        saveCache(fresh);
+        vaultUpsert(key, stats, fresh[key].fetchedAt);
+      }
+      return true;
+    } catch (err) {
+      console.warn(`WOM update failed for ${key}:`, err.message);
+      return false;
+    }
+  });
+}
+
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };

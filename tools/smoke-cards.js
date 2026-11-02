@@ -65,7 +65,7 @@ async function t(name, fn, needFile = true) {
   await t('clog clues summary card', () => S.clogPayload('clues', 'IronVale', GAVIN));
   await t('clog scrolls summary card', () => S.clogPayload('scrolls', 'IronVale', GAVIN));
   await t('dry card (Zulrah)', () => S.dryPayload('zulrah', 'IronVale', GAVIN));
-  await t('gains card', () => S.gainsPayload('IronVale', 7, GAVIN), false);
+  await t('gains card', () => S.gainsPayload('IronVale', 'week', GAVIN), false);
   await t('pb reply', () => S.pbPayload('', 'IronVale', GAVIN), false);
   await t('compare overall', () => S.compareOverallPayload('IronVale', 'IronStewPot', GAVIN, GAVIN));
   await t('compare skills', () => S.compareSkillsPayload('IronVale', 'IronStewPot', GAVIN, GAVIN, {}));
@@ -241,7 +241,37 @@ async function t(name, fn, needFile = true) {
       note.slice(0, 120));
   }
 
-  // ── I. Profile-luck file (writer runs at startup + 6h) ──
+  // ── I. Gains: WOM periods (Nov 2, 2026) ──────────────
+  for (const per of ['day', 'week', 'month', 'year']) {
+    const gp = await S.gainsPayload('IronVale', per, GAVIN);
+    ok(`gains card renders: ${per}`, hasFile(gp), gp && gp.content ? gp.content.slice(0, 80) : '');
+  }
+  const gw = await S.gainsPayload('IronVale', 'week', GAVIN);
+  const gBtns = flat(gw).filter((c) => c.id.startsWith('gains:'));
+  ok('gains card carries 4 period buttons', gBtns.length === 4,
+    JSON.stringify(gBtns.map((b) => b.id)));
+  let flipped = null;
+  await S.handleGainsButton({ customId: 'gains:year:IronVale', user: { id: GAVIN },
+    update: async (p) => { flipped = p; }, reply: async (p) => { flipped = p; } });
+  ok('gains period flip swaps the card', !!(flipped && flipped.files));
+  let wgOk = false;
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(DATA, 'wom-gains.json'), 'utf8'));
+    wgOk = !!(raw.ptstud && raw.ptstud.week && raw.ptstud.year);
+  } catch {}
+  ok('wom-gains.json holds IronVale week + year', wgOk);
+  const gb = await S.leaderboardPayload(GAVIN, 'gains');
+  const pyBtn = flat(gb).find((c) => c.id.startsWith('lbg:py:'));
+  ok('gains board has a Year period button', !!pyBtn);
+  if (pyBtn) {
+    const ixG = fakeIx(pyBtn.id, gb.components);
+    await S.handleLeaderboardButton(ixG);
+    ok('gains board year press updates', !!ixG.last && hasFile(ixG.last));
+    ok('gains board keeps kind + period rows',
+      flat(ixG.last).some((c) => c.id.startsWith('lbg:pm:')));
+  }
+
+  // ── J. Profile-luck file (writer runs at startup + 6h) ──
   let luckOk = false, luckWhy = '';
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(DATA, 'profile-luck.json'), 'utf8'));

@@ -2,7 +2,7 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers } = require('./wom');
+const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, GAINS_PERIODS } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -15,7 +15,6 @@ const countersFor = (stats, rsn) => ({
   ...(stats && stats.kc ? stats.kc : {}),
   ...pluginCountersFor(rsn),
 });
-const { snapshotToday, baselineFor } = require('./gains');
 const { bountyAutocompleteChoices } = require('./bounty');
 const fs = require('fs');
 const path = require('path');
@@ -644,13 +643,39 @@ async function handleDryCommand(message, args) {
   await message.reply(await dryPayload(activity, rsn, message.author.id)).catch(() => {});
 }
 
-// !gains [name] [week|month]: XP and KC gained over the
-// period, diffed against the bot's daily snapshots (src/gains).
-async function gainsPayload(rsn, days, userId) {
+// !gains [name] [day|week|month|year]: XP and KC gained over
+// the period, read from Wise Old Man deltas (src/wom
+// getPlayerGains: their snapshot history, normalized + file
+// cached). The bot's own daily snapshots keep recording as an
+// independent backup but no longer feed this card.
+const GAINS_PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 };
+const GAINS_PERIOD_LABEL = { day: 'Day', week: 'Week', month: 'Month', year: 'Year' };
+
+function gainsPeriod(p) {
+  if (p === 7 || p === '7') return 'week';
+  if (p === 30 || p === '30') return 'month';
+  if (p === 1 || p === '1') return 'day';
+  if (p === 365 || p === '365') return 'year';
+  const s = String(p || '').toLowerCase();
+  return GAINS_PERIODS.includes(s) ? s : 'week';
+}
+
+function gainsPeriodRow(period, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  const btn = (p) => new ButtonBuilder()
+    .setCustomId(`gains:${p}:${enc}`)
+    .setLabel(GAINS_PERIOD_LABEL[p])
+    .setStyle(p === period ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(p === period);
+  return new ActionRowBuilder().addComponents(
+    btn('day'), btn('week'), btn('month'), btn('year'));
+}
+
+async function gainsPayload(rsn, periodIn, userId) {
+  const period = gainsPeriod(periodIn);
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId);
-  snapshotToday(); // make sure today's baseline exists
   let st;
   try {
     st = await getStats(rsn);
@@ -659,61 +684,57 @@ async function gainsPayload(rsn, days, userId) {
   }
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
-  const base = baselineFor(days || 7);
-  if (!base) return { content: 'Gains tracking just started. First real numbers land tomorrow.' };
-  if (base.isToday) {
-    return { content: 'Gains tracking just started. First real numbers land tomorrow.' };
-  }
-  const prev = base.snap[rsn.toLowerCase()];
-  if (!prev) {
-    return { content: `No gains baseline for **${rsn}** yet. Baselines are recorded daily for every tracked player.` };
-  }
-  const skillGains = [];
-  for (const [skill, v] of Object.entries(st.skills || {})) {
-    if (skill === 'overall' || !v || typeof v.xp !== 'number') continue;
-    const d = v.xp - (prev.xp[skill] || 0);
-    if (d > 0) {
-      skillGains.push({
-        skill: skill === 'runecrafting' ? 'runecraft' : skill,
-        name: skill.charAt(0).toUpperCase() + skill.slice(1),
-        xp: d,
-      });
-    }
-  }
-  skillGains.sort((x, y) => y.xp - x.xp);
-  const totalXp = Math.max(0,
-    ((st.skills || {}).overall?.xp || 0) - (prev.xp.overall || 0));
-  const kcGains = [];
-  for (const [m, v] of Object.entries(st.kc || {})) {
-    if (typeof v !== 'number' || NON_KC_SCORES.has(m)) continue;
-    const d = v - (prev.kc[m] || 0);
-    if (d > 0) kcGains.push({ metric: m, name: prettyMetric(m), kc: d });
-  }
-  kcGains.sort((x, y) => y.kc - x.kc);
-  const totalKc = kcGains.reduce((s, g) => s + g.kc, 0);
+  const g = await getPlayerGains(rsn, period);
+  if (!g) return { content: `Wise Old Man has no gains history for **${rsn}** yet.` };
   const card = await fetchCard('/gains', {
-    rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), spanDays: base.spanDays, totalXp, totalKc,
-    skills: skillGains.slice(0, 5), bosses: kcGains.slice(0, 5),
+    rsn, badge: cardBadgeFor(rsn, st.accountType), spanDays: GAINS_PERIOD_DAYS[period],
+    totalXp: g.totalXp, totalKc: g.totalKc,
+    skills: g.skills.slice(0, 5), bosses: g.bosses.slice(0, 5),
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'gains.png' })] };
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'gains.png' })],
+      components: [gainsPeriodRow(period, rsn)],
+    };
+  }
   return CARD_DOWN;
+}
+
+// Period flip on a posted gains card. Open to everyone like
+// the compare and leaderboard view controls; a press that hits
+// the account-type gate (only possible for the card owner on
+// their own unstated account) answers privately instead of
+// replacing the card.
+async function handleGainsButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const period = gainsPeriod(parts[1]);
+  const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
+  if (!rsn) return;
+  const payload = await gainsPayload(rsn, period, interaction.user.id);
+  if (payload && payload.files) {
+    await interaction.update(payload).catch(() => {});
+  } else if (payload) {
+    await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
+  }
 }
 
 async function handleGainsCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
-  let days = 7;
+  let period = 'week';
   const rest = [];
   for (const a of args) {
     const low = String(a).toLowerCase();
-    if (low === 'month' || low === 'monthly') days = 30;
-    else if (low === 'week' || low === 'weekly') days = 7;
+    if (low === 'day' || low === 'daily') period = 'day';
+    else if (low === 'week' || low === 'weekly') period = 'week';
+    else if (low === 'month' || low === 'monthly') period = 'month';
+    else if (low === 'year' || low === 'yearly') period = 'year';
     else rest.push(a);
   }
   const { rsn, error, payload } = resolveName(rest, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await gainsPayload(rsn, days, message.author.id)).catch(() => {});
+  await message.reply(await gainsPayload(rsn, period, message.author.id)).catch(() => {});
 }
 
 async function handleKcCommand(message, args) {
@@ -1308,7 +1329,7 @@ const LB_PAGE_SIZE = 25; // paging machinery exists from day one; the
 const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains'];
 
 function lbDefaultState() {
-  return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 7, var: null };
+  return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 'week', var: null };
 }
 // Compact positional state: Discord caps custom ids at 100 chars, and a
 // JSON blob overflows it. Fields join with '|' (never in a page title),
@@ -1318,7 +1339,7 @@ const LB_LETTER_VIEW = { o: 'overall', p: 'pvm', s: 'skills', c: 'clogs', g: 'ga
 function lbEncode(st) {
   return [LB_VIEW_LETTER[st.v] || 'o', st.k || '-', st.p || 0, st.cat || '-',
     st.cp || 0, st.ctab || '-', st.cpg || 0, st.gk === 'kc' ? 'k' : 'x',
-    st.gd === 30 ? '3' : '7', st.var == null ? '-' : String(st.var)].join('|');
+    ({ day: 'd', week: '7', month: '3', year: 'y' })[st.gd] || '7', st.var == null ? '-' : String(st.var)].join('|');
 }
 function lbDecode(s) {
   const parts = String(s || '').split('|');
@@ -1331,7 +1352,7 @@ function lbDecode(s) {
   if (parts[5] && parts[5] !== '-') st.ctab = parts[5];
   st.cpg = parseInt(parts[6], 10) || 0;
   st.gk = parts[7] === 'k' ? 'kc' : 'xp';
-  st.gd = parts[8] === '3' ? 30 : 7;
+  st.gd = ({ d: 'day', 7: 'week', 3: 'month', y: 'year' })[parts[8]] || 'week';
   if (parts[9] && parts[9] !== '-') st.var = parseInt(parts[9], 10) || 0;
   return st;
 }
@@ -1552,35 +1573,26 @@ function lbBuildBoard(st, names) {
     rows.sort((a, b) => b.value - a.value);
     return { title: st.k, unit: 'items', rows };
   }
-  // gains
-  snapshotToday();
-  const base = baselineFor(st.gd || 7);
-  if (!base || base.isToday) {
-    return { unavailable: 'Gains tracking just started. First real numbers land tomorrow.' };
-  }
+  // gains: Wise Old Man deltas, read from the file cache the
+  // gains card and the daily sync keep warm. A player with no
+  // cached totals sits this board out until the next sync.
+  const period = GAINS_PERIODS.includes(st.gd) ? st.gd : 'week';
   for (const rsn of names) {
     const s = lbStats(rsn);
-    const prev = base.snap[rsn.toLowerCase()];
-    if (!s || !prev) continue;
-    let gain = 0;
-    if (st.gk === 'kc') {
-      for (const [m, v] of Object.entries(s.kc || {})) {
-        if (typeof v !== 'number' || NON_KC_SCORES.has(m)) continue;
-        gain += Math.max(0, v - ((prev.kc || {})[m] || 0));
-      }
-    } else {
-      gain = Math.max(0, (((s.skills || {}).overall || {}).xp || 0) - ((prev.xp || {}).overall || 0));
-    }
+    const tot = getGainsTotals(rsn, period);
+    if (!tot) continue;
+    const gain = st.gk === 'kc' ? tot.kc : tot.xp;
     if (gain <= 0) continue;
     rows.push({
-      name: rsn, badge: lbBadgeFor(rsn, s.accountType), value: gain,
+      name: rsn, badge: lbBadgeFor(rsn, s ? s.accountType : null), value: gain,
       valueText: st.gk === 'kc' ? `+${fmtNum(gain)} KC` : `+${fmtNum(gain)} XP`,
     });
   }
   rows.sort((a, b) => b.value - a.value);
   return {
     title: st.gk === 'kc' ? 'KC Gained' : 'XP Gained',
-    note: `Last ${base.spanDays} days`, unit: st.gk === 'kc' ? 'KC' : 'XP', rows,
+    note: { day: 'Last 24 hours', week: 'Last 7 days', month: 'Last 30 days', year: 'Last 365 days' }[period],
+    unit: st.gk === 'kc' ? 'KC' : 'XP', rows,
   };
 }
 
@@ -1697,8 +1709,10 @@ function lbComponents(st, pages, scoped = false) {
       .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
       .setDisabled(active);
     rows.push(new ActionRowBuilder().addComponents(
-      gBtn('xp', 'XP', st.gk === 'xp'), gBtn('kc', 'KC', st.gk === 'kc'),
-      gBtn('d7', '7 days', st.gd === 7), gBtn('d30', '30 days', st.gd === 30)));
+      gBtn('xp', 'XP', st.gk === 'xp'), gBtn('kc', 'KC', st.gk === 'kc')));
+    rows.push(new ActionRowBuilder().addComponents(
+      gBtn('pd', 'Day', st.gd === 'day'), gBtn('pw', 'Week', st.gd === 'week'),
+      gBtn('pm', 'Month', st.gd === 'month'), gBtn('py', 'Year', st.gd === 'year')));
   }
   if (pages > 1) {
     rows.push(new ActionRowBuilder().addComponents(
@@ -1817,8 +1831,10 @@ async function handleLeaderboardButton(interaction) {
   } else if (kind === 'lbg') {
     if (parts[1] === 'xp') st.gk = 'xp';
     else if (parts[1] === 'kc') st.gk = 'kc';
-    else if (parts[1] === 'd7') st.gd = 7;
-    else if (parts[1] === 'd30') st.gd = 30;
+    else if (parts[1] === 'pd') st.gd = 'day';
+    else if (parts[1] === 'pw') st.gd = 'week';
+    else if (parts[1] === 'pm') st.gd = 'month';
+    else if (parts[1] === 'py') st.gd = 'year';
     st.p = 0;
   } else if (kind === 'lbvar') {
     st.var = parts[1] === '-' ? null : (parseInt(parts[1], 10) || 0);
@@ -3753,14 +3769,16 @@ const commands = [
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)'))
       .addStringOption((o) => o.setName('period').setDescription('How far back to compare')
         .addChoices(
-          { name: 'Last 7 days', value: '7' },
-          { name: 'Last 30 days', value: '30' })),
+          { name: 'Last day', value: 'day' },
+          { name: 'Last week', value: 'week' },
+          { name: 'Last month', value: 'month' },
+          { name: 'Last year', value: 'year' })),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, gainsPayload(rsn, Number(interaction.options.getString('period') || '7'), interaction.user.id));
+      await slashReply(interaction, gainsPayload(rsn, interaction.options.getString('period') || 'week', interaction.user.id));
     },
   },
   {
@@ -3806,4 +3824,24 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+// Daily Wise Old Man sync (Nov 2, 2026): ask WOM to refresh
+// every ranked player's snapshot from the hiscores, then warm
+// all four gains periods into the file cache. The refresh also
+// seeds the stats cache, so every WOM-fed card gets fresher
+// numbers. Failures are counted and logged, never swallowed;
+// a player WOM rejects keeps their last snapshot and totals.
+async function syncWomGains() {
+  const names = await rankedNames();
+  let updated = 0;
+  let failed = 0;
+  let warmed = 0;
+  for (const rsn of names) {
+    if (await updatePlayer(rsn)) updated += 1; else failed += 1;
+    for (const p of GAINS_PERIODS) {
+      if (await getPlayerGains(rsn, p)) warmed += 1;
+    }
+  }
+  console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
+}
+
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
