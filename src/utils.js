@@ -80,7 +80,7 @@ function buildGuestWelcome(userId) {
     `The door's open. Come see what the forsaken built.\n\n` +
     `• Drop an intro in <#${introduceId}>\n` +
     `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
-    `• Guest in the clan chat any time: type **OathForsaken** in the guest clan tab\n` +
+    `• Join the clan chat as a guest any time: type **OathForsaken** in the guest tab\n` +
     `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
   );
 }
