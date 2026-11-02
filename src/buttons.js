@@ -42,7 +42,7 @@ async function routeButton(interaction) {
   if (kind === 'lbtab' || kind === 'lbg' || kind === 'lbpage') return handleLeaderboardButton(interaction);
   if (kind === 'donate') {
     await interaction.reply({
-      content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nEvery bit helps. Chaos takes all.',
+      content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nChaos takes all.',
       ephemeral: true,
     });
     return;

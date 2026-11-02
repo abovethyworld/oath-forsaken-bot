@@ -185,10 +185,10 @@ async function connect(interaction) {
       'The clan plugin is not live yet. This code will work when it launches.\n\n' +
       `Your plugin connect code:\n\`${code}\`\n` +
       'Paste it into the Connect Code setting in the Oath Forsaken RuneLite plugin. ' +
-      'One code covers every account you play: the plugin reports the account you are ' +
-      'logged into, and playing an account links it to you here. ' +
+      'One code covers every account you play. The plugin reports the account you are ' +
+      'logged into, and playing an account links it to you. ' +
       'Keep it to yourself: anyone with this code can sync as you. ' +
-      'Running /connect again replaces it, and the old code stops working.' +
+      'Run /connect again to replace it. The old code stops working.' +
       (entry.rsns.length ? '' : '\nNo RSN linked yet. It links itself the first time the plugin syncs.'),
     ephemeral: true,
   });

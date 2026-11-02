@@ -171,7 +171,7 @@ async function closeTicket(interaction) {
   store.removeTicket(interaction.guildId, ownerId);
   // Archive and lock the thread instead of deleting
   try {
-    await thread.send('Staff has closed this ticket. Don\'t be afraid to reach out if you need anything else.').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await thread.send('Staff has closed this ticket.').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     await thread.setLocked(true);
     await thread.setArchived(true);
     await interaction.followUp({ content: 'Ticket closed.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
