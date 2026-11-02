@@ -179,7 +179,8 @@ function parseStats(playerJson) {
     if (entry && typeof entry.score === 'number' && entry.score >= 0) kc[key] = entry.score;
   }
   for (const sk of SKILL_LEVELS) {
-    const entry = skills[sk];
+    // WOM names the skill runecrafting; the board shorthand is runecraft.
+    const entry = skills[sk === 'runecraft' ? 'runecrafting' : sk];
     const lvl = entry && typeof entry.level === 'number' ? entry.level : null;
     // Missing in WOM's snapshot (their record can be missing a skill
     // entirely) renders as null -> the board shows '-', never a fake 1.
