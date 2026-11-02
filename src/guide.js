@@ -144,6 +144,7 @@ const commands = [
           .addChoices(
             { name: 'Setup', value: 'setup' },
             { name: 'Cards', value: 'cards' },
+            { name: 'Text commands', value: 'text-commands' },
             { name: 'Compare', value: 'compare' },
             { name: 'Bounties', value: 'bounties' },
             { name: 'Plugin', value: 'plugin' },
