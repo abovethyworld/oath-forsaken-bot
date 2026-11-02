@@ -786,6 +786,7 @@ async function dryCluesAllPayload(rsn, userId) {
 // wearing return buttons). Categories are the collection
 // log's own sections minus Raids, which luck never scores.
 const DRY_LIST_CATS = ['all', 'Bosses', 'Clues', 'Minigames', 'Other'];
+const dryListMemo = new Map();
 
 function dryListUnits(rsn, st) {
   const counters = countersFor(st, rsn);
@@ -879,7 +880,13 @@ async function dryListPayload(rsn, userId, cat = 'all') {
   }
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
-  const units = dryListUnits(rsn, st);
+  const memoKey = String(rsn).toLowerCase();
+  const memo = dryListMemo.get(memoKey);
+  const units = memo && Date.now() - memo.at < 5 * 60 * 1000
+    ? memo.units : dryListUnits(rsn, st);
+  if (units.length && (!memo || Date.now() - memo.at >= 5 * 60 * 1000)) {
+    dryListMemo.set(memoKey, { at: Date.now(), units });
+  }
   if (!units.length) {
     return { content: `Nothing to rank for **${rsn}** yet: no scored drops are missing, or the log is not synced.` };
   }
@@ -910,7 +917,7 @@ async function drySwapUpdate(interaction, payload) {
   const msg = { content: payload.content || '', components: payload.components || [] };
   if (payload.files) { msg.files = payload.files; msg.attachments = []; }
   else { msg.files = []; msg.attachments = []; }
-  await interaction.update(msg).catch(() => {});
+  await interaction.editReply(msg).catch(() => {});
 }
 
 async function handleDryCatButton(interaction) {
@@ -918,6 +925,7 @@ async function handleDryCatButton(interaction) {
   const cat = parts[1];
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
   if (!rsn || !DRY_LIST_CATS.includes(cat)) return;
+  await interaction.deferUpdate().catch(() => {});
   await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, cat));
 }
 
@@ -927,6 +935,7 @@ async function handleDryPickSelect(interaction) {
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
   const value = String((interaction.values || [])[0] || '');
   if (!rsn || !value) return;
+  await interaction.deferUpdate().catch(() => {});
   let payload = null;
   if (value.startsWith('b:')) payload = await dryPayload(value.slice(2), rsn, interaction.user.id);
   else if (value.startsWith('c:')) payload = await dryCluePayload(value.slice(2), rsn, interaction.user.id);
@@ -3270,7 +3279,11 @@ async function slashReply(interaction, payloadPromise) {
     console.error('[slashReply] defer failed:', e && e.message);
     return false;
   });
-  const payload = await payloadPromise;
+  // A thunk defers the payload build itself until after the
+  // defer lands, so a heavy build can never starve the
+  // interaction's 3-second acknowledgement window.
+  const payload = await (typeof payloadPromise === 'function'
+    ? payloadPromise() : payloadPromise);
   // Defer failed (usually an expired interaction): editReply would fail
   // too, so bail instead of answering into the void.
   if (!deferred) return;
@@ -4356,9 +4369,9 @@ const commands = [
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
       const act = interaction.options.getString('activity');
-      await slashReply(interaction, act
+      await slashReply(interaction, () => (act
         ? dryPayload(act, rsn, interaction.user.id)
-        : dryListPayload(rsn, interaction.user.id, 'all'));
+        : dryListPayload(rsn, interaction.user.id, 'all')));
     },
   },
   {
