@@ -4,7 +4,7 @@
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage } = require('./runeprofile');
-const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
+const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor } = require('./luck');
@@ -343,7 +343,37 @@ async function petsForSide(pageItems, petIds) {
   })));
 }
 
+
+// ─── Account-type gate ───────────────────────────────────────────────
+// A member's own account gets no card until its game mode is stated.
+// Looking up someone else is never gated. Returns the setup reply, or
+// null when the card may run.
+function ownAccountGate(userId, rsn) {
+  if (!userId || !rsn) return null;
+  const entry = getRsnEntry(userId);
+  if (!entry.rsns.some((r) => r.toLowerCase() === String(rsn).toLowerCase())) return null;
+  if (getStatedBadge(userId, rsn)) return null;
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('team:badge')
+      .setLabel('Account Type')
+      .setStyle(ButtonStyle.Danger)
+      .setEmoji({ name: 'accounttype', id: '1561578543501025313' })
+  );
+  if (entry.rsns.length > 1) {
+    row.addComponents(
+      new ButtonBuilder().setCustomId('team:rsnswitch').setLabel('Switch RSN').setStyle(ButtonStyle.Danger).setEmoji('⚔️')
+    );
+  }
+  return {
+    content: `Set the account type for **${rsn}** first. Press **Account Type**, pick its mode, then run the command again.`,
+    components: [row],
+  };
+}
+
 async function kcPayload(activity, rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
     return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(KC_KEYS).join(', ')}` };
@@ -400,6 +430,8 @@ function dryAutocompleteChoices(focused) {
 }
 
 async function dryPayload(activity, rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
     return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${dryScoredKeys().join(', ')}` };
@@ -465,6 +497,8 @@ async function handleDryCommand(message, args) {
 // !gains [name] [week|month]: XP and KC gained over the
 // period, diffed against the bot's daily snapshots (src/gains).
 async function gainsPayload(rsn, days, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   if (userId) noteUse(userId);
   snapshotToday(); // make sure today's baseline exists
   let st;
@@ -836,6 +870,8 @@ async function clueSummaryPayload(rsn, userId) {
 }
 
 async function clogPayload(key, rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   if (key === 'clues') return clueSummaryPayload(rsn, userId);
   if (key === 'total') {
@@ -982,6 +1018,8 @@ async function siteCardPayload(rsn) {
 }
 
 async function profilePayload(rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   const site = await siteCardPayload(rsn);
   if (site) return site;
@@ -1530,6 +1568,8 @@ function pbTime(entry) {
 // them; !pb <boss> [name] shows one boss. Nothing is fetched live:
 // the record is a local file the plugin API writes.
 async function pbPayload(activity, rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   const record = pluginRecord(rsn);
   const pbs = (record && record.personalBests) || {};
   const all = Object.entries(pbs).filter(([, e]) => e && typeof e === 'object');
@@ -1595,6 +1635,8 @@ const SKILL_ORDER = [
 // !skills: the full skill grid from Wise Old Man, same numbers the
 // website profile pages show.
 async function skillsPayload(rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
   if (userId) noteUse(userId); // a real lookup fires: start the cooldown
   let st;
   try {
@@ -2108,10 +2150,14 @@ function compareNames(rest, userId) {
   if (parts.length > 1) {
     const second = resolveNameFor(userId, parts[1]);
     if (second.error || second.payload) return second;
+    const gate = ownAccountGate(userId, first.rsn) || ownAccountGate(userId, second.rsn);
+    if (gate) return { payload: gate };
     return { a: first.rsn, b: second.rsn };
   }
   const linked = resolveNameFor(userId, null);
   if (linked.error || linked.payload) return linked;
+  const gate = ownAccountGate(userId, first.rsn) || ownAccountGate(userId, linked.rsn);
+  if (gate) return { payload: gate };
   return { a: first.rsn, b: linked.rsn };
 }
 
@@ -3114,6 +3160,8 @@ async function resolveComparePair(interaction) {
     await interaction.reply({ content: 'Pick two different players to compare.', ephemeral: true }).catch(() => {});
     return null;
   }
+  const gate = ownAccountGate(uid, aRes.rsn) || ownAccountGate(uid, bRes.rsn);
+  if (gate) { await interaction.reply({ ...gate, ephemeral: true }).catch(() => {}); return null; }
   return { a: aRes.rsn, b: bRes.rsn };
 }
 

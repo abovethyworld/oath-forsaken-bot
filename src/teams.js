@@ -1494,6 +1494,7 @@ const BADGE_MANAGER_TEXT =
   'AUTO reads the account on Wise Old Man. Group iron modes can\'t be detected, pick those by hand.';
 
 async function handleBadgeButton(interaction) {
+  await maybeSyncModeRoles(interaction.client, interaction.user.id);
   const entry = getRsnEntry(interaction.user.id);
   if (!entry.rsns.length) {
     await interaction
