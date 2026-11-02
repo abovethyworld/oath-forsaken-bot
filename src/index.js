@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, kcEntry } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, kcEntry } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
@@ -191,7 +191,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       cooldowns.set(btnKey, btnNow);
       await routeButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
-      if (interaction.customId.startsWith('cmpboss:')) {
+      if (interaction.customId.startsWith('lbpick:')) {
+        await handleLeaderboardSelect(interaction);
+      } else if (interaction.customId.startsWith('cmpboss:')) {
         await handleCompareBossSelect(interaction);
       } else if (interaction.customId.startsWith('cmpskill:')) {
         await handleCompareSkillSelect(interaction);
@@ -247,7 +249,7 @@ client.on(Events.MessageCreate, async (message) => {
     if (cmd === 'kc') await handleKcCommand(message, parts.slice(1));
     else if (cmd === 'clog') await handleClogCommand(message, parts.slice(1));
     else if (cmd === 'profile') await handleProfileCommand(message, parts.slice(1));
-    else if (cmd === 'leaderboard') await handleLeaderboardCommand(message);
+    else if (cmd === 'leaderboard') await handleLeaderboardCommand(message, parts.slice(1));
     else if (cmd === 'tfa') await handleTfaCommand(message, parts.slice(1));
     else if (cmd === 'pb') await handlePbCommand(message, parts.slice(1));
     else if (cmd === 'skills') await handleSkillsCommand(message, parts.slice(1));
