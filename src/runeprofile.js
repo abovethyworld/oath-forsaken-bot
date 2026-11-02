@@ -341,6 +341,15 @@ function getCachedClogPage(username, tab, page) {
   return { obtained: hit.obtained, total: hit.total, fresh };
 }
 
+// Synchronous cache read WITH the item list, at any freshness:
+// for luck sweeps that must never trigger a network fetch.
+// { obtained, total, items } | null when uncached.
+function getCachedClogPageItems(username, tab, page) {
+  const hit = loadCache()[clogCacheKey(username, tab, page)];
+  if (!hit || typeof hit.fetchedAt !== 'number' || hit.notFound) return null;
+  return { obtained: hit.obtained, total: hit.total, items: hit.items || [] };
+}
+
 // Profile bundle: account summary + skills + combat achievements + diaries.
 // Only the account lookup gates the result: if the account itself is
 // missing, the profile is not found. A missing or failed extra (skills,
@@ -406,6 +415,7 @@ module.exports = {
   getClogPageWithItems,
   getClogTotal,
   getCachedClogPage,
+  getCachedClogPageItems,
   getCachedClogTotal,
   getProfile,
   parseClogPage,

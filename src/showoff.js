@@ -3,7 +3,7 @@
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers } = require('./wom');
-const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage } = require('./runeprofile');
+const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
@@ -1016,6 +1016,8 @@ async function clueSummaryPayload(rsn, userId) {
       continue;
     }
     anyPage = true;
+    const scores = st && !st.notFound
+      ? itemLuckScores(countersFor(st, rsn), res.items || []) : {};
     const rates = CLUE_RATES_LC[tierKey] || {};
     const rarest = (res.items || [])
       .filter((it) => (it.quantity || 0) > 0 && rates[it.name.toLowerCase()] != null)
@@ -1024,7 +1026,10 @@ async function clueSummaryPayload(rsn, userId) {
     const drawn = await loadClogItems({ items: rarest });
     rows.push({
       tier: label, completed, obtained: res.obtained, total: res.total,
-      items: drawn.map((d) => ({ icon: d.iconB64 })),
+      items: drawn.map((d) => ({
+        icon: d.iconB64,
+        score: scores[d.id] != null ? scores[d.id] : null,
+      })),
     });
   }
   const shared = await getClogPageWithItems(rsn, 'Clues', 'Shared Treasure Trail Rewards').catch(() => null);
@@ -1200,6 +1205,51 @@ async function siteCardPayload(rsn) {
   }
 }
 
+// The player's driest missing scored item across every synced
+// collection log page, in the luck plugin's phrasing ("85%
+// luckier than you"). Cache-only: pages the bot has never seen
+// are skipped, never fetched. Null when nothing scores, or when
+// the driest item sits under the 50% line the boss cards use.
+function driestItemText(rsn, st) {
+  if (!st || st.notFound) return null;
+  const counters = countersFor(st, rsn);
+  const seen = new Set();
+  let worst = null;
+  for (const pair of Object.values(CLOG_PAGES)) {
+    const tab = pair[0];
+    const title = pair[1];
+    const key = `${tab}|${title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const page = getCachedClogPageItems(rsn, tab, title);
+    if (!page || !page.items.length) continue;
+    const rep = dryReport(counters, page.items);
+    if (!rep || !rep.missing.length) continue;
+    const top = rep.missing[0];
+    if (!worst || top.score < worst.score) worst = top;
+  }
+  if (!worst) return null;
+  // A missing item's score is (1 - dryness) / 2 on the 0-100
+  // scale, so the dryness share inverts straight back out.
+  const pct = Math.round(100 - 2 * worst.score);
+  if (pct < 50) return null;
+  return `${worst.name} (${pct}% luckier than you)`;
+}
+
+// The website share cards carry the same driest-item fact; the
+// site builder reads it from this file in the bot data dir,
+// beside the RuneProfile cache it already loads. Refreshed on
+// a timer from index.js.
+async function refreshProfileLuck() {
+  const out = {};
+  for (const rsn of rankedNames()) {
+    const st = await getStats(rsn).catch(() => null);
+    const text = driestItemText(rsn, st);
+    if (text) out[rsn.toLowerCase()] = text;
+  }
+  fs.writeFileSync('data/profile-luck.json', JSON.stringify(out));
+}
+
 async function profilePayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
@@ -1225,7 +1275,9 @@ async function profilePayload(rsn, userId) {
   // House-style card from the card service. If it is down the
   // command says so; there is no old-style fallback.
   const pBadgeId = badgeForAccount(fields.name, null);
-  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId && !fields.accountLabel ? BADGE_WORDS[pBadgeId] : null });
+  const stL = await getStats(fields.name).catch(() => null);
+  const luckLine = driestItemText(fields.name, stL);
+  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId && !fields.accountLabel ? BADGE_WORDS[pBadgeId] : null, luckLine });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
   return CARD_DOWN;
 }
@@ -3754,4 +3806,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
