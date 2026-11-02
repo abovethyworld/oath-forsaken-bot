@@ -469,7 +469,7 @@
   "welcome": {
     "banner": "",
     "color": 5763719,
-    "message": "Welcome {user} to **{server}**!\n\nGrab your roles, read the rules and drop your RSN in introductions. See you in Gielinor.",
+    "message": "Welcome {user} to **{server}**!\n\nRead the rules, grab your roles in <#1558399101454786670>, and hit **Link RSN** in <#1561976856780210186> so the clan bot knows your name. See you in Gielinor.",
     "title": "Welcome to the clan! \u2694\ufe0f"
   },
   "tickets": {
