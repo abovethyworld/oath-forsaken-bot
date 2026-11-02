@@ -49,6 +49,7 @@ function getPingRole(guild) {
 function buildInitiateWelcome(userId) {
   const introduceId = config.channels?.introduceYourself;
   const rolesId = config.channels?.roles;
+  const botGuideId = config.channels?.botGuide;
   const staffId = config.tickets?.staffRoleIds?.[0];
   const initiateId = config.seniorityRanks?.find((r) => r.minMonths === 0)?.roleId;
 
@@ -59,6 +60,7 @@ function buildInitiateWelcome(userId) {
     `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
     `• Drop an intro in <#${introduceId}> so we can get to meet you\n` +
     `• Grab your roles in <#${rolesId}>\n` +
+    `• Hit **Link RSN** in <#${botGuideId}> so the clan bot knows your name\n` +
     `• Ping <@&${staffId}> when you're ready for a clan chat invite`
   );
 }
