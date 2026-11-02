@@ -559,8 +559,8 @@ function progressBar(obtained, total) {
   return `${'█'.repeat(filled)}${'░'.repeat(10 - filled)} ${obtained}/${total} (${pct}%)`;
 }
 
-const RP_GUIDE = 'No RuneProfile profile found for that name. Run the RuneProfile plugin ([runeprofile.com/info/guide](https://runeprofile.com/info/guide)) and it syncs on its own.';
 const CLOG_SYNC_STEPS = 'To sync it: install the RuneProfile plugin in RuneLite, log in on that account, open your Collection Log, then press the RuneProfile button in the top-left. There is no RSN to type in; it reads the account you\'re on.';
+const RP_GUIDE = 'No RuneProfile profile found for that name. ' + CLOG_SYNC_STEPS;
 
 // !clog covers the whole collection log: every RuneProfile page,
 // grouped by tab. Keys are the short names members type; common
@@ -1024,7 +1024,7 @@ async function pbPayload(activity, rsn, userId) {
   const pbs = (record && record.personalBests) || {};
   const all = Object.entries(pbs).filter(([, e]) => e && typeof e === 'object');
   if (!all.length) {
-    return { content: `No personal bests synced for **${rsn}** yet. They land here once the clan plugin's PB sync is on and a PB kill happens in game.` };
+    return { content: `No personal bests synced for **${rsn}** yet. PBs come from the clan plugin. This feature works when our clan plugin is live.` };
   }
   if (userId) noteUse(userId);
   if (activity) {

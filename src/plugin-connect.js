@@ -182,6 +182,7 @@ async function connect(interaction) {
   const entry = getRsnEntry(interaction.user.id);
   await interaction.reply({
     content:
+      'The clan plugin is not live yet. This code will work when it launches.\n\n' +
       `Your plugin connect code:\n\`${code}\`\n` +
       'Paste it into the Connect Code setting in the Oath Forsaken RuneLite plugin. ' +
       'One code covers every account you play: the plugin reports the account you are ' +
