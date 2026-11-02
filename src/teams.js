@@ -1540,6 +1540,11 @@ async function handleBadgeSet(interaction, badgeId, enc) {
   const entry = getRsnEntry(interaction.user.id);
   const rsn = enc ? decodeURIComponent(enc) : entry.active;
   if (!rsn) return;
+  // The name baked into a button must be one of the presser's own
+  // linked accounts. Without this check a forged button press could
+  // save a mode statement (and its role) for an account the presser
+  // does not hold.
+  if (!entry.rsns.some((r) => r.toLowerCase() === String(rsn).toLowerCase())) return;
   const picked = badgeId === 'none' ? null : badgeId;
   if (picked && badgeValid(picked)) {
     // Cross-check: refuse a pick that contradicts a type WOM can see.
@@ -2290,18 +2295,23 @@ async function syncModeRoles(client, userId) {
     if (!member) return finish(true);
     const wanted = wantedModeRoles(userId);
     const granted = new Set(rec.granted);
+    // A failed add or remove stays pending, so the next interaction
+    // retries it instead of the grant silently going missing.
+    let failed = false;
     for (const roleId of wanted) {
       if (member.roles.cache.has(roleId)) continue;
       const updated = await member.roles.add(roleId).catch(() => null);
       if (updated) granted.add(roleId);
+      else failed = true;
     }
     for (const roleId of [...granted]) {
       if (wanted.includes(roleId)) continue;
       const updated = await member.roles.remove(roleId).catch(() => null);
       if (updated) granted.delete(roleId);
+      else failed = true;
     }
     rec.granted = [...granted];
-    finish(false);
+    finish(failed);
   } catch {
     finish(true);
   }
