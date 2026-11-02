@@ -282,6 +282,11 @@ async function t(name, fn, needFile = true) {
   await S.handleBridgeButton({ customId: 'bridge:dry:zulrah:IronVale', user: { id: GAVIN },
     update: async (p) => { bridged = p; }, reply: async (p) => { bridged = p; } });
   ok('bridge press swaps KC into dry', !!(bridged && bridged.files));
+  let toClues = null;
+  await S.handleBridgeButton({ customId: 'bridge:clues:-:IronVale', user: { id: GAVIN },
+    update: async (p) => { toClues = p; }, reply: async (p) => { toClues = p; } });
+  ok('bridge to clues lands with no stale buttons',
+    !!(toClues && toClues.files) && Array.isArray(toClues.components) && toClues.components.length === 0);
   const dryHard = await S.dryPayload('clue:hard', 'IronVale', GAVIN);
   ok('dry renders for hard clues', hasFile(dryHard),
     dryHard && dryHard.content ? dryHard.content.slice(0, 80) : '');
