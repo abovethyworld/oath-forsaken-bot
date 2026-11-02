@@ -10,6 +10,7 @@
       "images": [],
       "short": [
         "Stats and KC need nothing. The bot looks your name up on Wise Old Man.",
+        "Link your RSN: press **Link RSN** under the guide post in #bot-guide and type your RSN. Commands use your name when you leave it blank.",
         "Your collection log needs RuneProfile:",
         "1. Open your RuneLite client.",
         "2. Open the Plugin Hub (bottom of the plugin list).",
