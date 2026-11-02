@@ -45,7 +45,7 @@
           "file": "guide-dry.png"
         },
         {
-          "caption": "What `/gains` posts: XP and KC gained, last 7 or 30 days.",
+          "caption": "What `/gains` posts: XP and KC gained over the last day, week, month, or year.",
           "file": "guide-gains.png"
         }
       ],
@@ -54,7 +54,7 @@
         "`/clog` - Your whole log, or one page.",
         "`/skills` - Levels and XP.",
         "`/dry zulrah` - What you're dry on, and your luck.",
-        "`/gains` - XP and KC, last 7 or 30 days."
+        "`/gains` - XP and KC gained over the last day, week, month, or year."
       ],
       "title": "Cards"
     },
