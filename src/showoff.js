@@ -1849,16 +1849,18 @@ async function compareOverallPayload(aName, bName, userId, ownerId, ui = {}) {
 // RuneProfile terms. Scored pages (single KC counter) also get a
 // luck line via SKILL_SECTION_METRIC.
 const SKILL_CLOG_PAGES = {
-  woodcutting: [['Other', 'Forestry'], ['Minigames', 'Temple Trekking']],
-  agility: [['Other', 'Rooftop Agility'], ['Minigames', 'Hallowed Sepulchre'], ['Other', 'Colossal Wyrm Agility']],
+  woodcutting: [['Other', 'Forestry'], ['Minigames', 'Temple Trekking'], ['Minigames', 'Vale Totems']],
+  agility: [['Other', 'Rooftop Agility'], ['Minigames', 'Hallowed Sepulchre'], ['Other', 'Colossal Wyrm Agility'], ['Minigames', 'Brimhaven Agility Arena']],
   firemaking: [['Bosses', 'Wintertodt']],
   fishing: [['Bosses', 'Tempoross'], ['Minigames', 'Fishing Trawler'], ['Other', 'Aerial Fishing']],
   runecraft: [['Minigames', 'Guardians of the Rift']],
-  mining: [['Bosses', 'Zalcano'], ['Other', 'Motherlode Mine'], ['Minigames', 'Volcanic Mine']],
+  mining: [['Bosses', 'Zalcano'], ['Other', 'Motherlode Mine'], ['Minigames', 'Volcanic Mine'], ['Other', 'Shooting Stars']],
   slayer: [['Other', 'Slayer']],
-  farming: [['Minigames', 'Tithe Farm']],
+  farming: [['Minigames', 'Tithe Farm'], ['Bosses', 'Hespori']],
   hunter: [['Other', 'Hunter Guild']],
-  sailing: [['Minigames', 'Barracuda Trials'], ['Other', 'Ocean Encounters'], ['Other', 'Sea Treasures']],
+  sailing: [['Minigames', 'Barracuda Trials'], ['Other', 'Ocean Encounters'], ['Other', 'Sea Treasures'], ['Other', 'Sailing Miscellaneous']],
+  magic: [['Minigames', 'Magic Training Arena']],
+  cooking: [['Minigames', 'Gnome Restaurant']],
   thieving: [['Minigames', "Rogues' Den"]],
   herblore: [['Minigames', 'Mastering Mixology']],
   construction: [['Minigames', 'Mahogany Homes']],
