@@ -343,6 +343,15 @@ async function t(name, fn, needFile = true) {
   const warmSeed = await S.ensureSynced('IronVale', 1000);
   ok('ensureSynced no-ops for a warm name', warmSeed === false);
 
+  // ── L. Dry list + driest board ──
+  const dl = await S.dryListPayload('IronVale', null, 'all');
+  ok('dry list renders for IronVale', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
+  ok('dry list carries category buttons', !!dl && (dl.components || []).length >= 1);
+  const dlb = await S.dryListPayload('IronVale', null, 'Bosses');
+  ok('dry list Bosses category renders', !!(dlb && dlb.files));
+  const drb = await S.leaderboardPayload(null, 'driest');
+  ok('driest board renders', !!(drb && drb.files), JSON.stringify(drb && drb.content || ''));
+
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
   if (fails.length) console.log('FAILURES:', fails.join(' ;; '));
   process.exit(fail ? 1 : 0);
