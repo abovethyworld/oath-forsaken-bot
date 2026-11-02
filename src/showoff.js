@@ -676,6 +676,7 @@ const CLOG_PAGES = {
   clues_elite_rare: ['Clues', 'Elite Treasure Trails (Rare)'],
   clues_master_rare: ['Clues', 'Master Treasure Trails (Rare)'],
   clues_shared: ['Clues', 'Shared Treasure Trail Rewards'],
+  clues: ['Clues', 'Shared Treasure Trail Rewards'],
   scroll_cases: ['Clues', 'Scroll Cases'],
   ba: ['Minigames', 'Barbarian Assault'],
   barracuda_trials: ['Minigames', 'Barracuda Trials'],
@@ -764,8 +765,79 @@ function clogPageForCommand(key) {
 
 
 // Drawn card in the in-game chat style: "{rsn}: {Page} (x/y)" + item icons.
+// Clue tiers for the !clog clues summary card: display label, clog page
+// title, clue-rates.json tier key, WOM completion metric.
+const CLUE_TIERS = [
+  ['Beginner', 'Beginner Treasure Trails', 'beginner', 'clue_scrolls_beginner'],
+  ['Easy', 'Easy Treasure Trails', 'easy', 'clue_scrolls_easy'],
+  ['Medium', 'Medium Treasure Trails', 'medium', 'clue_scrolls_medium'],
+  ['Hard', 'Hard Treasure Trails', 'hard', 'clue_scrolls_hard'],
+  ['Elite', 'Elite Treasure Trails', 'elite', 'clue_scrolls_elite'],
+  ['Master', 'Master Treasure Trails', 'master', 'clue_scrolls_master'],
+];
+const CLUE_PAGE_METRIC = {
+  'Beginner Treasure Trails': 'clue_scrolls_beginner',
+  'Easy Treasure Trails': 'clue_scrolls_easy',
+  'Medium Treasure Trails': 'clue_scrolls_medium',
+  'Hard Treasure Trails': 'clue_scrolls_hard',
+  'Elite Treasure Trails': 'clue_scrolls_elite',
+  'Master Treasure Trails': 'clue_scrolls_master',
+  'Shared Treasure Trail Rewards': 'clue_scrolls_all',
+};
+// Wiki casket drop rates per tier (tools/build-clue-rates.js), keyed by
+// lowercased item name for matching against clog page item names.
+const CLUE_RATES_LC = {};
+try {
+  const raw = require('./clue-rates.json');
+  for (const [tier, table] of Object.entries(raw)) {
+    CLUE_RATES_LC[tier] = {};
+    for (const [name, rate] of Object.entries(table)) CLUE_RATES_LC[tier][name.toLowerCase()] = rate;
+  }
+} catch { /* rates missing: summary renders without the rarest tiles */ }
+
+async function clueSummaryPayload(rsn, userId) {
+  if (userId) noteUse(userId); // a real lookup fires: start the cooldown
+  const st = await getStats(rsn).catch(() => null);
+  const kc = st && !st.notFound && st.kc ? st.kc : {};
+  const rows = [];
+  let anyPage = false;
+  for (const [label, title, tierKey, metric] of CLUE_TIERS) {
+    const completed = typeof kc[metric] === 'number' ? kc[metric] : null;
+    const res = await getClogPageWithItems(rsn, 'Clues', title).catch(() => null);
+    if (!res || res.notFound) {
+      rows.push({ tier: label, completed, obtained: null, total: null, items: [] });
+      continue;
+    }
+    anyPage = true;
+    const rates = CLUE_RATES_LC[tierKey] || {};
+    const rarest = (res.items || [])
+      .filter((it) => (it.quantity || 0) > 0 && rates[it.name.toLowerCase()] != null)
+      .sort((a, b) => rates[a.name.toLowerCase()] - rates[b.name.toLowerCase()])
+      .slice(0, 4);
+    const drawn = await loadClogItems({ items: rarest });
+    rows.push({
+      tier: label, completed, obtained: res.obtained, total: res.total,
+      items: drawn.map((d) => ({ icon: d.iconB64 })),
+    });
+  }
+  const shared = await getClogPageWithItems(rsn, 'Clues', 'Shared Treasure Trail Rewards').catch(() => null);
+  if (shared && !shared.notFound) {
+    anyPage = true;
+    rows.push({ tier: 'Shared Rewards', completed: null, obtained: shared.obtained, total: shared.total, items: [] });
+  }
+  if (!anyPage) return { content: RP_GUIDE };
+  const card = await fetchCard('/clue-summary', {
+    rsn,
+    totalCompleted: typeof kc.clue_scrolls_all === 'number' ? kc.clue_scrolls_all : null,
+    rows,
+  });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'clues.png' })] };
+  return CARD_DOWN;
+}
+
 async function clogPayload(key, rsn, userId) {
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
+  if (key === 'clues') return clueSummaryPayload(rsn, userId);
   if (key === 'total') {
     if (userId) noteUse(userId); // a real lookup fires: start the cooldown
     const res = await getClogSummary(rsn).catch(() => null);
@@ -817,11 +889,15 @@ async function clogPayload(key, rsn, userId) {
   const st2 = await getStats(rsn).catch(() => null);
   const pageScores = st2 && !st2.notFound
     ? itemLuckScores(countersFor(st2, rsn), res.items || []) : {};
+  const pageMetric = CLUE_PAGE_METRIC[page[1]];
+  const completed = pageMetric && st2 && !st2.notFound && st2.kc
+    && typeof st2.kc[pageMetric] === 'number' ? st2.kc[pageMetric] : null;
   const card = await fetchCard('/clog-page', {
     rsn,
     page: page[1],
     obtained: res.obtained,
     total: res.total,
+    completed,
     items: drawn.map((d) => ({
       qty: d.qty, icon: d.iconB64,
       has: (d.qty || 0) > 0,
@@ -1691,7 +1767,8 @@ function kcAutocompleteChoices(focused) {
 function clogAutocompleteChoices(focused) {
   const q = String(focused || '').toLowerCase();
   const seen = new Set();
-  const all = [{ name: 'Total (whole log)', value: 'total' }];
+  const all = [{ name: 'Total (whole log)', value: 'total' },
+    { name: 'Clue Scrolls (all tiers)', value: 'clues' }];
   for (const [value, page] of Object.entries(CLOG_PAGES)) {
     if (seen.has(page[1])) continue; // aliases share one dropdown row
     seen.add(page[1]);
