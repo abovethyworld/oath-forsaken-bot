@@ -3266,12 +3266,17 @@ function resolveNameFor(userId, named) {
 }
 
 async function slashReply(interaction, payloadPromise) {
-  const deferred = await interaction.deferReply().then(() => true).catch(() => false);
+  const deferred = await interaction.deferReply().then(() => true).catch((e) => {
+    console.error('[slashReply] defer failed:', e && e.message);
+    return false;
+  });
   const payload = await payloadPromise;
   // Defer failed (usually an expired interaction): editReply would fail
   // too, so bail instead of answering into the void.
   if (!deferred) return;
-  await interaction.editReply(payload).catch(() => {});
+  await interaction.editReply(payload).catch((e) => {
+    console.error('[slashReply] edit failed:', e && e.message);
+  });
 }
 
 // Returns true when the interaction was answered with a cooldown notice.
@@ -4351,6 +4356,7 @@ const commands = [
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
       const act = interaction.options.getString('activity');
+      console.log('[dry] act =', JSON.stringify(act), 'rsn =', rsn);
       await slashReply(interaction, act
         ? dryPayload(act, rsn, interaction.user.id)
         : dryListPayload(rsn, interaction.user.id, 'all'));

@@ -168,6 +168,8 @@ client.once(Events.ClientReady, async (c) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
+      console.log('[ix]', interaction.commandName, interaction.user.id,
+        JSON.stringify(interaction.options && interaction.options.data || []));
       // Cooldown: 3s per user per command (prevents spam)
       const cooldownKey = `${interaction.user.id}:${interaction.commandName}`;
       const now = Date.now();
