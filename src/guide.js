@@ -87,7 +87,7 @@ function homeEmbed(user) {
   const rsns = linkedRsns(user.id);
   const status = rsns.length
     ? `Your linked accounts: ${rsns.join(', ')}`
-    : 'Linking accounts works when our clan plugin is live. The RSN Sync topic covers what works today.';
+    : 'No RSN linked yet. The Link RSN button is under the guide post in #bot-guide.';
   const topicList = (content.topics || []).map((t) => `**${t.title}**`).join(' · ');
   return new EmbedBuilder()
     .setTitle('⛧ Bot Guide ⛧')
