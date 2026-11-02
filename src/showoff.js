@@ -4356,7 +4356,6 @@ const commands = [
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
       const act = interaction.options.getString('activity');
-      console.log('[dry] act =', JSON.stringify(act), 'rsn =', rsn);
       await slashReply(interaction, act
         ? dryPayload(act, rsn, interaction.user.id)
         : dryListPayload(rsn, interaction.user.id, 'all'));

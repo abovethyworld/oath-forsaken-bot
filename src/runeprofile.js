@@ -19,11 +19,18 @@ const CACHE_MS = 24 * 3600 * 1000;
 const RETAIN_MS = 30 * 24 * 3600 * 1000;
 const MIN_GAP_MS = 2500; // keyed tier is 120 req/min; pacing stays deliberately conservative
 
+let cacheMemo = null;
+let cacheMemoMtime = 0;
 function loadCache() {
   try {
-    return JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    const mtime = fs.statSync(CACHE_FILE).mtimeMs;
+    if (cacheMemo && mtime === cacheMemoMtime) return cacheMemo;
+    const parsed = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    cacheMemo = parsed;
+    cacheMemoMtime = mtime;
+    return parsed;
   } catch {
-    return {};
+    return cacheMemo || {};
   }
 }
 
