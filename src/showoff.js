@@ -1242,7 +1242,7 @@ function driestItemText(rsn, st) {
 // a timer from index.js.
 async function refreshProfileLuck() {
   const out = {};
-  for (const rsn of rankedNames()) {
+  for (const rsn of await rankedNames()) {
     const st = await getStats(rsn).catch(() => null);
     const text = driestItemText(rsn, st);
     if (text) out[rsn.toLowerCase()] = text;
