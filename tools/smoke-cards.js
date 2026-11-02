@@ -337,6 +337,12 @@ async function t(name, fn, needFile = true) {
   } catch (e) { unitsWhy = e.message; }
   ok('profile-luck-units.json exists with structured units', unitsOk, unitsWhy);
 
+  // ── K. Cold start: warm names never seed, unknown names are cold ──
+  ok('tracked member is warm (no cold sync)', S.isCold('IronVale') === false);
+  ok('never-checked name is cold', S.isCold('zz no such rsn 42') === true);
+  const warmSeed = await S.ensureSynced('IronVale', 1000);
+  ok('ensureSynced no-ops for a warm name', warmSeed === false);
+
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
   if (fails.length) console.log('FAILURES:', fails.join(' ;; '));
   process.exit(fail ? 1 : 0);

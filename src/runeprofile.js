@@ -406,11 +406,66 @@ async function getProfile(username) {
   return { account: out.account, skills: out.skills, ca: out.ca, diaries: out.diaries };
 }
 
+// Cold-start seed: ONE whole-log fetch written into every
+// per-page cache entry (plus the summary and total entries the
+// same response feeds), so a never-checked name's pages all
+// exist at once instead of arriving page by page. Returns
+// { pages, notFound } - pages is 0 when RuneProfile has no log
+// for the name or the fetch failed.
+async function seedCollectionLog(username) {
+  const name = String(username).toLowerCase().trim();
+  const u = encodeURIComponent(String(username).trim());
+  try {
+    return await paced(async () => {
+      const res = await rpFetch(`/accounts/${u}/collection-log`);
+      if (res.notFound) return { pages: 0, notFound: true };
+      const json = res.json;
+      if (!json || !Array.isArray(json.tabs)) throw new Error('RuneProfile returned an unexpected shape');
+      const cache = loadCache();
+      const now = Date.now();
+      let pages = 0;
+      for (const tab of json.tabs) {
+        for (const page of (tab.pages || [])) {
+          const items = (page.items || [])
+            .filter((it) => it && typeof it.id === 'number' && typeof it.name === 'string');
+          if (!page.name || !items.length) continue;
+          cache[clogCacheKey(username, String(tab.name || 'Other'), String(page.name))] = {
+            fetchedAt: now,
+            obtained: items.filter((it) => (it.quantity || 0) > 0).length,
+            total: items.length,
+            items,
+          };
+          pages++;
+        }
+      }
+      const summary = parseClogSummary(json);
+      if (summary) cache[`clogsummary:${name}`] = { fetchedAt: now, ...summary };
+      if (typeof json.obtained === 'number' && typeof json.total === 'number') {
+        cache[totalCacheKey(username)] = { fetchedAt: now, obtained: json.obtained, total: json.total };
+      }
+      if (pages) saveCache(cache);
+      return { pages, notFound: false };
+    });
+  } catch (err) {
+    console.warn(`RuneProfile seed failed for ${username}: ${err.message}`);
+    return { pages: 0, notFound: false };
+  }
+}
+
+// Sync probe for the cold-start check: does any per-page entry
+// exist for this name (plugin sync, a clog lookup, or a seed)?
+function hasCachedClogPages(username) {
+  const prefix = `clog:${String(username).toLowerCase().trim()}:`;
+  return Object.keys(loadCache()).some((k) => k.startsWith(prefix));
+}
+
 module.exports = {
   getClogPage,
   getClogIndex,
   getClogPages,
   getClogSummary,
+  seedCollectionLog,
+  hasCachedClogPages,
   parseClogIndex,
   getClogPageWithItems,
   getClogTotal,

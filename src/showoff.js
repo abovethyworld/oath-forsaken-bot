@@ -3,7 +3,7 @@
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, GAINS_PERIODS } = require('./wom');
-const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems } = require('./runeprofile');
+const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
@@ -583,6 +583,7 @@ async function kcPayload(activity, rsn, userId) {
     return { content: `Pick an activity: \`!kc <activity> [name]\`\nActivities: ${Object.keys(KC_KEYS).join(', ')}` };
   }
   if (userId) noteUse(userId, 'kc'); // a real lookup fires: start the cooldown
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -659,6 +660,7 @@ async function dryPayload(activity, rsn, userId) {
     return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${dryScoredKeys().join(', ')}` };
   }
   if (userId) noteUse(userId, 'dry');
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -720,6 +722,7 @@ async function dryCluesAllPayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'dry');
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -787,6 +790,7 @@ async function dryCluePayload(tierKey, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'dry');
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -837,7 +841,7 @@ async function handleDryCommand(message, args) {
       const r = resolveName(rest, message.author.id);
       if (r.error) { await message.reply(r.error).catch(() => {}); return; }
       if (r.payload) { await message.reply(r.payload).catch(() => {}); return; }
-      await message.reply(await dryCluesAllPayload(r.rsn, message.author.id)).catch(() => {});
+      await replyPayload(message, r.rsn, dryCluesAllPayload(r.rsn, message.author.id));
       return;
     }
     const drop = new Set(['clue', 'clues', 'scroll', 'scrolls',
@@ -846,14 +850,14 @@ async function handleDryCommand(message, args) {
     const r = resolveName(rest, message.author.id);
     if (r.error) { await message.reply(r.error).catch(() => {}); return; }
     if (r.payload) { await message.reply(r.payload).catch(() => {}); return; }
-    await message.reply(await dryCluePayload(t[2], r.rsn, message.author.id)).catch(() => {});
+    await replyPayload(message, r.rsn, dryCluePayload(t[2], r.rsn, message.author.id));
     return;
   }
   const activity = takeActivity(args, KC_KEYS);
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await dryPayload(activity, rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, dryPayload(activity, rsn, message.author.id));
 }
 
 // !gains [name] [day|week|month|year]: XP and KC gained over
@@ -889,6 +893,7 @@ async function gainsPayload(rsn, periodIn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'gains');
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -947,7 +952,7 @@ async function handleGainsCommand(message, args) {
   const { rsn, error, payload } = resolveName(rest, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await gainsPayload(rsn, period, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, gainsPayload(rsn, period, message.author.id));
 }
 
 async function handleKcCommand(message, args) {
@@ -957,7 +962,7 @@ async function handleKcCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await kcPayload(activity, rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, kcPayload(activity, rsn, message.author.id));
 }
 
 function progressBar(obtained, total) {
@@ -1238,6 +1243,7 @@ try {
 
 async function clueSummaryPayload(rsn, userId) {
   if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
+  await ensureSynced(rsn);
   const st = await getStats(rsn).catch(() => null);
   const kc = st && !st.notFound && st.kc ? st.kc : {};
   const rows = [];
@@ -1285,6 +1291,7 @@ async function clogPayload(key, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
+  await ensureSynced(rsn);
   if (key === 'clues' || key === 'scrolls') return clueSummaryPayload(rsn, userId);
   if (key === 'total') {
     if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
@@ -1373,7 +1380,7 @@ async function handleClogCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await clogPayload(key, rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, clogPayload(key, rsn, message.author.id));
 }
 
 const SITE_BASE = 'https://oathforsaken.cc';
@@ -1475,6 +1482,101 @@ function driestItemText(rsn, st) {
   return u ? `${u.name} (${u.dryness}% luckier than you)` : null;
 }
 
+// Cold start (Alex, Nov 2, 2026): the first time ANY card
+// command touches a never-checked name, run one full sync -
+// WOM track, RuneProfile profile bundle, and the whole
+// collection log into the page cache - so that name's cards
+// are complete from then on. Once per name per day; after
+// that the caches carry it. A name whose pages already exist
+// with a fresh total (plugin members, seeded names) is warm
+// and costs no calls.
+const SEED_TTL_MS = 24 * 3600 * 1000;
+const seedInFlight = new Map();
+
+function seedMarkers() {
+  try {
+    return JSON.parse(fs.readFileSync('data/cold-seeds.json', 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function stampSeed(key) {
+  const markers = seedMarkers();
+  markers[key] = Date.now();
+  try {
+    fs.writeFileSync('data/cold-seeds.json', JSON.stringify(markers));
+  } catch { /* the marker is an optimization; never fail a lookup over it */ }
+}
+
+function isCold(rsn) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key) return false;
+  const marked = seedMarkers()[key];
+  if (marked && Date.now() - marked < SEED_TTL_MS) return false;
+  if (hasCachedClogPages(rsn)) {
+    const total = getCachedClogTotal(rsn);
+    if (total && total.fresh && !total.notFound) {
+      stampSeed(key);
+      return false;
+    }
+  }
+  return true;
+}
+
+async function ensureSynced(rsn, waitMs = 20000) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key || !isCold(rsn)) return false;
+  let p = seedInFlight.get(key);
+  if (!p) {
+    p = (async () => {
+      let settled = false;
+      try {
+        await getStats(rsn).catch(() => null);
+        const prof = await getProfile(rsn).catch(() => null);
+        if (prof && prof.notFound) {
+          settled = true; // no RuneProfile account: nothing to seed
+        } else {
+          const seed = await seedCollectionLog(rsn).catch(() => ({ pages: 0 }));
+          settled = !!(seed && seed.pages > 0);
+        }
+      } catch { /* a failed seed is retried by the next command */ } finally {
+        if (settled) stampSeed(key);
+        seedInFlight.delete(key);
+      }
+    })();
+    seedInFlight.set(key, p);
+  }
+  // Wait for the seed so the first card is complete, capped:
+  // past the cap the reply goes out with what exists and the
+  // seed finishes in the background.
+  await Promise.race([p, new Promise((r) => setTimeout(r, waitMs))]);
+  return true;
+}
+
+function loadingText(rsn) {
+  return `First look at **${rsn}**. Pulling their stats and log, give it a few seconds.`;
+}
+
+// Message-command reply with cold-start feedback: a cold name
+// gets the loading line first, edited into the result when it
+// lands. Warm names reply exactly as before.
+async function replyPayload(message, rsn, payloadPromise) {
+  const names = (Array.isArray(rsn) ? rsn : [rsn]).filter(Boolean);
+  const cold = names.find((n) => isCold(n));
+  if (!cold) {
+    await message.reply(await payloadPromise).catch(() => {});
+    return;
+  }
+  const loading = await message.reply(loadingText(cold)).catch(() => null);
+  const payload = await payloadPromise;
+  if (loading) {
+    const edited = await loading.edit(payload).then(() => true).catch(() => false);
+    if (edited) return;
+  }
+  await message.reply(payload).catch(() => {});
+}
+
 // The website share cards carry the same driest-item fact; the
 // site builder reads it from this file in the bot data dir,
 // beside the RuneProfile cache it already loads. Refreshed on
@@ -1500,6 +1602,7 @@ async function profilePayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'profile'); // a real lookup fires: start the cooldown
+  await ensureSynced(rsn);
   const site = await siteCardPayload(rsn);
   if (site) return site;
   const prof = await getProfile(rsn).catch(() => null);
@@ -1558,7 +1661,7 @@ async function handleProfileCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await profilePayload(rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, profilePayload(rsn, message.author.id));
 }
 
 // Leaderboard rows from cached clog totals (instant); missing profiles get a
@@ -2168,6 +2271,7 @@ function pbTime(entry) {
 async function pbPayload(activity, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
+  await ensureSynced(rsn);
   const record = pluginRecord(rsn);
   const pbs = (record && record.personalBests) || {};
   const all = Object.entries(pbs).filter(([, e]) => e && typeof e === 'object');
@@ -2236,6 +2340,7 @@ async function skillsPayload(rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'skills'); // a real lookup fires: start the cooldown
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -2312,6 +2417,7 @@ async function skillPayload(rsn, skillKey, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'skills');
+  await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
@@ -2396,13 +2502,13 @@ async function handleSkillsCommand(message, args) {
     const { rsn, error, payload } = resolveName(sk.rest, message.author.id);
     if (error) { await message.reply(error).catch(() => {}); return; }
     if (payload) { await message.reply(payload).catch(() => {}); return; }
-    await message.reply(await skillPayload(rsn, sk.skill, message.author.id)).catch(() => {});
+    await replyPayload(message, rsn, skillPayload(rsn, sk.skill, message.author.id));
     return;
   }
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await skillsPayload(rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, skillsPayload(rsn, message.author.id));
 }
 
 // ---- Compare (added Oct 31, 2026) -----------------------------------
@@ -2479,6 +2585,7 @@ function abbrXp(n) {
 
 async function compareOverallPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId, 'compare');
+  await Promise.all([ensureSynced(aName), ensureSynced(bName)]);
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
@@ -2599,6 +2706,7 @@ async function skillDiffSections(aName, bName, skillKey, kcMapA, kcMapB) {
 
 async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId, 'compare');
+  await Promise.all([ensureSynced(aName), ensureSynced(bName)]);
   const [sa, sb] = await Promise.all([compareSnapshot(aName), compareSnapshot(bName)]).catch(() => [null, null]);
   if (!sa || !sb) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (!sa.st) return { content: `Could not find the RuneScape name **${aName}**.` };
@@ -2742,6 +2850,7 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId, 'compare');
   const entry = kcEntry(key);
   if (!entry) return { content: `I do not track a boss or activity called **${key}**.` };
+  await Promise.all([ensureSynced(aName), ensureSynced(bName)]);
   const [sa, sb] = await Promise.all([
     getStats(aName).catch(() => null), getStats(bName).catch(() => null),
   ]);
@@ -2898,7 +3007,7 @@ async function handleCompareCommand(message, args) {
     if (names.error) { await message.reply(names.error).catch(() => {}); return; }
     if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
     if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
-    await message.reply(await compareSkillsPayload(names.a, names.b, uid)).catch(() => {});
+    await replyPayload(message, [names.a, names.b], compareSkillsPayload(names.a, names.b, uid));
     return;
   }
   const tokens = joined.split(/\s+/);
@@ -2908,14 +3017,14 @@ async function handleCompareCommand(message, args) {
     if (names.error) { await message.reply(names.error).catch(() => {}); return; }
     if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
     if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
-    await message.reply(await compareBossPayload(actKey, names.a, names.b, uid)).catch(() => {});
+    await replyPayload(message, [names.a, names.b], compareBossPayload(actKey, names.a, names.b, uid));
     return;
   }
   const names = compareNames(joined, uid);
   if (names.error) { await message.reply(names.error).catch(() => {}); return; }
   if (names.payload) { await message.reply(names.payload).catch(() => {}); return; }
   if (normName(names.a) === normName(names.b)) { await message.reply('Pick two different players to compare.').catch(() => {}); return; }
-  await message.reply(await compareOverallPayload(names.a, names.b, uid)).catch(() => {});
+  await replyPayload(message, [names.a, names.b], compareOverallPayload(names.a, names.b, uid));
 }
 
 async function handlePbCommand(message, args) {
@@ -2925,7 +3034,7 @@ async function handlePbCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await message.reply(await pbPayload(activity, rsn, message.author.id)).catch(() => {});
+  await replyPayload(message, rsn, pbPayload(activity, rsn, message.author.id));
 }
 
 // !tfa [name]: the Fractured Archive combined card, shorthand for
@@ -3058,6 +3167,7 @@ function decodePair(enc) {
 
 async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (userId) noteUse(userId, 'compare');
+  await Promise.all([ensureSynced(aName), ensureSynced(bName)]);
   const owner = ownerId ?? userId;
   const [pa, pb] = await Promise.all([clogPagesOf(aName), clogPagesOf(bName)]);
   // The card's shared state slot carries the clog page title in
@@ -4093,4 +4203,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
