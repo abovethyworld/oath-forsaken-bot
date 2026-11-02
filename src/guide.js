@@ -87,7 +87,7 @@ function homeEmbed(user) {
   const rsns = linkedRsns(user.id);
   const status = rsns.length
     ? `Your linked accounts: ${rsns.join(', ')}`
-    : 'You are not linked yet. The Setup topic covers it, it takes two minutes.';
+    : 'Linking accounts works when our clan plugin is live. The RSN Sync topic covers what works today.';
   const topicList = (content.topics || []).map((t) => `**${t.title}**`).join(' · ');
   return new EmbedBuilder()
     .setTitle('⛧ Bot Guide ⛧')
@@ -142,12 +142,11 @@ const commands = [
           .setDescription('Jump straight to a topic')
           .setRequired(false)
           .addChoices(
-            { name: 'Setup', value: 'setup' },
+            { name: 'RSN Sync', value: 'sync' },
             { name: 'Cards', value: 'cards' },
             { name: 'Text commands', value: 'text-commands' },
             { name: 'Compare', value: 'compare' },
             { name: 'Bounties', value: 'bounties' },
-            { name: 'Plugin', value: 'plugin' },
             { name: 'Fixes', value: 'fixes' }
           )
       ),
