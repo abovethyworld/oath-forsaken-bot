@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
@@ -200,6 +200,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId.startsWith('lbpick:')) {
         await handleLeaderboardSelect(interaction);
+      } else if (interaction.customId.startsWith('drypick:')) {
+        await handleDryPickSelect(interaction);
       } else if (interaction.customId.startsWith('cmpboss:')) {
         await handleCompareBossSelect(interaction);
       } else if (interaction.customId.startsWith('cmpskill:')) {

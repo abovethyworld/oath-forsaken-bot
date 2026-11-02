@@ -778,6 +778,168 @@ async function dryCluesAllPayload(rsn, userId) {
   return CARD_DOWN;
 }
 
+// !dry on a name alone: the personal driest list (Alex,
+// Nov 2, 2026). Every missing scored drop across the log,
+// ranked worst first, with category buttons that filter the
+// list in place and a picker that drills into the page
+// behind a drop (the existing per-boss / per-tier dry card,
+// wearing return buttons). Categories are the collection
+// log's own sections minus Raids, which luck never scores.
+const DRY_LIST_CATS = ['all', 'Bosses', 'Clues', 'Minigames', 'Other'];
+
+function dryListUnits(rsn, st) {
+  const counters = countersFor(st, rsn);
+  const seen = new Set();
+  const byId = new Map();
+  for (const [key, pair] of Object.entries(CLOG_PAGES)) {
+    const tab = pair[0];
+    const title = pair[1];
+    if (!DRY_LIST_CATS.includes(tab)) continue;
+    const pk = `${tab}|${title}`;
+    if (seen.has(pk)) continue;
+    seen.add(pk);
+    const page = getCachedClogPageItems(rsn, tab, title);
+    if (!page || !page.items.length) continue;
+    const rep = dryReport(counters, page.items);
+    if (!rep) continue;
+    for (const m of rep.missing) {
+      const cur = byId.get(m.id);
+      if (!cur || m.score < cur.score) {
+        byId.set(m.id, { ...m, tab, page: title, actKey: key });
+      }
+    }
+  }
+  return [...byId.values()]
+    .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
+}
+
+function dryDrillTarget(u) {
+  if (u.tab === 'Clues') {
+    const t = CLUE_TIERS.find((x) => x[1] === u.page);
+    return t ? `c:${t[2]}` : null;
+  }
+  return kcEntry(u.actKey) ? `b:${u.actKey}` : null;
+}
+
+function dryCatRow(cat, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  const btn = (c, label) => new ButtonBuilder()
+    .setCustomId(`drycat:${c}:${enc}`)
+    .setLabel(label)
+    .setStyle(c === cat ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(c === cat);
+  return new ActionRowBuilder().addComponents(
+    btn('all', 'All'), btn('Bosses', 'Bosses'), btn('Clues', 'Clues'),
+    btn('Minigames', 'Minigames'), btn('Other', 'Other'));
+}
+
+function dryPickRow(cat, rsn, units) {
+  const byPage = new Map();
+  for (const u of units) {
+    const target = dryDrillTarget(u);
+    if (!target) continue;
+    const cur = byPage.get(u.page);
+    if (!cur || u.score < cur.score) byPage.set(u.page, { page: u.page, score: u.score, target });
+  }
+  const pages = [...byPage.values()].sort((a, b) => a.score - b.score).slice(0, 24);
+  if (!pages.length) return null;
+  const enc = String(rsn).replace(/ /g, '_');
+  const label = cat === 'Bosses' ? 'Pick a boss to open its page'
+    : cat === 'Clues' ? 'Pick a tier to open its page'
+      : 'Pick a page to open';
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`drypick:${cat}:${enc}`)
+      .setPlaceholder(label)
+      .addOptions(pages.map((p) => ({ label: p.page.slice(0, 100), value: p.target }))));
+}
+
+function dryHubReturnRow(cat, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  const mk = (c, label) => new ButtonBuilder()
+    .setCustomId(`drycat:${c}:${enc}`)
+    .setLabel(label)
+    .setStyle(ButtonStyle.Secondary);
+  const row = new ActionRowBuilder();
+  if (cat && cat !== 'all') row.addComponents(mk(cat, `\u2190 ${cat} driest`));
+  row.addComponents(mk('all', cat && cat !== 'all' ? 'Driest list' : '\u2190 Driest list'));
+  return row;
+}
+
+async function dryListPayload(rsn, userId, cat = 'all') {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
+  if (userId) noteUse(userId, 'dry');
+  await ensureSynced(rsn);
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const units = dryListUnits(rsn, st);
+  if (!units.length) {
+    return { content: `Nothing to rank for **${rsn}** yet: no scored drops are missing, or the log is not synced.` };
+  }
+  const filtered = cat === 'all' ? units : units.filter((u) => u.tab === cat);
+  const top = filtered.slice(0, 10);
+  const withIcons = async (list) => Promise.all(list.map(async (e) => ({
+    ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
+  })));
+  const card = await fetchCard('/dry-list', {
+    rsn, cat, badge: cardBadgeFor(rsn, st ? st.accountType : null),
+    rows: (await withIcons(top)).map((e) => ({
+      id: e.id, name: e.name, page: e.page, score: e.score,
+      pieces: e.pieces || null, icon: e.icon,
+    })),
+  });
+  if (!card) return CARD_DOWN;
+  const components = [dryCatRow(cat, rsn)];
+  const pick = dryPickRow(cat, rsn, filtered);
+  if (pick) components.push(pick);
+  return {
+    files: [new AttachmentBuilder(card, { name: 'dry-list.png' })],
+    components,
+  };
+}
+
+async function drySwapUpdate(interaction, payload) {
+  if (!payload) return;
+  const msg = { content: payload.content || '', components: payload.components || [] };
+  if (payload.files) { msg.files = payload.files; msg.attachments = []; }
+  else { msg.files = []; msg.attachments = []; }
+  await interaction.update(msg).catch(() => {});
+}
+
+async function handleDryCatButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const cat = parts[1];
+  const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
+  if (!rsn || !DRY_LIST_CATS.includes(cat)) return;
+  await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, cat));
+}
+
+async function handleDryPickSelect(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const cat = parts[1];
+  const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
+  const value = String((interaction.values || [])[0] || '');
+  if (!rsn || !value) return;
+  let payload = null;
+  if (value.startsWith('b:')) payload = await dryPayload(value.slice(2), rsn, interaction.user.id);
+  else if (value.startsWith('c:')) payload = await dryCluePayload(value.slice(2), rsn, interaction.user.id);
+  if (!payload) return;
+  if (payload.files) {
+    payload = {
+      ...payload,
+      components: [...(payload.components || []), dryHubReturnRow(cat, rsn)],
+    };
+  }
+  await drySwapUpdate(interaction, payload);
+}
+
 // !dry hard clues: one tier of the clue log, scored like a
 // boss page (the tier's completions are the counter). The
 // summary card already proves the scoring; this is the full
@@ -857,6 +1019,10 @@ async function handleDryCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
+  if (!activity) {
+    await replyPayload(message, rsn, dryListPayload(rsn, message.author.id, 'all'));
+    return;
+  }
   await replyPayload(message, rsn, dryPayload(activity, rsn, message.author.id));
 }
 
@@ -1678,7 +1844,7 @@ async function handleProfileCommand(message, args) {
 
 const LB_PAGE_SIZE = 25; // paging machinery exists from day one; the
 // flips only render once a board outgrows one page.
-const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains'];
+const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains', 'driest'];
 
 function lbDefaultState() {
   return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 'week', var: null };
@@ -1686,8 +1852,8 @@ function lbDefaultState() {
 // Compact positional state: Discord caps custom ids at 100 chars, and a
 // JSON blob overflows it. Fields join with '|' (never in a page title),
 // '-' means null, the view is one letter.
-const LB_VIEW_LETTER = { overall: 'o', pvm: 'p', skills: 's', clogs: 'c', gains: 'g' };
-const LB_LETTER_VIEW = { o: 'overall', p: 'pvm', s: 'skills', c: 'clogs', g: 'gains' };
+const LB_VIEW_LETTER = { overall: 'o', pvm: 'p', skills: 's', clogs: 'c', gains: 'g', driest: 'd' };
+const LB_LETTER_VIEW = { o: 'overall', p: 'pvm', s: 'skills', c: 'clogs', g: 'gains', d: 'driest' };
 function lbEncode(st) {
   return [LB_VIEW_LETTER[st.v] || 'o', st.k || '-', st.p || 0, st.cat || '-',
     st.cp || 0, st.ctab || '-', st.cpg || 0, st.gk === 'kc' ? 'k' : 'x',
@@ -1925,6 +2091,36 @@ function lbBuildBoard(st, names) {
     rows.sort((a, b) => b.value - a.value);
     return { title: st.k, unit: 'items', rows };
   }
+  if (st.v === 'driest') {
+    // Each member's single driest drop, from the profile luck
+    // sweep (data/profile-luck-units.json). Driest first: the
+    // value is dryness, so the board sorts like the others.
+    let units = {};
+    try {
+      units = JSON.parse(fs.readFileSync(
+        path.join(__dirname, '..', 'data', 'profile-luck-units.json'), 'utf8'));
+    } catch { /* sweep has not run yet */ }
+    const ord = (n) => {
+      if (n % 100 >= 10 && n % 100 <= 20) return `${n}th`;
+      return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th'}`;
+    };
+    for (const rsn of names) {
+      const u = units[String(rsn).toLowerCase()];
+      if (!u || typeof u.score !== 'number') continue;
+      const s = lbStats(rsn);
+      rows.push({
+        name: rsn, badge: lbBadgeFor(rsn, s ? s.accountType : null),
+        value: 100 - u.score,
+        valueText: `${u.name} · ${ord(u.score)}`,
+        sub: `${u.dryness}% luckier than you`,
+      });
+    }
+    rows.sort((a, b) => b.value - a.value);
+    return {
+      title: 'Driest', unit: 'points',
+      note: "Each member's single driest drop", rows,
+    };
+  }
   // gains: Wise Old Man deltas, read from the file cache the
   // gains card and the daily sync keep warm. A player with no
   // cached totals sits this board out until the next sync.
@@ -1982,7 +2178,8 @@ function lbComponents(st, pages, scoped = false) {
     .setDisabled(st.v === v);
   const rows = [new ActionRowBuilder().addComponents(
     tabBtn('overall', 'Overall'), tabBtn('pvm', 'PvM'), tabBtn('skills', 'Skills'),
-    tabBtn('clogs', 'Clogs'), tabBtn('gains', 'Gains'))];
+    tabBtn('clogs', 'Clogs'), tabBtn('gains', 'Gains')),
+    new ActionRowBuilder().addComponents(tabBtn('driest', 'Driest'))];
   if (st.v === 'pvm') {
     const vr = lbVariantRow(st);
     if (vr) rows.push(vr);
@@ -2123,6 +2320,7 @@ function lbStateForArg(arg) {
   if (q === 'clogtotal') { st.v = 'clogs'; st.k = 'total'; return st; }
   if (q === 'overall' || q === 'total xp' || q === 'xp') return st;
   if (q === 'gains' || q === 'gained') { st.v = 'gains'; return st; }
+  if (q === 'driest' || q === 'dry' || q === 'unluckiest') { st.v = 'driest'; return st; }
   if (q === 'clog' || q === 'clogs' || q === 'collection log' || q === 'total') {
     st.v = 'clogs'; st.k = 'total'; return st;
   }
@@ -2225,6 +2423,7 @@ function lbAutocompleteChoices(focused) {
     { name: 'Total XP', value: 'overall' },
     { name: 'Collection Log (total)', value: 'clogtotal' },
     { name: 'Gains', value: 'gains' },
+    { name: 'Driest', value: 'driest' },
   ];
   const catalog = bossCatalog();
   for (const list of Object.values(catalog.byCat)) {
@@ -4143,15 +4342,18 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('dry')
-      .setDescription("Check a player's drop luck on one boss")
-      .addStringOption((o) => o.setName('activity').setDescription('Boss to check').setAutocomplete(true).setRequired(true))
+      .setDescription("Check a player's drop luck, or their driest drops overall")
+      .addStringOption((o) => o.setName('activity').setDescription('Boss to check (blank = driest drops list)').setAutocomplete(true))
       .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, dryPayload(interaction.options.getString('activity'), rsn, interaction.user.id));
+      const act = interaction.options.getString('activity');
+      await slashReply(interaction, act
+        ? dryPayload(act, rsn, interaction.user.id)
+        : dryListPayload(rsn, interaction.user.id, 'all'));
     },
   },
   {
@@ -4170,7 +4372,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('leaderboard')
-      .setDescription('Clan leaderboards: total XP, boss KC, skills, collection log, gains')
+      .setDescription('Clan leaderboards: total XP, boss KC, skills, collection log, gains, driest')
       .addStringOption((o) => o.setName('board')
         .setDescription('Jump straight to a board: a boss, skill, or collection log page')
         .setAutocomplete(true)
@@ -4203,4 +4405,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
