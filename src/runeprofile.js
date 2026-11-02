@@ -11,6 +11,12 @@ const BASE = 'https://api.runeprofile.com/v1';
 const USER_AGENT = 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)';
 const CACHE_FILE = path.join(__dirname, '..', 'data', 'rp-cache-v2.json');
 const CACHE_MS = 24 * 3600 * 1000;
+// Entries stay in the file far longer than the freshness window:
+// boards render the last known count and refresh it in the
+// background, so a page nobody has opened in a day must not vanish
+// and read as "no clog". Only the prune uses this longer window;
+// fetches still treat 24h as stale.
+const RETAIN_MS = 30 * 24 * 3600 * 1000;
 const MIN_GAP_MS = 2500; // keyed tier is 120 req/min; pacing stays deliberately conservative
 
 function loadCache() {
@@ -22,8 +28,8 @@ function loadCache() {
 }
 
 function saveCache(cache) {
-  // Prune expired entries so the file doesn't grow forever.
-  const cutoff = Date.now() - CACHE_MS;
+  // Prune long-dead entries so the file doesn't grow forever.
+  const cutoff = Date.now() - RETAIN_MS;
   for (const [key, entry] of Object.entries(cache)) {
     if (!entry || typeof entry.fetchedAt !== 'number' || entry.fetchedAt < cutoff) delete cache[key];
   }
