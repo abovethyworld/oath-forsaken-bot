@@ -70,8 +70,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Tempoross churns the sea and the harpoonfish run thick in the foam. One of them runs far bigger than the rest.",
+   "winLine": "The big harpoonfish is hauled in at last."
   },
   {
    "id": 7,
@@ -82,8 +82,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Two tomes, two elements. Fire waits in the Wintertodt's snow, water in the Tempoross's sea.",
+   "winLine": "A tome of fire or water is in hand at last."
   },
   {
    "id": 8,
@@ -94,8 +94,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Some bosses leave more than bones behind. A jar is the rarest keepsake of all, a piece of the fight bottled for your boss lair display.",
+   "winLine": "A boss has dropped a jar."
   },
   {
    "id": 9,
@@ -106,8 +106,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The revenants haunt their caves in the deep Wilderness, still holding the weapons of the wars that made them.",
+   "winLine": "A weapon of the God Wars changes hands."
   },
   {
    "id": 10,
@@ -118,8 +118,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Your task is a draconic visage, the front of a dragon's head, dropped by the strongest dragons. It looks like it could be attached to a shield somehow.",
+   "winLine": "A dragon has dropped its visage."
   },
   {
    "id": 11,
@@ -130,8 +130,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Under the desert the Kalphite Queen rules her hive, and every hunter wants her head on the wall.",
+   "winLine": "The hive has no queen."
   },
   {
    "id": 12,
@@ -142,8 +142,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "Basilisk knights walk the prison of the Jormungand. Take a jaw, and a helm becomes a faceguard.",
+   "winLine": "A knight's jaw is taken."
   },
   {
    "id": 13,
@@ -154,8 +154,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The Gauntlet is the Amlodd Clan's old training ground, built to prove warriors fit to defend Prifddinas. Your task is its rarest loot: an enhanced crystal weapon seed from the reward chest after the Hunllef falls.",
+   "winLine": "The enhanced seed has been found."
   },
   {
    "id": 14,
@@ -166,8 +166,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The task is Zalcano's shard. She was Zamorak's general, cursed by her god to turn to stone, and the elves hold her under Prifddinas. Mine her down and break her open. Take back what is Zamorak's.",
+   "winLine": "The Zalcano shard has dropped."
   },
   {
    "id": 15,
@@ -178,8 +178,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The task is Zalcano's tool seed, the piece that sings a dragon tool into crystal. She was Zamorak's general, cursed by her god to turn to stone, and the elves hold her under Prifddinas. Mine her down and break her open. Take back what is Zamorak's.",
+   "winLine": "The crystal tool seed has dropped."
   },
   {
    "id": 16,
@@ -190,8 +190,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The task is one piece of the Voidwaker. The three great beasts of the Wilderness hold the pieces, and their lesser twins hold them too. One of the beasts is ours: Vet'ion, Zamorak's skeletal champion. The task names him anyway.",
+   "winLine": "A piece of the Voidwaker has dropped."
   },
   {
    "id": 17,
@@ -202,8 +202,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Dawn and Dusk, the Grotesque Guardians who keep the Slayer Tower roof. Bring back their black tourmaline core, the stone that turns Bandos boots into Guardian boots.",
+   "winLine": "The black tourmaline core has dropped."
   },
   {
    "id": 18,
@@ -214,8 +214,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the four commanders of the God Wars Dungeon. Each carries the hilt of their god's sword, and the board asks for any one of them.",
+   "winLine": "A godsword hilt has dropped."
   },
   {
    "id": 19,
@@ -226,8 +226,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Forgotten Four, ancient bosses waking in forgotten places. Any of the four can drop a piece of the Virtus robes, and one piece is all the board asks.",
+   "winLine": "A piece of Virtus has dropped."
   },
   {
    "id": 20,
@@ -238,8 +238,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Fortis Colosseum in Varlamore. Fight through its waves and bring back the Tonalztics of Ralos, the glaives of the sun god and the rarest prize in the Colosseum's chest.",
+   "winLine": "The Tonalztics of Ralos have been won."
   },
   {
    "id": 21,
@@ -250,8 +250,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Alchemical Hydra, deep under Mount Karuulm. Bring back its claw, the piece that turns a Zamorakian spear into the dragon hunter lance.",
+   "winLine": "The Hydra's claw has dropped."
   },
   {
    "id": 22,
@@ -262,8 +262,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Doom of Mokhaiotl, in the ruins deep beneath the Tlati Rainforest. Bring back one of his uniques: the cloth, the eye, or the treads.",
+   "winLine": "A Doom unique has dropped."
   },
   {
    "id": 23,
@@ -274,20 +274,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
-  },
-  {
-   "id": 24,
-   "name": "Araxyte Fang",
-   "content": "Araxxor",
-   "tier": "Medium",
-   "thumbnail": "https://oldschool.runescape.wiki/images/Araxyte_fang_detail.png?43deb",
-   "lane": "PvM",
-   "winners": 1,
-   "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Maggot King of Vampyrium. He is a venator's corpse, taken over by the maggot that killed him. Gut him and bring back the elder venator fang or the crimson kisten.",
+   "winLine": "A Maggot King unique has dropped."
   },
   {
    "id": 25,
@@ -298,8 +286,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Yama, the demon of the Chasm of Fire who binds men with pacts. Bring back one of his uniques: a piece of Oathplate or the soulflame horn.",
+   "winLine": "A Yama unique has dropped."
   },
   {
    "id": 26,
@@ -310,8 +298,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the superior slayer creatures, the rare monsters that rise while you are on task. Bring back an imbued heart or an eternal gem.",
+   "winLine": "An imbued heart or an eternal gem has dropped."
   },
   {
    "id": 27,
@@ -322,8 +310,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Mad Angel of Wyrmscraig, a golem whose maker left it behind. Break it in its cathedral and bring back the Hallowfell.",
+   "winLine": "The Hallowfell has dropped."
   },
   {
    "id": 28,
@@ -334,20 +322,20 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the shellbane gryphon, in its cave at the centre of the Great Conch. The tortugans call it a calamity. Bring back its blade, Belle's folly.",
+   "winLine": "Belle's folly has dropped."
   },
   {
    "id": 29,
-   "name": "1 Full Set of Barrows Gear",
+   "name": "Any 10 Barrows Pieces",
    "content": "Barrows",
-   "tier": "Hard",
+   "tier": "Easy",
    "thumbnail": "https://oldschool.runescape.wiki/images/thumb/Dharok%27s_greataxe_detail.png/1276px-Dharok%27s_greataxe_detail.png?d8a0b",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Barrows brothers, six dead brothers under their mounds in Morytania. Bring back any ten pieces of their gear.",
+   "winLine": "Ten pieces of Barrows gear have been looted."
   },
   {
    "id": 30,
@@ -358,8 +346,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the tormented demons, in the ancient temple under the Wilderness. Bring back a tormented synapse, the piece that upgrades a demon weapon.",
+   "winLine": "A tormented synapse has dropped."
   },
   {
    "id": 31,
@@ -370,8 +358,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The Great Guardian holds the rift at the Temple of the Eye while the Abyss pours through. A bounty hangs on the fight. Bring back an abyssal dye.",
+   "winLine": "An abyssal dye has been earned."
   },
   {
    "id": 32,
@@ -382,8 +370,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Royal Titans, the fire queen and the ice king in the caves below Asgarnia. Each wears a crown, and the board asks for either one.",
+   "winLine": "A titan's crown has dropped."
   },
   {
    "id": 33,
@@ -394,8 +382,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the lizardman shamans, in their canyon in Great Kourend. Bring back the dragon warhammer.",
+   "winLine": "The dragon warhammer has dropped."
   },
   {
    "id": 34,
@@ -406,8 +394,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Dagannoth Kings, three kings in the dark under Waterbirth Island. Bring back any one of their rings.",
+   "winLine": "A Dagannoth ring has dropped."
   },
   {
    "id": 35,
@@ -418,8 +406,8 @@
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Hespori, a meat-eating plant from Morytania, first grown as a weapon against the vampyres. Grow it in the Farming Guild, kill it, and bring back its bottomless compost bucket.",
+   "winLine": "The bottomless compost bucket has dropped."
   },
   {
    "id": 36,
@@ -430,8 +418,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Moons of Peril, three immortal spirits sealed under Cam Torum. A dying shaman summoned them to take others with her. Bring back any one of their items.",
+   "winLine": "A Moons item has been looted."
   },
   {
    "id": 37,
@@ -678,175 +666,175 @@
    "name": "Any Corp Drop",
    "content": "Corporeal Beast",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Elysian_spirit_shield_detail.png?e83cd",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Corporeal Beast, in its lair east of the Graveyard of Shadows. Bring back a piece of the spirit shields: the shield, the holy elixir, or a sigil.",
+   "winLine": "A spirit shield piece has dropped."
   },
   {
    "id": 58,
    "name": "Any Zilyana Unique",
    "content": "Commander Zilyana",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Armadyl_crossbow_detail.png?de091",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Commander Zilyana, Saradomin's commander in the God Wars Dungeon. Bring back one of her uniques: the Saradomin sword, Saradomin's light, or the Armadyl crossbow.",
+   "winLine": "A Zilyana unique has dropped."
   },
   {
    "id": 59,
    "name": "Any K'ril Unique",
    "content": "K'ril Tsutsaroth",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Zamorakian_spear_detail.png?29623",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "The task names a general of our own god. K'ril Tsutsaroth led Zamorak's army into the God Wars Dungeon and was sealed in with it, frozen until the thaw woke the war again. Bring back one of his uniques: the staff of the dead or the Zamorakian spear.",
+   "winLine": "A K'ril unique has dropped."
   },
   {
    "id": 60,
    "name": "Any Bandos Piece",
    "content": "General Graardor",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Bandos_chestplate_detail.png?98028",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on General Graardor, Bandos's commander in the God Wars Dungeon. Bring back a piece of Bandos armour: the chestplate, the tassets, or the boots.",
+   "winLine": "A Bandos piece has dropped."
   },
   {
    "id": 61,
    "name": "Any Armadyl Piece",
    "content": "Kree'arra",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Armadyl_chestplate_detail.png?78ba5",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Kree'arra, Armadyl's commander in the God Wars Dungeon. Bring back a piece of Armadyl armour: the chestplate, the chainskirt, or the helmet.",
+   "winLine": "An Armadyl piece has dropped."
   },
   {
    "id": 62,
    "name": "Any Zulrah Unique",
    "content": "Zulrah",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Tanzanite_fang_detail.png?859ba",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Zulrah, the great serpent of Zul-Andra, fed on sacrifices by the village that calls it a god. Bring back one of its uniques: the tanzanite fang, the magic fang, or the serpentine visage.",
+   "winLine": "A Zulrah unique has dropped."
   },
   {
    "id": 63,
    "name": "Any Nightmare Unique",
    "content": "The Nightmare",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Nightmare_staff_detail.png?51fcd",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Nightmare of Ashihama, in the Sisterhood Sanctuary under Slepe. Bring back one of its uniques: a piece of Inquisitor's armour, the mace, or the Nightmare staff.",
+   "winLine": "A Nightmare unique has dropped."
   },
   {
    "id": 64,
    "name": "Build Any DT2 Ring",
    "content": "The Forgotten Four",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Ultor_ring_detail.png?784a8",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the Forgotten Four, ancient bosses waking in forgotten places. Bring back a vestige and build one of their rings: Ultor, Bellator, Magus, or Venator.",
+   "winLine": "A ring of the Forgotten Four has been built."
   },
   {
    "id": 65,
    "name": "Mole Slippers",
    "content": "Beginner Treasure Trails",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Mole_slippers_detail.png?4e2de",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the mole slippers, the most beloved footwear in Gielinor. Cute, says the examine, and worth every dig. They hide in beginner clue caskets. Bring a pair back for the clan.",
+   "winLine": "The mole slippers have been looted."
   },
   {
    "id": 66,
    "name": "Tackle Box or Fish Barrel",
    "content": "Tempoross",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Tackle_box_detail.png?5411e",
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Tempoross, the storm spirit of the sea. Weather it, earn the permits, and bring back a tackle box or a fish barrel.",
+   "winLine": "A tackle box or a fish barrel has been earned."
   },
   {
    "id": 67,
    "name": "Dragon Pickaxe",
    "content": "Chaos Elemental / Wilderness Bosses",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Dragon_pickaxe_detail.png?4f4ee",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "No ironman is done without it. The dragon pickaxe, best pick in the game, sits with the Chaos Elemental and the Wilderness six, the King Black Dragon and the Kalphite Queen. Bring one home.",
+   "winLine": "The dragon pickaxe has dropped."
   },
   {
    "id": 68,
-   "name": "Any Araxxor Unique",
+   "name": "Amulet of Rancour or Noxious Halberd",
    "content": "Araxxor",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Amulet_of_rancour_detail.png?43deb",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Araxxor, the great spider in the caves of Morytania. Take his fang and make the amulet of rancour, or build the noxious halberd from his pieces.",
+   "winLine": "The amulet of rancour or the noxious halberd is in hand."
   },
   {
    "id": 69,
    "name": "Zenyte Shard",
    "content": "Demonic Gorillas",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Zenyte_shard.png?8abb8",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on the demonic gorillas, Glough's own creations, still lurking in the Crash Site Cavern beside his wrecked airship. Bring back a zenyte shard.",
+   "winLine": "A zenyte shard has dropped."
   },
   {
    "id": 70,
    "name": "Granite Hammer",
    "content": "Grotesque Guardians",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Granite_hammer_detail.png?a6345",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "A bounty hangs on Dawn and Dusk, the Grotesque Guardians who keep the Slayer Tower roof. Bring back their granite hammer.",
+   "winLine": "The granite hammer has dropped."
   },
   {
    "id": 71,
    "name": "Holy Sandals",
    "content": "Treasure Trails",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Holy_sandals_detail.png?13943",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -858,7 +846,7 @@
    "name": "Trident of the Seas",
    "content": "Kraken",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Uncharged_trident_detail.png?c0ec2",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -870,7 +858,7 @@
    "name": "Build a Venator Bow",
    "content": "Phantom Muspah",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Venator_bow_detail.png?624b1",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -882,7 +870,7 @@
    "name": "Any ToA Unique",
    "content": "Tombs of Amascut",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Tumeken%27s_shadow_detail.png?24f11",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -894,7 +882,7 @@
    "name": "Black Mask",
    "content": "Cave Horrors",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Black_mask_detail.png?5b902",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -906,7 +894,7 @@
    "name": "Occult Necklace",
    "content": "Thermonuclear Smoke Devil",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Occult_necklace_detail.png?08adc",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -918,7 +906,7 @@
    "name": "Hallowed Ring",
    "content": "Hallowed Sepulchre",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Hallowed_ring_detail.png?1763e",
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
@@ -930,7 +918,7 @@
    "name": "Abyssal Whip",
    "content": "Abyssal Demons",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Abyssal_whip_detail.png?9aee6",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -942,7 +930,7 @@
    "name": "Any Nex Unique",
    "content": "Nex",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Zaryte_crossbow_detail.png?cc833",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -954,7 +942,7 @@
    "name": "Any ToB Unique",
    "content": "Theatre of Blood",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Scythe_of_Vitur_detail.png?939b9",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -966,7 +954,7 @@
    "name": "Any CoX Unique",
    "content": "Chambers of Xeric",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Twisted_bow_detail.png?7aa10",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -978,7 +966,7 @@
    "name": "Any Fractured Archive Unique",
    "content": "The Fractured Archive",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/The_Fractured_Archive_logo.png?2eb86",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -990,7 +978,7 @@
    "name": "Build a Bludgeon",
    "content": "Abyssal Sire",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Abyssal_bludgeon_detail.png?dd634",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -1002,7 +990,7 @@
    "name": "Dizana's Quiver",
    "content": "Colosseum",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Dizana%27s_quiver_detail.png?f6c23",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -1014,7 +1002,7 @@
    "name": "Build a Ward",
    "content": "Wilderness Bosses",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Malediction_ward_detail.png?c708e",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -1026,7 +1014,7 @@
    "name": "Skeletal Visage",
    "content": "Vorkath",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Skeletal_visage_detail.png?bccc7",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -1038,7 +1026,7 @@
    "name": "Infernal Cape",
    "content": "The Inferno",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Infernal_cape_detail.png?03de7",
    "lane": "PvM",
    "winners": 1,
    "pet": false,
@@ -1050,7 +1038,7 @@
    "name": "Beef",
    "content": "Brutus",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Beef_%28follower%29.png?b4a02",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1062,7 +1050,7 @@
    "name": "Smol Heredit or Jal-nib-rek",
    "content": "Colosseum / Inferno",
    "tier": "Easy",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Smol_Heredit.png?b9b16",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1074,7 +1062,7 @@
    "name": "Pet Chaos Elemental",
    "content": "Chaos Elemental",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Chaos_Elemental_Jr..png?5c995",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1086,7 +1074,7 @@
    "name": "Huberte",
    "content": "The Hueycoatl",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Huberte_%28follower%29.png?19e22",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1098,7 +1086,7 @@
    "name": "Smolcano",
    "content": "Zalcano",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Smolcano.png?52875",
    "lane": "Skilling",
    "winners": 1,
    "pet": true,
@@ -1110,7 +1098,7 @@
    "name": "Aggy",
    "content": "The Mad Angel",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Aggy.png?4700a",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1122,7 +1110,7 @@
    "name": "Any Hunter Pet",
    "content": "Hunter",
    "tier": "Hard",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Herbi.png?d8722",
    "lane": "Skilling",
    "winners": 1,
    "pet": true,
@@ -1134,7 +1122,7 @@
    "name": "Phoenix",
    "content": "Wintertodt",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Phoenix_%28follower%29.png?f6800",
    "lane": "Skilling",
    "winners": 1,
    "pet": true,
@@ -1146,7 +1134,7 @@
    "name": "Kalphite Princess",
    "content": "The Kalphite Queen",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Kalphite_Princess.png?d8722",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1158,7 +1146,7 @@
    "name": "Vorki",
    "content": "Vorkath",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Vorki.png?03aa0",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1170,7 +1158,7 @@
    "name": "Tiny Tempor",
    "content": "Tempoross",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Tiny_Tempor.png?c4248",
    "lane": "Skilling",
    "winners": 1,
    "pet": true,
@@ -1182,7 +1170,7 @@
    "name": "Maggot Marquess",
    "content": "The Maggot King",
    "tier": "Extreme",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Maggot_marquess.png?0f67a",
    "lane": "PvM",
    "winners": 1,
    "pet": true,
@@ -1194,7 +1182,7 @@
    "name": "Fox Whistle, Golden Pheasant Egg, or Petal Garland",
    "content": "Forestry Events",
    "tier": "Medium",
-   "thumbnail": null,
+   "thumbnail": "https://oldschool.runescape.wiki/images/Fox_whistle.png?1068a",
    "lane": "Skilling",
    "winners": 1,
    "pet": false,
