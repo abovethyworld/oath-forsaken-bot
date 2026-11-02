@@ -1024,9 +1024,8 @@ async function handleProfileCommand(message, args) {
 // the compare card's menu: tab buttons plus a picker per tab, view
 // controls open to everyone. Design: files/leaderboard-design-draft-
 // 2026-11-02.md in the clan goal (drafted with Alex, Nov 1-2 2026).
-// Ranked set = the website population: WOM group members (data/
-// wom-group.json) plus Friend of the Clan role holders with a linked RSN
-// (data/friends.json); friends.js keeps both files current. Numbers come
+// Ranked set = the website population (ladder-data.json on the site;
+// see rankedNames). Numbers come
 // straight from the caches (WOM / RuneProfile); a member appears on a
 // board only when they have a number for it (no invented zeros), and KC
 // is whatever WOM returns, so WOM's own ranking cutoffs apply.
@@ -1063,21 +1062,43 @@ function lbDecode(s) {
   return st;
 }
 
-function rankedNames() {
-  const names = [];
-  const seen = new Set();
-  const push = (rsn) => {
-    const n = String(rsn || '').trim();
-    const key = n.toLowerCase();
-    if (n && !seen.has(key)) { seen.add(key); names.push(n); }
-  };
-  const dataDir = path.join(__dirname, '..', 'data');
+// The ranked set is the website's own population file: the exporter
+// builds ladder-data.json from the WOM group plus its extra members and
+// verified friends, which is a wider set than the bot's raw input files
+// (IronVale is an exporter extra member; some friends are verified on the
+// site before they ever link an RSN here). Cached in memory; the bot's
+// wom-group.json + friends.json are the fallback if the site is down.
+let lbNamesCache = { at: 0, names: null };
+async function rankedNames() {
+  if (lbNamesCache.names && Date.now() - lbNamesCache.at < 10 * 60 * 1000) {
+    return lbNamesCache.names;
+  }
+  let names = null;
   try {
-    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
-  } catch { /* file not published yet */ }
-  try {
-    for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
-  } catch { /* file not published yet */ }
+    const res = await fetch('https://oathforsaken.cc/ladder-data.json');
+    if (res.ok) {
+      const data = await res.json();
+      const list = Object.values(data.players || {}).map((p) => p.rsn).filter(Boolean);
+      if (list.length) names = list;
+    }
+  } catch { /* fall through to the local files */ }
+  if (!names) {
+    names = [];
+    const seen = new Set();
+    const push = (rsn) => {
+      const n = String(rsn || '').trim();
+      const key = n.toLowerCase();
+      if (n && !seen.has(key)) { seen.add(key); names.push(n); }
+    };
+    const dataDir = path.join(__dirname, '..', 'data');
+    try {
+      for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
+    } catch { /* file not published yet */ }
+    try {
+      for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
+    } catch { /* file not published yet */ }
+  }
+  if (names.length) lbNamesCache = { at: Date.now(), names };
   return names;
 }
 
@@ -1132,8 +1153,7 @@ function lbClogTotal(rsn) {
 
 const fmtNum = (n) => Math.round(n).toLocaleString('en-US');
 
-function lbBuildBoard(st) {
-  const names = rankedNames();
+function lbBuildBoard(st, names) {
   const rows = [];
   if (st.v === 'overall') {
     for (const rsn of names) {
@@ -1169,8 +1189,10 @@ function lbBuildBoard(st) {
       const s = lbStats(rsn);
       if (!s) continue;
       const counters = countersFor(s, rsn);
+      // WOM's snapshot carries an explicit 0 for bosses the hiscores do
+      // not rank the player at, so a real rank always has kills.
       const present = entry.cols.map((c) => c.metric)
-        .filter((m) => typeof counters[m] === 'number');
+        .filter((m) => typeof counters[m] === 'number' && counters[m] > 0);
       if (!present.length) continue; // WOM does not rank them here
       const value = present.reduce((sum, m) => sum + counters[m], 0);
       let sub = null;
@@ -1348,7 +1370,7 @@ function lbComponents(st, pages) {
 }
 
 async function lbView(st, userId) {
-  const board = lbBuildBoard(st);
+  const board = lbBuildBoard(st, await rankedNames());
   const components = lbComponents(st, 1);
   if (board.unavailable) return { content: board.unavailable, components };
   const rows = board.rows;
@@ -1409,8 +1431,8 @@ async function leaderboardPayload(userId, boardArg) {
   // Served from cache, but it fires background warming lookups, so it
   // counts as a use like the other commands.
   if (userId) noteUse(userId);
-  if (!rankedNames().length) {
-    return { content: 'No ranked profiles yet. The roster syncs from Wise Old Man and the friends list; try again in a bit.' };
+  if (!(await rankedNames()).length) {
+    return { content: 'No ranked profiles yet. The roster syncs from the website list; try again in a bit.' };
   }
   return lbView(lbStateForArg(boardArg), userId);
 }
