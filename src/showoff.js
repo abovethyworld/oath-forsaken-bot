@@ -2,7 +2,7 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getStats, getCachedStats, combatLevel, kcStandings } = require('./wom');
+const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -205,24 +205,67 @@ function kcEntry(key) {
 // boss post the same combined card.
 function kcCardBody(rsn, entry, st, clog, luck, pets) {
   const primary = entry.cols[0];
-  const myKc = st.kc ? st.kc[primary.metric] : null;
-  const standings = kcStandings(primary.metric);
+  const me = rsn.toLowerCase();
+  const perCol = entry.cols.map((c) => {
+    let standings = [];
+    try { standings = kcStandings(c.metric); } catch { /* cache only */ }
+    const idx = standings.findIndex((r) => r.name === me);
+    return { standings, rank: idx >= 0 ? idx + 1 : null };
+  });
+  // Ranks (Alex, Nov 2, 2026): every variant on the card carries
+  // its own clan rank, and multi-variant cards add a combined
+  // rank and total. Two exceptions: Clue Scrolls, whose first
+  // column already is the combined total, and the Fortis
+  // Colosseum, whose second column is Glory, not kills, so its
+  // rank stays on Sol Heredit kills alone.
+  const isClues = primary.metric === 'clue_scrolls_all';
+  const combined = entry.cols.length > 1 && entry.name !== 'Fortis Colosseum';
+  let standings;
+  let myKc;
+  let rankLabel = null;
+  if (isClues) {
+    standings = perCol[0].standings;
+    myKc = st.kc ? st.kc[primary.metric] : null;
+    rankLabel = 'Combined rank';
+  } else if (combined) {
+    const totals = new Map();
+    for (const p of perCol) {
+      for (const row of p.standings) {
+        totals.set(row.name, (totals.get(row.name) || 0) + row.kc);
+      }
+    }
+    standings = [...totals.entries()]
+      .map(([name, kc]) => ({ name, kc }))
+      .sort((x, y) => y.kc - x.kc);
+    const myVals = entry.cols.map((c) => (st.kc ? st.kc[c.metric] : null));
+    myKc = myVals.every((v) => typeof v !== 'number')
+      ? null
+      : myVals.reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+    rankLabel = 'Combined rank';
+  } else {
+    standings = perCol[0].standings;
+    myKc = st.kc ? st.kc[primary.metric] : null;
+  }
   const rankIdx = typeof myKc === 'number'
-    ? standings.findIndex((r) => r.name === rsn.toLowerCase())
+    ? standings.findIndex((r) => r.name === me)
     : -1;
   return {
     rsn,
     boss: entry.name,
     metric: primary.metric,
-    entries: entry.cols.map((c) => {
+    entries: entry.cols.map((c, i) => {
       const n = st.kc ? st.kc[c.metric] : null;
       return {
         label: c.label || (entry.cols.length === 1 ? 'Kill count' : prettyMetric(c.metric)),
         value: typeof n === 'number' ? n.toLocaleString('en-US') : '-',
+        // The All column of clues carries no line of its own: its
+        // rank is the combined rank in the rank tile.
+        rank: combined && !(isClues && i === 0) ? perCol[i].rank : null,
       };
     }),
     kcValue: typeof myKc === 'number' ? myKc : null,
     rank: rankIdx >= 0 ? rankIdx + 1 : null,
+    rankLabel,
     rankOf: standings.length,
     clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
     members: standings.length,
@@ -231,6 +274,50 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     luck: luck || null,
     pets: pets || null,
   };
+}
+
+// Clan standings for one skill (or overall) by XP, from the same
+// merged cache population the KC ranks use.
+function skillStandings(skillKey) {
+  const dataKey = skillKey === 'runecraft' ? 'runecrafting' : skillKey;
+  const rows = [];
+  try {
+    for (const [name, entry] of Object.entries(mergedPlayers())) {
+      const st = entry && entry.stats;
+      if (!st || st.notFound || !st.skills) continue;
+      const sk = st.skills[dataKey];
+      if (!sk || typeof sk.xp !== 'number' || sk.xp <= 0) continue;
+      rows.push({ name, xp: sk.xp });
+    }
+  } catch { /* cache only */ }
+  return rows.sort((a, b) => b.xp - a.xp);
+}
+
+function skillRank(rsn, skillKey) {
+  const idx = skillStandings(skillKey)
+    .findIndex((r) => r.name === rsn.toLowerCase());
+  return idx >= 0 ? idx + 1 : null;
+}
+
+// Leaderboard jump button (Alex, Nov 2, 2026): any card that
+// shows a clan rank carries the matching board under it. Anyone
+// can press it; the board posts in the channel.
+function lbButtonRow(boardArg) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`lbopen:${boardArg}`)
+    .setLabel('Leaderboard')
+    .setStyle(ButtonStyle.Danger));
+}
+
+async function handleLbOpenButton(interaction) {
+  const arg = interaction.customId.split(':').slice(1).join(':');
+  await interaction.deferReply().catch(() => {});
+  const payload = await leaderboardPayload(interaction.user.id, arg || null);
+  await interaction.editReply({
+    content: payload.content || '',
+    files: payload.files || [],
+    components: payload.components || [],
+  }).catch(() => {});
 }
 
 // Load a clog page's obtained items with their icons (decoded for the
@@ -395,8 +482,14 @@ async function kcPayload(activity, rsn, userId) {
   // one-fetch path as compare. No separate pet line: the pet
   // is an item on the page and shows in the strip.
   const cl = await bossClogLuck(rsn, activity, countersFor(st, rsn));
-  const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, null));
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
+  const body = kcCardBody(rsn, entry, st, cl.clog, cl.luck, null);
+  const card = await fetchCard('/kc', body);
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'kc.png' })],
+      components: body.rank ? [lbButtonRow(`boss:${activity}`)] : [],
+    };
+  }
   return CARD_DOWN;
 }
 
@@ -1719,16 +1812,131 @@ async function skillsPayload(rsn, userId) {
   const skillingBosses = SKILLING_BOSSES
     .map(([metric, name]) => ({ key: metric, name, kc: st.kc ? st.kc[metric] : null }))
     .filter((b) => typeof b.kc === 'number' && b.kc > 0);
+  const rank = skillRank(rsn, 'overall');
   const card = await fetchCard('/skills', {
-    rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
+    rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), combat: st.combat, totalLevel, totalXp, skills, skillingBosses, rank,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'skills.png' })] };
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'skills.png' })],
+      components: rank ? [lbButtonRow('overall')] : [],
+    };
+  }
+  return CARD_DOWN;
+}
+
+// !skills <skill> [name]: the solo single-skill card (Alex,
+// Nov 2, 2026). Same sections the compare inspect shows, one
+// player: level, XP and clan rank tiles, the skill's pet, and
+// its collection log pages as tile strips, scored where the
+// game gives a counter.
+const SKILL_ALIASES = { rc: 'runecraft', runecrafting: 'runecraft', hp: 'hitpoints' };
+
+function takeSkill(args) {
+  if (!args || !args.length) return null;
+  const fold = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+  const tries = [];
+  if (args.length > 1) tries.push([fold(args[0] + args[1]), args.slice(2)]);
+  tries.push([fold(args[0]), args.slice(1)]);
+  for (const [cand, rest] of tries) {
+    if (!cand) continue;
+    const key = SKILL_ALIASES[cand] || (SKILL_ORDER.includes(cand) ? cand : null);
+    if (key) return { skill: key, rest };
+  }
+  return null;
+}
+
+async function skillPayload(rsn, skillKey, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
+  if (userId) noteUse(userId);
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch (err) {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const dataKey = skillKey === 'runecraft' ? 'runecrafting' : skillKey;
+  const sk = (st.skills || {})[dataKey] || {};
+  const counters = countersFor(st, rsn);
+  const pageList = SKILL_CLOG_PAGES[skillKey] || [];
+  const sections = [];
+  for (const [tab, title] of pageList) {
+    let res = null;
+    try { res = await getClogPageWithItems(rsn, tab, title); } catch { res = null; }
+    if (!res || res.notFound) continue;
+    const scores = itemLuckScores(counters, res.items || []);
+    const items = await Promise.all((res.items || []).map(async (it) => ({
+      name: it.name,
+      has: (it.quantity || 0) > 0,
+      qty: it.quantity || 0,
+      score: scores[it.id] != null ? scores[it.id] : null,
+      icon: await petIconB64(it.id, it.name),
+    })));
+    const lk = luckForPage(counters,
+      (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
+    sections.push({
+      title, got: res.obtained, total: res.total, items,
+      luckLine: lk ? `Luck: ${lk.word}${lk.dry ? ` · Driest item: ${lk.dry}` : ''}` : null,
+    });
+  }
+  // The skill has pages but none are synced, and the player has
+  // no RuneProfile profile at all: explain syncing instead of
+  // posting an empty card.
+  if (pageList.length && !sections.length) {
+    const total = await getClogTotal(rsn).catch(() => null);
+    if (!total || total.notFound) return { content: RP_GUIDE };
+  }
+  let pets = [];
+  const petNames = SKILL_PETS[skillKey] || [];
+  if (petNames.length) {
+    const all = await allPetsItems(rsn);
+    if (all) {
+      pets = [];
+      for (const nm of petNames) {
+        const it = all.find((x) => x.name === nm);
+        pets.push({
+          name: nm,
+          has: !!(it && (it.quantity || 0) > 0),
+          qty: it ? (it.quantity || 0) : 0,
+          icon: it ? await petIconB64(it.id, it.name) : null,
+        });
+      }
+    }
+  }
+  const rank = skillRank(rsn, skillKey);
+  const card = await fetchCard('/skill', {
+    rsn,
+    skillName: skillKey.charAt(0).toUpperCase() + skillKey.slice(1),
+    skillKey,
+    badge: cardBadgeFor(rsn, st ? st.accountType : null),
+    level: typeof sk.level === 'number' ? sk.level : null,
+    xp: typeof sk.xp === 'number' ? sk.xp : null,
+    rank, pets, sections,
+    noSections: !pageList.length,
+  });
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'skill.png' })],
+      components: rank ? [lbButtonRow(`skill:${skillKey}`)] : [],
+    };
+  }
   return CARD_DOWN;
 }
 
 async function handleSkillsCommand(message, args) {
   const cd = checkCooldown(message.author.id);
   if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const sk = takeSkill(args);
+  if (sk) {
+    const { rsn, error, payload } = resolveName(sk.rest, message.author.id);
+    if (error) { await message.reply(error).catch(() => {}); return; }
+    if (payload) { await message.reply(payload).catch(() => {}); return; }
+    await message.reply(await skillPayload(rsn, sk.skill, message.author.id)).catch(() => {});
+    return;
+  }
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
@@ -1974,14 +2182,15 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     }
     const card = await fetchCard('/compare-skill', {
       skillKey: picked, skillName: ai ? ai.name : picked,
-      a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null), level: ai ? ai.level : null, xp: ai ? ai.xp : null },
-      b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), level: bi ? bi.level : null, xp: bi ? bi.xp : null },
+      a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null), level: ai ? ai.level : null, xp: ai ? ai.xp : null, rank: skillRank(aName, picked) },
+      b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), level: bi ? bi.level : null, xp: bi ? bi.xp : null, rank: skillRank(bName, picked) },
       sections, noSections: noMap,
       noSync: !noMap && sections.length === 0,
       leader, note, pets: skillPets,
     });
     const components = await compareComponents('skills', aName, bName,
       ui.bossKey || null, ownerId ?? userId, ui);
+    components.push(lbButtonRow(`skill:${picked}`));
     if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skill.png' })], components };
     return { content: `**${ai ? ai.name : picked}** - ${aName}: ${ai ? ai.level ?? '-' : '-'} · ${bName}: ${bi ? bi.level ?? '-' : '-'}`, components };
   }
@@ -2059,7 +2268,11 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
     b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: null },
     leader, note: parts.join(' · '),
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: raidDef && raidDef.cat ? raidDef.cat : 'raids', catPage: 0 }) };
+  if (card) {
+    const components = await compareComponents('boss', aName, bName, key, ownerId, { cat: raidDef && raidDef.cat ? raidDef.cat : 'raids', catPage: 0 });
+    components.push(lbButtonRow(`boss:${key}`));
+    return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components };
+  }
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${parts.length ? ` (${parts.join(' · ')})` : ''}` };
 }
 
@@ -2110,7 +2323,11 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
     b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: null },
     leader, note,
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 }) };
+  if (card) {
+    const components = await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 });
+    components.push(lbButtonRow(`boss:${key}`));
+    return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components };
+  }
   return { content: `**${bossName}** - ${aName}: ${kcA == null ? '-' : fmt(kcA)} · ${bName}: ${kcB == null ? '-' : fmt(kcB)}${note ? ` (${note})` : ''}` };
 }
 
@@ -2306,6 +2523,14 @@ function kcAutocompleteChoices(focused) {
   return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
 }
 
+function skillAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  return SKILL_ORDER
+    .map((key) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), value: key }))
+    .filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q))
+    .slice(0, 25);
+}
+
 function clogAutocompleteChoices(focused) {
   const q = String(focused || '').toLowerCase();
   const seen = new Set();
@@ -2327,6 +2552,8 @@ async function handleAutocomplete(interaction) {
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
+    : interaction.commandName === 'skills'
+      ? skillAutocompleteChoices(focused)
       : interaction.commandName === 'leaderboard'
         ? lbAutocompleteChoices(focused)
         : interaction.commandName === 'bounty'
@@ -3270,13 +3497,18 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('skills')
       .setDescription("Show a player's skill levels card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)'))
+      .addStringOption((o) => o.setName('skill').setDescription('One skill on its own card (blank = all skills)').setAutocomplete(true)),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction)) return;
-      await slashReply(interaction, skillsPayload(rsn, interaction.user.id));
+      const skFold = String(interaction.options.getString('skill') || '').toLowerCase().replace(/[^a-z]/g, '');
+      const skill = skFold ? (SKILL_ALIASES[skFold] || (SKILL_ORDER.includes(skFold) ? skFold : null)) : null;
+      await slashReply(interaction, skill
+        ? skillPayload(rsn, skill, interaction.user.id)
+        : skillsPayload(rsn, interaction.user.id));
     },
   },
   {
@@ -3353,4 +3585,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbOpenButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
