@@ -358,7 +358,30 @@ async function handleBridgeButton(interaction) {
   let payload = null;
   if (target === 'kc') payload = await kcPayload(key, rsn, interaction.user.id);
   else if (target === 'dry') payload = await dryPayload(key, rsn, interaction.user.id);
-  else if (target === 'clues') payload = await clogPayload('clues', rsn, interaction.user.id);
+  else if (target === 'dryc') {
+    payload = key === 'all'
+      ? await dryCluesAllPayload(rsn, interaction.user.id)
+      : await dryCluePayload(key, rsn, interaction.user.id);
+  } else if (target === 'clues') {
+    payload = await clogPayload('clues', rsn, interaction.user.id);
+    // The summary has no buttons of its own, so landing here
+    // from a dry card would dead-end. Give it the way back: a
+    // Dry card button for the exact dry card the presser came
+    // from (a tier, or 'all' for the all-tiers report). Key
+    // '-' marks buttons posted before origins were recorded;
+    // those still land clean, with nothing attached.
+    if (payload && payload.files && key && key !== '-') {
+      payload = {
+        ...payload,
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`bridge:dryc:${key}:${rsn.replace(/ /g, '_')}`)
+            .setLabel('Dry card')
+            .setStyle(ButtonStyle.Danger),
+        )],
+      };
+    }
+  }
   else return;
   if (payload && payload.files) {
     // A target with no buttons of its own must land clean:
@@ -746,7 +769,7 @@ async function dryCluesAllPayload(rsn, userId) {
   if (card) {
     return {
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
-      components: [bridgeRow('clues', '-', rsn)],
+      components: [bridgeRow('clues', 'all', rsn)],
     };
   }
   return CARD_DOWN;
@@ -797,7 +820,7 @@ async function dryCluePayload(tierKey, rsn, userId) {
   if (card) {
     return {
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
-      components: [bridgeRow('clues', '-', rsn)],
+      components: [bridgeRow('clues', tierKey, rsn)],
     };
   }
   return CARD_DOWN;

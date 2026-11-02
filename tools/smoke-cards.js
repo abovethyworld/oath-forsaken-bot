@@ -297,6 +297,22 @@ async function t(name, fn, needFile = true) {
     dryAll && dryAll.content ? dryAll.content.slice(0, 80) : '');
   ok('all-tiers dry card has the Clues bridge',
     !!(dryAll && dryAll.components) && flat(dryAll).some((c) => c.id.startsWith('bridge:clues:')));
+  let toSummary = null;
+  await S.handleBridgeButton({ customId: 'bridge:clues:hard:IronVale', user: { id: GAVIN },
+    update: async (p) => { toSummary = p; }, reply: async (p) => { toSummary = p; } });
+  ok('summary landing from a dry card carries the way back',
+    !!(toSummary && toSummary.files)
+      && JSON.stringify(toSummary.components || []).includes('bridge:dryc:hard'));
+  let backToDry = null;
+  await S.handleBridgeButton({ customId: 'bridge:dryc:hard:IronVale', user: { id: GAVIN },
+    update: async (p) => { backToDry = p; }, reply: async (p) => { backToDry = p; } });
+  ok('way-back press returns the tier dry card', !!(backToDry && backToDry.files));
+  let oldLanding = null;
+  await S.handleBridgeButton({ customId: 'bridge:clues:-:IronVale', user: { id: GAVIN },
+    update: async (p) => { oldLanding = p; }, reply: async (p) => { oldLanding = p; } });
+  ok('pre-origin Clues buttons still land clean',
+    !!(oldLanding && oldLanding.files)
+      && Array.isArray(oldLanding.components) && oldLanding.components.length === 0);
   const u2 = '999000111';
   S.noteUse(u2, 'kc');
   ok('cooldown blocks the same family', S.checkCooldown(u2, 'kc').wait > 0);
