@@ -361,7 +361,10 @@ async function handleBridgeButton(interaction) {
   else if (target === 'clues') payload = await clogPayload('clues', rsn, interaction.user.id);
   else return;
   if (payload && payload.files) {
-    await interaction.update(payload).catch(() => {});
+    // A target with no buttons of its own must land clean:
+    // omitting components leaves the old row in place (the
+    // clue summary kept the Clues card button this way).
+    await interaction.update({ ...payload, components: payload.components || [] }).catch(() => {});
   } else if (payload) {
     await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
   }
