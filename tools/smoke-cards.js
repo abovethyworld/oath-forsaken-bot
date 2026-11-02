@@ -292,6 +292,11 @@ async function t(name, fn, needFile = true) {
     dryHard && dryHard.content ? dryHard.content.slice(0, 80) : '');
   ok('clue dry card has the Clues bridge',
     !!(dryHard && dryHard.components) && flat(dryHard).some((c) => c.id.startsWith('bridge:clues:')));
+  const dryAll = await S.dryPayload('clue:all', 'IronVale', GAVIN);
+  ok('dry renders for all clue tiers', hasFile(dryAll),
+    dryAll && dryAll.content ? dryAll.content.slice(0, 80) : '');
+  ok('all-tiers dry card has the Clues bridge',
+    !!(dryAll && dryAll.components) && flat(dryAll).some((c) => c.id.startsWith('bridge:clues:')));
   const u2 = '999000111';
   S.noteUse(u2, 'kc');
   ok('cooldown blocks the same family', S.checkCooldown(u2, 'kc').wait > 0);
