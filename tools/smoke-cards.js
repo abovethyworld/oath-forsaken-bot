@@ -326,6 +326,16 @@ async function t(name, fn, needFile = true) {
     if (!luckOk) luckWhy = `entries=${raw ? Object.keys(raw).length : 0}`;
   } catch (e) { luckWhy = e.message; }
   ok('profile-luck.json exists with entries', luckOk, luckWhy);
+  let unitsOk = false, unitsWhy = '';
+  try {
+    const units = JSON.parse(fs.readFileSync(path.join(DATA, 'profile-luck-units.json'), 'utf8'));
+    const sample = Object.values(units)[0];
+    unitsOk = units && typeof units === 'object' && Object.keys(units).length >= 5
+      && sample && typeof sample.name === 'string' && typeof sample.score === 'number'
+      && typeof sample.dryness === 'number';
+    if (!unitsOk) unitsWhy = `entries=${units ? Object.keys(units).length : 0}`;
+  } catch (e) { unitsWhy = e.message; }
+  ok('profile-luck-units.json exists with structured units', unitsOk, unitsWhy);
 
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
   if (fails.length) console.log('FAILURES:', fails.join(' ;; '));
