@@ -378,15 +378,37 @@ async function kcPayload(activity, rsn, userId) {
 // !dry <boss> [name]: one player's drop luck on one boss, from
 // the same engine that scores the compare strips. Raids and
 // the wilderness boss pairs are not scored and say so.
+// Canonical scored bosses for /dry: one entry per boss name, only
+// bosses the luck table can score (raids and the wilderness boss
+// pairs are excluded in the table itself). First key wins per name,
+// so aliases keep working when typed but never list twice.
+function dryScoredKeys() {
+  const scored = scoredCounters();
+  const seen = new Set();
+  const out = [];
+  for (const k of Object.keys(KC_KEYS)) {
+    const e = kcEntry(k);
+    if (!e || seen.has(e.name)) continue;
+    if (!(CLOG_PAGES[k] || clogPageForActivity(k))) continue;
+    if (!e.cols.some((c) => scored.has(c.metric))) continue;
+    seen.add(e.name);
+    out.push(k);
+  }
+  return out;
+}
+
+function dryAutocompleteChoices(focused) {
+  const q = String(focused || '').toLowerCase();
+  return dryScoredKeys()
+    .map((value) => ({ name: kcEntry(value).name, value }))
+    .filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q))
+    .slice(0, 25);
+}
+
 async function dryPayload(activity, rsn, userId) {
   const entry = activity ? kcEntry(activity) : null;
   if (!entry) {
-    const scored = scoredCounters();
-    const keys = Object.keys(KC_KEYS).filter((k) => {
-      const e = KC_ACTIVITIES[k];
-      return e && e.cols.length === 1 && scored.has(e.cols[0].metric);
-    });
-    return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${keys.join(', ')}` };
+    return { content: `Pick a scored boss: \`!dry <boss> [name]\`\nScored: ${dryScoredKeys().join(', ')}` };
   }
   if (userId) noteUse(userId);
   let st;
@@ -398,15 +420,32 @@ async function dryPayload(activity, rsn, userId) {
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
   const metric = entry.cols.length ? entry.cols[0].metric : null;
-  const kc = metric && st.kc ? st.kc[metric] : null;
+  // The Gauntlet is one boss with two counters: gauge the KC across
+  // both, the way its luck items are scored (each at its own rates).
+  let kc = metric && st.kc ? st.kc[metric] : null;
+  if (entry.name === 'The Gauntlet' && st.kc) {
+    kc = (st.kc.the_gauntlet || 0) + (st.kc.the_corrupted_gauntlet || 0) || null;
+  }
   if (!kc) return { content: `**${rsn}** has no ${entry.name} kills yet, so there is no luck to check.` };
   const page = CLOG_PAGES[activity] || clogPageForActivity(activity);
   if (!page) return { content: `${entry.name} has no collection log page to score.` };
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
-  if (!res || res.notFound) return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score. ${CLOG_SYNC_STEPS}` };
+  if (!res || res.notFound) {
+    const prof = await getProfile(rsn).catch(() => null);
+    if (prof && !prof.notFound && prof.account) {
+      return { content: `The ${entry.name} page is not synced for **${rsn}** yet. Their collection log total is in, but this page has not been read. Open the Collection Log in game, go to the ${entry.name} page, then press the RuneProfile button in the top-left.` };
+    }
+    return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score. ${CLOG_SYNC_STEPS}` };
+  }
   const report = dryReport(countersFor(st, rsn),
     (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
-  if (!report) return { content: `No luck scoring for ${entry.name}. Raids and the wilderness boss pairs are not scored.` };
+  if (!report) {
+    const scored = scoredCounters();
+    if (!entry.cols.some((c) => scored.has(c.metric))) {
+      return { content: `No luck scoring for ${entry.name}. Raids and the wilderness boss pairs are not scored.` };
+    }
+    return { content: `No scored drops could be checked for ${entry.name} on **${rsn}** yet.` };
+  }
   const withIcons = async (list) => Promise.all(list.map(async (e) => ({
     ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
   })));
@@ -888,7 +927,7 @@ async function profilePayload(rsn, userId) {
   if (!prof) return { content: 'Could not reach the profile service right now. Try again in a bit.' };
   if (prof.notFound) return { content: RP_GUIDE };
   const a = prof.account;
-  const buf = renderProfileCard({
+  const fields = {
     name: a.username || rsn,
     accountLabel: a.accountType && a.accountType.name ? String(a.accountType.name).toUpperCase() : null,
     combat: prof.skills ? combatLevel(prof.skills.levels) : null,
@@ -899,7 +938,12 @@ async function profilePayload(rsn, userId) {
     combatTasks: prof.ca || { done: 0, total: 0 },
     clog: { done: a.collectionLog ? a.collectionLog.obtained : 0, total: a.collectionLog ? a.collectionLog.total : 0 },
     clan: a.clan && a.clan.name ? a.clan.name : null,
-  });
+  };
+  // House-style card from the card service; the local renderer is
+  // only the fallback if the service is down.
+  const card = await fetchCard('/profile', { rsn: fields.name, ...fields });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
+  const buf = renderProfileCard(fields);
   return { files: [new AttachmentBuilder(buf, { name: 'profile.png' })] };
 }
 
@@ -1675,8 +1719,9 @@ function clogAutocompleteChoices(focused) {
 
 async function handleAutocomplete(interaction) {
   const focused = interaction.options.getFocused();
-  const choices = interaction.commandName === 'kc' || interaction.commandName === 'pb'
-    || interaction.commandName === 'dry'
+  const choices = interaction.commandName === 'dry'
+    ? dryAutocompleteChoices(focused)
+    : interaction.commandName === 'kc' || interaction.commandName === 'pb'
     ? kcAutocompleteChoices(focused)
     : interaction.commandName === 'clog'
       ? clogAutocompleteChoices(focused)
@@ -2660,4 +2705,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
