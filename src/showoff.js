@@ -1044,7 +1044,7 @@ async function profilePayload(rsn, userId) {
   // House-style card from the card service. If it is down the
   // command says so; there is no old-style fallback.
   const pBadgeId = badgeForAccount(fields.name, null);
-  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId ? BADGE_WORDS[pBadgeId] : null });
+  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId && !fields.accountLabel ? BADGE_WORDS[pBadgeId] : null });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
   return CARD_DOWN;
 }
