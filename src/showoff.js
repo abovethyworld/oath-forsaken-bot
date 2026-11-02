@@ -403,7 +403,7 @@ async function dryPayload(activity, rsn, userId) {
   const page = CLOG_PAGES[activity] || clogPageForActivity(activity);
   if (!page) return { content: `${entry.name} has no collection log page to score.` };
   const res = await getClogPageWithItems(rsn, page[0], page[1]).catch(() => null);
-  if (!res || res.notFound) return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score.` };
+  if (!res || res.notFound) return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score. ${CLOG_SYNC_STEPS}` };
   const report = dryReport(countersFor(st, rsn),
     (res.items || []).map((it) => ({ id: it.id, qty: it.quantity || 0 })));
   if (!report) return { content: `No luck scoring for ${entry.name}. Raids and the wilderness boss pairs are not scored.` };
@@ -521,6 +521,7 @@ function progressBar(obtained, total) {
 }
 
 const RP_GUIDE = 'No RuneProfile profile found for that name. Run the RuneProfile plugin ([runeprofile.com/info/guide](https://runeprofile.com/info/guide)) and it syncs on its own.';
+const CLOG_SYNC_STEPS = 'To sync it: install the RuneProfile plugin in RuneLite, log in on that account, open your Collection Log, then press the RuneProfile button in the top-left. There is no RSN to type in; it reads the account you\'re on.';
 
 // !clog covers the whole collection log: every RuneProfile page,
 // grouped by tab. Keys are the short names members type; common
@@ -1715,7 +1716,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
   if (!pa || !pb) {
     const missing = !pa ? aName : bName;
     return {
-      content: `The collection log is not synced for **${missing}** yet, so there is nothing to compare. It syncs through the RuneProfile plugin.`,
+      content: `The collection log is not synced for **${missing}** yet, so there is nothing to compare. ${CLOG_SYNC_STEPS}`,
       components,
     };
   }
