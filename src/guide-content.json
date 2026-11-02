@@ -11,9 +11,12 @@
       "short": [
         "Stats and KC need nothing. The bot looks your name up on Wise Old Man.",
         "Your collection log needs RuneProfile:",
-        "1. Install the RuneProfile plugin in RuneLite.",
-        "2. Log in on the account. There is no RSN to type in, it reads the account you're on.",
-        "3. Open your Collection Log and press the RuneProfile button in the top-left."
+        "1. Open your RuneLite client.",
+        "2. Open the Plugin Hub (bottom of the plugin list).",
+        "3. Search for RuneProfile.",
+        "4. Click Install.",
+        "5. Log in on the account. There is no RSN to type in, it reads the account you're on.",
+        "6. Open your Collection Log and press the RuneProfile button in the top-left."
       ],
       "title": "RSN Sync"
     },
