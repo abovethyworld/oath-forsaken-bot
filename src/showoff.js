@@ -2371,8 +2371,11 @@ async function editCompareMessage(interaction, payload) {
   await interaction.editReply(edit).catch(() => {});
 }
 
-// Only the member who ran the compare may drive its card. Cards
-// posted before owner ids existed carry no owner and stay open.
+// View controls on a compare card are open to everyone (Alex,
+// Nov 1, 2026): the card is a shared surface in the channel. Only
+// the controls that change who is being compared (Change players,
+// alt-account buttons) stay with the member who ran the compare.
+// Cards posted before owner ids existed carry no owner and stay open.
 async function compareOwnerGate(interaction, pair) {
   if (pair.owner && interaction.user.id !== pair.owner) {
     await interaction.reply({ content: 'That is not your compare card. Run /compare to make your own.', ephemeral: true }).catch(() => {});
@@ -2390,7 +2393,6 @@ async function handleCompareButton(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!await compareOwnerGate(interaction, pair)) return;
   await interaction.deferUpdate().catch(() => {});
   const bossKey = bossSeg && bossSeg !== '-' && KC_KEYS[bossSeg] ? bossSeg : null;
   await editCompareMessage(interaction,
@@ -2407,7 +2409,6 @@ async function handleCompareBossSelect(interaction) {
       await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
       return;
     }
-    if (!await compareOwnerGate(interaction, pair)) return;
     if (!value || !KC_KEYS[value]) return;
     await interaction.deferUpdate().catch(() => {});
     await editCompareMessage(interaction, await compareBossPayload(
@@ -2419,7 +2420,6 @@ async function handleCompareBossSelect(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!await compareOwnerGate(interaction, pair)) return;
   if (!value) return;
   const state = compareStateOf(interaction);
   const current = state.bossKey && KC_KEYS[state.bossKey] ? state.bossKey : bossCatalog().top;
@@ -2472,7 +2472,6 @@ async function handleCompareSkillSelect(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!await compareOwnerGate(interaction, pair)) return;
   const value = interaction.values && interaction.values[0];
   if (!value) return;
   const state = compareStateOf(interaction);
@@ -2493,7 +2492,6 @@ async function handleCompareClogSelect(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!await compareOwnerGate(interaction, pair)) return;
   const value = interaction.values && interaction.values[0];
   if (!value) return;
   const state = compareStateOf(interaction);
