@@ -2294,7 +2294,7 @@ async function handleCompareSwapButton(interaction) {
     await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (!await compareOwnerGate(interaction, pair)) return;
+  if (!await compareOwnerGate(interaction, pair, { view, bossKey, enc })) return;
   const input = (id, label, value) => new ActionRowBuilder().addComponents(
     new TextInputBuilder().setCustomId(id).setLabel(label)
       .setStyle(TextInputStyle.Short).setRequired(true)
@@ -2376,12 +2376,51 @@ async function editCompareMessage(interaction, payload) {
 // the controls that change who is being compared (Change players,
 // alt-account buttons) stay with the member who ran the compare.
 // Cards posted before owner ids existed carry no owner and stay open.
-async function compareOwnerGate(interaction, pair) {
+async function compareOwnerGate(interaction, pair, offer) {
   if (pair.owner && interaction.user.id !== pair.owner) {
-    await interaction.reply({ content: 'That is not your compare card. Run /compare to make your own.', ephemeral: true }).catch(() => {});
+    if (offer) {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`cmpmine:${offer.view}:${offer.bossKey || '-'}:${offer.enc}`)
+          .setLabel('Make my own')
+          .setStyle(ButtonStyle.Danger));
+      await interaction.reply({
+        content: "You can't change the players on this one. Would you like to make your own card?",
+        components: [row],
+        ephemeral: true,
+      }).catch(() => {});
+    } else {
+      await interaction.reply({ content: 'That is not your compare card. Run /compare to make your own.', ephemeral: true }).catch(() => {});
+    }
     return false;
   }
   return true;
+}
+
+// The Make my own button on the not-your-card note: posts the same
+// matchup in the channel as the presser's own compare card, opened
+// on the view the original card was showing.
+async function handleCompareMineButton(interaction) {
+  const [, view, bossKey, enc] = interaction.customId.split(':');
+  const pair = decodePair(enc);
+  if (!pair) {
+    await interaction.reply({ content: 'That compare card has expired. Run the command again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const payload = await compareViewRender(view, bossKey === '-' ? null : bossKey, pair.a, pair.b, interaction.user.id);
+  if (!payload || !payload.files) {
+    await interaction.update({ content: (payload && payload.content) || 'Could not load those players.', components: [] }).catch(() => {});
+    return;
+  }
+  const post = { files: payload.files, components: payload.components || [] };
+  if (payload.content) post.content = payload.content;
+  const sent = interaction.channel
+    ? await interaction.channel.send(post).catch(() => null) : null;
+  if (sent) {
+    await interaction.update({ content: 'Your card is posted in the channel.', components: [] }).catch(() => {});
+  } else {
+    await interaction.update({ ...post, attachments: [] }).catch(() => {});
+  }
 }
 
 async function handleCompareButton(interaction) {
@@ -2686,4 +2725,4 @@ const commands = [
   },
 ];
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handleTfaCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, leaderboardRows, unlinkedPayload, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
