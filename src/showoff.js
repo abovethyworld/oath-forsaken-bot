@@ -266,6 +266,11 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     kcValue: typeof myKc === 'number' ? myKc : null,
     rank: rankIdx >= 0 ? rankIdx + 1 : null,
     rankLabel,
+    // The player's own combined KC for the Total tile (Alex,
+    // Nov 2, 2026). Clues stay off it: their All tile already is
+    // the total. Single-variant cards and the Colosseum have none.
+    totalValue: combined && !isClues && typeof myKc === 'number' ? myKc : null,
+    totalLabel: combined && !isClues ? `${entry.name.replace(/^The /, '')} Total` : null,
     rankOf: standings.length,
     clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
     members: standings.length,
@@ -312,9 +317,18 @@ function lbSwapRow(boardArg, backId) {
 }
 
 function lbBackRow(backId) {
+  // The button names the card it returns to (Alex, Nov 2, 2026):
+  // a bare "Back" does not say where it goes.
+  const segs = String(backId || '').split(':');
+  let label = 'Back';
+  if (segs[0] === 'kc') label = '\u2190 KC card';
+  else if (segs[0] === 'skills') label = '\u2190 Skills card';
+  else if (segs[0] === 'skill' && segs[1]) {
+    label = `\u2190 ${segs[1].charAt(0).toUpperCase() + segs[1].slice(1)} card`;
+  } else if (segs[0] === 'cmpboss' || segs[0] === 'cmpskill') label = '\u2190 Compare card';
   return new ActionRowBuilder().addComponents(new ButtonBuilder()
     .setCustomId(`lbback:${backId}`)
-    .setLabel('Back')
+    .setLabel(label)
     .setStyle(ButtonStyle.Secondary));
 }
 
@@ -324,7 +338,7 @@ async function handleLbSwapButton(interaction) {
   let backSegs;
   if (parts[1] === 'overall') { boardArg = 'overall'; backSegs = parts.slice(2); }
   else { boardArg = `${parts[1]}:${parts[2]}`; backSegs = parts.slice(3); }
-  const payload = await leaderboardPayload(interaction.user.id, boardArg);
+  const payload = await leaderboardPayload(interaction.user.id, boardArg, true);
   const components = [...(payload.components || []), lbBackRow(backSegs.join(':'))];
   await interaction.update({
     content: payload.content || '',
@@ -1232,7 +1246,7 @@ const LB_PAGE_SIZE = 25; // paging machinery exists from day one; the
 const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains'];
 
 function lbDefaultState() {
-  return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 7 };
+  return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 7, var: null };
 }
 // Compact positional state: Discord caps custom ids at 100 chars, and a
 // JSON blob overflows it. Fields join with '|' (never in a page title),
@@ -1242,7 +1256,7 @@ const LB_LETTER_VIEW = { o: 'overall', p: 'pvm', s: 'skills', c: 'clogs', g: 'ga
 function lbEncode(st) {
   return [LB_VIEW_LETTER[st.v] || 'o', st.k || '-', st.p || 0, st.cat || '-',
     st.cp || 0, st.ctab || '-', st.cpg || 0, st.gk === 'kc' ? 'k' : 'x',
-    st.gd === 30 ? '3' : '7'].join('|');
+    st.gd === 30 ? '3' : '7', st.var == null ? '-' : String(st.var)].join('|');
 }
 function lbDecode(s) {
   const parts = String(s || '').split('|');
@@ -1256,7 +1270,32 @@ function lbDecode(s) {
   st.cpg = parseInt(parts[6], 10) || 0;
   st.gk = parts[7] === 'k' ? 'kc' : 'xp';
   st.gd = parts[8] === '3' ? 30 : 7;
+  if (parts[9] && parts[9] !== '-') st.var = parseInt(parts[9], 10) || 0;
   return st;
+}
+
+// Variant boards (Alex, Nov 2, 2026): a multi-variant boss ranks
+// three ways, the total or one variant alone, through toggle
+// buttons named for that boss. Labels are the buttons; titles name
+// the board. Keyed by the entry's first metric, arrays aligned
+// with its cols order. The Colosseum is absent on purpose: its
+// second column is Glory, not kills.
+const LB_VARIANT_INFO = {
+  tombs_of_amascut: { labels: ['Normal', 'Expert'], titles: ['Tombs of Amascut', 'Tombs of Amascut Expert'] },
+  chambers_of_xeric: { labels: ['Normal', 'CM'], titles: ['Chambers of Xeric', 'Chambers of Xeric CM'] },
+  theatre_of_blood: { labels: ['Regular', 'Hard Mode'], titles: ['Theatre of Blood', 'Hard Mode Theatre of Blood'] },
+  the_gauntlet: { labels: ['Gauntlet', 'Corrupted Gauntlet'], titles: ['The Gauntlet', 'The Corrupted Gauntlet'] },
+  dagannoth_rex: { labels: ['Rex', 'Prime', 'Supreme'], titles: ['Dagannoth Rex', 'Dagannoth Prime', 'Dagannoth Supreme'] },
+  nightmare: { labels: ['Nightmare', "Phosani's"], titles: ['The Nightmare', "Phosani's Nightmare"] },
+  artio: { labels: ['Artio', 'Callisto'], titles: ['Artio', 'Callisto'] },
+  spindel: { labels: ['Spindel', 'Venenatis'], titles: ['Spindel', 'Venenatis'] },
+  calvarion: { labels: ['Calvarion', "Vet'ion"], titles: ['Calvarion', "Vet'ion"] },
+  bounty_hunter_hunter: { labels: ['Hunter', 'Rogue'], titles: ['Bounty Hunter (Hunter)', 'Bounty Hunter (Rogue)'] },
+};
+function lbVariantInfo(entry) {
+  if (!entry || entry.cols.length < 2 || entry.name === 'Fortis Colosseum') return null;
+  const info = LB_VARIANT_INFO[entry.cols[0].metric];
+  return info && info.labels.length === entry.cols.length ? info : null;
 }
 
 // The ranked set mirrors the site exporter's allowed set (export_site_
@@ -1387,16 +1426,25 @@ function lbBuildBoard(st, names) {
     const entry = kcEntry(key);
     if (!entry) return { title: 'PvM', unit: 'KC', rows: [] };
     const page = clogPageForCommand(key);
+    const vInfo = lbVariantInfo(entry);
+    const vi = vInfo && st.var != null && entry.cols[st.var] ? st.var : null;
     for (const rsn of names) {
       const s = lbStats(rsn);
       if (!s) continue;
       const counters = countersFor(s, rsn);
       // WOM's snapshot carries an explicit 0 for bosses the hiscores do
       // not rank the player at, so a real rank always has kills.
-      const present = entry.cols.map((c) => c.metric)
-        .filter((m) => typeof counters[m] === 'number' && counters[m] > 0);
-      if (!present.length) continue; // WOM does not rank them here
-      const value = present.reduce((sum, m) => sum + counters[m], 0);
+      let value;
+      if (vi != null) {
+        const v = counters[entry.cols[vi].metric];
+        if (typeof v !== 'number' || v <= 0) continue;
+        value = v;
+      } else {
+        const present = entry.cols.map((c) => c.metric)
+          .filter((m) => typeof counters[m] === 'number' && counters[m] > 0);
+        if (!present.length) continue; // WOM does not rank them here
+        value = present.reduce((sum, m) => sum + counters[m], 0);
+      }
       let sub = null;
       if (page) {
         const c = lbClogPage(rsn, page[0], page[1]);
@@ -1408,7 +1456,9 @@ function lbBuildBoard(st, names) {
       });
     }
     rows.sort((a, b) => b.value - a.value);
-    return { title: entry.name, unit: 'KC', rows };
+    const title = vi != null ? vInfo.titles[vi]
+      : vInfo ? `${entry.name} Total` : entry.name;
+    return { title, unit: 'KC', rows };
   }
   if (st.v === 'clogs') {
     if (!st.k || st.k === 'total') {
@@ -1472,7 +1522,32 @@ function lbBuildBoard(st, names) {
   };
 }
 
-function lbComponents(st, pages) {
+function lbVariantRow(st) {
+  const entry = kcEntry(st.k || '');
+  const info = entry && lbVariantInfo(entry);
+  if (!info) return null;
+  const enc = lbEncode(st);
+  const mk = (sel, label) => {
+    const active = sel === '-' ? st.var == null : st.var === parseInt(sel, 10);
+    return new ButtonBuilder()
+      .setCustomId(`lbvar:${sel}:${enc}`)
+      .setLabel(label)
+      .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setDisabled(active);
+  };
+  return new ActionRowBuilder().addComponents(
+    mk('-', 'Total'), ...info.labels.map((l, i) => mk(String(i), l)));
+}
+
+function lbComponents(st, pages, scoped = false) {
+  // A board entered from a card is scoped to that card's boss
+  // (Alex, Nov 2, 2026): its variant toggle and nothing else. The
+  // caller's return row is appended on top of these.
+  if (scoped) {
+    if (st.v !== 'pvm') return [];
+    const vr = lbVariantRow(st);
+    return vr ? [vr] : [];
+  }
   const enc = lbEncode(st);
   const tabBtn = (v, label) => new ButtonBuilder()
     .setCustomId(`lbtab:${v}:${enc}`)
@@ -1482,6 +1557,10 @@ function lbComponents(st, pages) {
   const rows = [new ActionRowBuilder().addComponents(
     tabBtn('overall', 'Overall'), tabBtn('pvm', 'PvM'), tabBtn('skills', 'Skills'),
     tabBtn('clogs', 'Clogs'), tabBtn('gains', 'Gains'))];
+  if (st.v === 'pvm') {
+    const vr = lbVariantRow(st);
+    if (vr) rows.push(vr);
+  }
   if (st.v === 'pvm') {
     const catalog = bossCatalog();
     if (!st.cat || !catalog.byCat[st.cat]) {
@@ -1571,9 +1650,9 @@ function lbComponents(st, pages) {
   return rows;
 }
 
-async function lbView(st, userId) {
+async function lbView(st, userId, scoped = false) {
   const board = lbBuildBoard(st, await rankedNames());
-  const components = lbComponents(st, 1);
+  const components = lbComponents(st, 1, scoped);
   if (board.unavailable) return { content: board.unavailable, components };
   const rows = board.rows;
   if (!rows.length) {
@@ -1601,7 +1680,7 @@ async function lbView(st, userId) {
   if (!card) return CARD_DOWN;
   return {
     files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })],
-    components: lbComponents(st, pages),
+    components: lbComponents(st, pages, scoped),
   };
 }
 
@@ -1629,32 +1708,33 @@ function lbStateForArg(arg) {
   return st;
 }
 
-async function leaderboardPayload(userId, boardArg) {
+async function leaderboardPayload(userId, boardArg, scoped = false) {
   // Served from cache, but it fires background warming lookups, so it
   // counts as a use like the other commands.
   if (userId) noteUse(userId);
   if (!(await rankedNames()).length) {
     return { content: 'No ranked profiles yet. The roster syncs from the website list; try again in a bit.' };
   }
-  return lbView(lbStateForArg(boardArg), userId);
+  return lbView(lbStateForArg(boardArg), userId, scoped);
 }
 
 async function lbUpdate(interaction, st) {
-  const payload = await lbView(st, interaction.user.id);
-  const msg = { content: payload.content || '', components: payload.components || [] };
-  if (payload.files) { msg.files = payload.files; msg.attachments = []; }
-  else { msg.files = []; msg.attachments = []; }
-  // A board swapped in from a card carries that card's Back
-  // button on the message; keep it across board flips.
+  // A board swapped in from a card carries that card's return
+  // button on the message. Its presence marks the board as scoped:
+  // flips keep the scoped components and the return button.
   const rows = (interaction.message && interaction.message.components) || [];
+  let backId = null;
   for (const row of rows) {
     for (const comp of row.components || []) {
       const cid = comp.customId || (comp.data && comp.data.custom_id);
-      if (cid && cid.startsWith('lbback:')) {
-        msg.components = [...msg.components, lbBackRow(cid.slice('lbback:'.length))];
-      }
+      if (cid && cid.startsWith('lbback:')) backId = cid.slice('lbback:'.length);
     }
   }
+  const payload = await lbView(st, interaction.user.id, !!backId);
+  const msg = { content: payload.content || '', components: payload.components || [] };
+  if (payload.files) { msg.files = payload.files; msg.attachments = []; }
+  else { msg.files = []; msg.attachments = []; }
+  if (backId) msg.components = [...msg.components, lbBackRow(backId)];
   await interaction.update(msg).catch(() => {});
 }
 
@@ -1670,13 +1750,16 @@ async function handleLeaderboardButton(interaction) {
       st.k = target === 'pvm' ? 'zulrah'
         : target === 'skills' ? 'attack'
         : target === 'clogs' ? 'total' : null;
-      st.cat = null; st.cp = 0; st.ctab = null; st.cpg = 0;
+      st.cat = null; st.cp = 0; st.ctab = null; st.cpg = 0; st.var = null;
     }
   } else if (kind === 'lbg') {
     if (parts[1] === 'xp') st.gk = 'xp';
     else if (parts[1] === 'kc') st.gk = 'kc';
     else if (parts[1] === 'd7') st.gd = 7;
     else if (parts[1] === 'd30') st.gd = 30;
+    st.p = 0;
+  } else if (kind === 'lbvar') {
+    st.var = parts[1] === '-' ? null : (parseInt(parts[1], 10) || 0);
     st.p = 0;
   } else if (kind === 'lbpage') {
     if (parts[1] === 'prev') st.p = Math.max(0, (st.p || 0) - 1);
@@ -1693,7 +1776,7 @@ async function handleLeaderboardSelect(interaction) {
     if (value.startsWith('cat:')) { st.cat = value.slice(4); st.cp = 0; }
     else if (value === 'back') st.cat = null;
     else if (value.startsWith('page:')) st.cp = parseInt(value.slice(5), 10) || 0;
-    else { st.k = value; st.p = 0; }
+    else { st.k = value; st.p = 0; st.var = null; }
   } else if (st.v === 'skills') {
     st.k = value; st.p = 0;
   } else if (st.v === 'clogs') {

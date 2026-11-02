@@ -39,7 +39,7 @@ async function routeButton(interaction) {
   if (kind === 'cmpswap') return handleCompareSwapButton(interaction);
   if (kind === 'cmpalt') return handleCompareAltButton(interaction);
   if (kind === 'cmpmine') return handleCompareMineButton(interaction);
-  if (kind === 'lbtab' || kind === 'lbg' || kind === 'lbpage') return handleLeaderboardButton(interaction);
+  if (kind === 'lbtab' || kind === 'lbg' || kind === 'lbpage' || kind === 'lbvar') return handleLeaderboardButton(interaction);
   if (kind === 'lbswap') return handleLbSwapButton(interaction);
   if (kind === 'lbback') return handleLbBackButton(interaction);
   if (kind === 'lbopen') {
