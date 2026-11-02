@@ -128,7 +128,7 @@ async function verifyProof({ rsn, proof, postedAt, feedLines }) {
   if (!rsn) {
     return {
       status: 'unknown',
-      lines: ['No RSN is linked to this Discord account, so the feeds cannot be matched by name. /connect links it. Staff can still judge the screenshot.'],
+      lines: ['No RSN is linked to this Discord account, so the feeds cannot be matched by name. Press **Link RSN** under the guide post in #bot-guide. Staff can still judge the screenshot.'],
     };
   }
 
