@@ -414,7 +414,7 @@ async function postCommand(interaction) {
       bountyConfig().notifyRoleId ? `<@&${bountyConfig().notifyRoleId}>` : null,
       `⛧ **A new contract: ${contract.name}** ⛧`,
       record.blurb ||
-        `The drop has to be earned after the contract posts. First ${contract.pet ? 'pet hunter' : lane === 'Skilling' ? 'skiller' : 'hunter'} back with the drop takes the title.`,
+        `Get it while the contract is live. First ${contract.pet ? 'pet hunter' : lane === 'Skilling' ? 'skiller' : 'hunter'} back with the drop takes the title.`,
       `Reward: <@&${role.id}>`,
       `⏳ Closes <t:${Math.floor(record.expiresAt / 1000)}:R>`,
     ]
