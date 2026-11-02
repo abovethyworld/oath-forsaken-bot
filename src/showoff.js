@@ -4,7 +4,7 @@
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage } = require('./runeprofile');
-const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge } = require('./teams');
+const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor } = require('./luck');
@@ -226,6 +226,7 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     rankOf: standings.length,
     clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
     members: standings.length,
+    badge: cardBadgeFor(rsn, st ? st.accountType : null),
     clog: clog || null,
     luck: luck || null,
     pets: pets || null,
@@ -477,6 +478,7 @@ async function dryPayload(activity, rsn, userId) {
   })));
   const card = await fetchCard('/dry', {
     boss: entry.name, metric, rsn, kc, word: report.word,
+    badge: cardBadgeFor(rsn, st ? st.accountType : null),
     missing: await withIcons(report.missing),
     obtained: await withIcons(report.obtained),
   });
@@ -542,7 +544,7 @@ async function gainsPayload(rsn, days, userId) {
   kcGains.sort((x, y) => y.kc - x.kc);
   const totalKc = kcGains.reduce((s, g) => s + g.kc, 0);
   const card = await fetchCard('/gains', {
-    rsn, spanDays: base.spanDays, totalXp, totalKc,
+    rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), spanDays: base.spanDays, totalXp, totalKc,
     skills: skillGains.slice(0, 5), bosses: kcGains.slice(0, 5),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'gains.png' })] };
@@ -861,7 +863,7 @@ async function clueSummaryPayload(rsn, userId) {
   }
   if (!anyPage) return { content: RP_GUIDE };
   const card = await fetchCard('/clue-summary', {
-    rsn,
+    rsn, badge: cardBadgeFor(rsn, null),
     totalCompleted: typeof kc.clue_scrolls_all === 'number' ? kc.clue_scrolls_all : null,
     rows,
   });
@@ -880,7 +882,7 @@ async function clogPayload(key, rsn, userId) {
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
     const card = await fetchCard('/clog-total', {
-      rsn, obtained: res.obtained, total: res.total, tabs: res.tabs,
+      rsn, badge: cardBadgeFor(rsn, null), obtained: res.obtained, total: res.total, tabs: res.tabs,
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
     return CARD_DOWN;
@@ -929,7 +931,7 @@ async function clogPayload(key, rsn, userId) {
   const completed = pageMetric && st2 && !st2.notFound && st2.kc
     && typeof st2.kc[pageMetric] === 'number' ? st2.kc[pageMetric] : null;
   const card = await fetchCard('/clog-page', {
-    rsn,
+    rsn, badge: cardBadgeFor(rsn, st2 ? st2.accountType : null),
     page: page[1],
     obtained: res.obtained,
     total: res.total,
@@ -1041,7 +1043,8 @@ async function profilePayload(rsn, userId) {
   };
   // House-style card from the card service. If it is down the
   // command says so; there is no old-style fallback.
-  const card = await fetchCard('/profile', { rsn: fields.name, ...fields });
+  const pBadgeId = badgeForAccount(fields.name, null);
+  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId ? BADGE_WORDS[pBadgeId] : null });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
   return CARD_DOWN;
 }
@@ -1141,6 +1144,23 @@ function lbBadgeId(accountType) {
   return null;
 }
 const lbBadgeCache = new Map();
+function lbBadgeIconById(id) {
+  if (!id) return null;
+  if (!lbBadgeCache.has(id)) {
+    let b64 = null;
+    try {
+      b64 = fs.readFileSync(path.join(__dirname, '..', 'assets', 'party-board',
+        'badge-icons', `${id}.png`)).toString('base64');
+    } catch { /* icon missing: no badge */ }
+    lbBadgeCache.set(id, b64);
+  }
+  return lbBadgeCache.get(id);
+}
+// The shared account badge for cards: stated mode first, then WOM's type.
+function cardBadgeFor(rsn, accountType) {
+  return lbBadgeIconById(badgeForAccount(rsn, accountType));
+}
+const lbBadgeFor = cardBadgeFor;
 function lbBadgeIcon(accountType) {
   const id = lbBadgeId(accountType);
   if (!id) return null;
@@ -1185,7 +1205,7 @@ function lbBuildBoard(st, names) {
       const s = lbStats(rsn);
       const xp = s && s.skills && s.skills.overall ? s.skills.overall.xp : null;
       if (typeof xp !== 'number') continue;
-      rows.push({ name: rsn, badge: lbBadgeIcon(s.accountType), value: xp, valueText: fmtNum(xp) });
+      rows.push({ name: rsn, badge: lbBadgeFor(rsn, s.accountType), value: xp, valueText: fmtNum(xp) });
     }
     rows.sort((a, b) => b.value - a.value);
     return { title: 'Total XP', unit: 'XP', rows };
@@ -1198,7 +1218,7 @@ function lbBuildBoard(st, names) {
       const sk = s && s.skills ? s.skills[dataKey] : null;
       if (!sk || typeof sk.xp !== 'number') continue;
       rows.push({
-        name: rsn, badge: lbBadgeIcon(s.accountType), level: sk.level,
+        name: rsn, badge: lbBadgeFor(rsn, s.accountType), level: sk.level,
         value: sk.xp, valueText: `${fmtNum(sk.xp)} XP`,
       });
     }
@@ -1226,7 +1246,7 @@ function lbBuildBoard(st, names) {
         sub = c ? `${c.obtained} / ${c.total} clog` : 'no clog';
       }
       rows.push({
-        name: rsn, badge: lbBadgeIcon(s.accountType), sub,
+        name: rsn, badge: lbBadgeFor(rsn, s.accountType), sub,
         value, valueText: `${fmtNum(value)} KC`,
       });
     }
@@ -1240,7 +1260,7 @@ function lbBuildBoard(st, names) {
         const c = lbClogTotal(rsn);
         if (!c) continue;
         rows.push({
-          name: rsn, badge: lbBadgeIcon(s ? s.accountType : null),
+          name: rsn, badge: lbBadgeFor(rsn, s ? s.accountType : null),
           value: c.obtained, valueText: `${fmtNum(c.obtained)} / ${fmtNum(c.total)}`,
           frac: c.total ? c.obtained / c.total : 0,
         });
@@ -1255,7 +1275,7 @@ function lbBuildBoard(st, names) {
       const c = lbClogPage(rsn, tab, st.k);
       if (!c) continue;
       rows.push({
-        name: rsn, badge: lbBadgeIcon(s ? s.accountType : null),
+        name: rsn, badge: lbBadgeFor(rsn, s ? s.accountType : null),
         value: c.obtained, valueText: `${fmtNum(c.obtained)} / ${fmtNum(c.total)}`,
         frac: c.total ? c.obtained / c.total : 0,
       });
@@ -1284,7 +1304,7 @@ function lbBuildBoard(st, names) {
     }
     if (gain <= 0) continue;
     rows.push({
-      name: rsn, badge: lbBadgeIcon(s.accountType), value: gain,
+      name: rsn, badge: lbBadgeFor(rsn, s.accountType), value: gain,
       valueText: st.gk === 'kc' ? `+${fmtNum(gain)} KC` : `+${fmtNum(gain)} XP`,
     });
   }
@@ -1591,7 +1611,7 @@ async function pbPayload(activity, rsn, userId) {
     const [key, e] = hit;
     const boss = e.boss || (entry && entry.name) || key;
     const card = await fetchCard('/pb', {
-      mode: 'single', rsn, boss, time: pbTime(e),
+      mode: 'single', rsn, badge: cardBadgeFor(rsn, null), boss, time: pbTime(e),
       killCount: e.killCount || null, at: e.at || null,
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
@@ -1600,7 +1620,7 @@ async function pbPayload(activity, rsn, userId) {
   const rows = all
     .map(([key, e]) => ({ boss: e.boss || key, time: pbTime(e) }))
     .sort((a, b) => a.boss.localeCompare(b.boss));
-  const card = await fetchCard('/pb', { mode: 'list', rsn, rows });
+  const card = await fetchCard('/pb', { mode: 'list', rsn, badge: cardBadgeFor(rsn, null), rows });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
   return CARD_DOWN;
 }
@@ -1677,7 +1697,7 @@ async function skillsPayload(rsn, userId) {
     .map(([metric, name]) => ({ key: metric, name, kc: st.kc ? st.kc[metric] : null }))
     .filter((b) => typeof b.kc === 'number' && b.kc > 0);
   const card = await fetchCard('/skills', {
-    rsn, combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
+    rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'skills.png' })] };
   return CARD_DOWN;
@@ -1795,7 +1815,7 @@ async function compareOverallPayload(aName, bName, userId, ownerId, ui = {}) {
   // second), whichever side leads.
   const tally = wa === wb ? `ALL SQUARE AT ${wa} - ${wb}`
     : `${(wa > wb ? aName : bName).toUpperCase()} LEADS ${wa} - ${wb}`;
-  const card = await fetchCard('/compare', { a: { rsn: aName }, b: { rsn: bName }, rows, tally });
+  const card = await fetchCard('/compare', { a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null) }, b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null) }, rows, tally });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare.png' })], components: await compareComponents('overall', aName, bName, ui.bossKey || null, ownerId ?? userId, ui) };
   return { content: `**${aName}** vs **${bName}** - ${tally.charAt(0) + tally.slice(1).toLowerCase()}. The card service is down right now.` };
 }
@@ -1928,8 +1948,8 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     }
     const card = await fetchCard('/compare-skill', {
       skillKey: picked, skillName: ai ? ai.name : picked,
-      a: { rsn: aName, level: ai ? ai.level : null, xp: ai ? ai.xp : null },
-      b: { rsn: bName, level: bi ? bi.level : null, xp: bi ? bi.xp : null },
+      a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null), level: ai ? ai.level : null, xp: ai ? ai.xp : null },
+      b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), level: bi ? bi.level : null, xp: bi ? bi.xp : null },
       sections, noSections: noMap,
       noSync: !noMap && sections.length === 0,
       leader, note, pets: skillPets,
@@ -1943,7 +1963,7 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
   const tied = 24 - led.a - led.b;
   const summary = `Skills led: ${aName} ${led.a} - ${led.b} ${bName}${tied ? ` · ${tied} tied` : ''}`;
   const card = await fetchCard('/compare-skills', {
-    a: { rsn: aName }, b: { rsn: bName }, summary, cells: led.cells,
+    a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null) }, b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null) }, summary, cells: led.cells,
     highlight: null, focusLine: '',
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-skills.png' })], components: await compareComponents('skills', aName, bName, ui.bossKey || null, ownerId ?? userId, ui) };
@@ -2009,8 +2029,8 @@ async function compareRaidCombinedPayload(key, entry, aName, bName, sa, sb, owne
   const sideCols = (stats) => cols.map((c) => ({ label: c.label, kc: kcOf(stats, c.metric) }));
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric: cols[0].metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null, pets: null },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: null },
+    a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null), kc: kcA, rank: rankOf(aName), cols: sideCols(sa), clog: ca.clog, luck: null, pets: null },
+    b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), kc: kcB, rank: rankOf(bName), cols: sideCols(sb), clog: cb.clog, luck: null, pets: null },
     leader, note: parts.join(' · '),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId, { cat: raidDef && raidDef.cat ? raidDef.cat : 'raids', catPage: 0 }) };
@@ -2060,8 +2080,8 @@ async function compareBossPayload(key, aName, bName, userId, ownerId, ui = {}) {
   ]);
   const card = await fetchCard('/compare-boss', {
     boss: bossName, metric,
-    a: { rsn: aName, kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck, pets: null },
-    b: { rsn: bName, kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: null },
+    a: { rsn: aName, badge: cardBadgeFor(aName, sa && sa.st ? sa.st.accountType : null), kc: kcA, rank: rankOf(aName), clog: ca.clog, luck: ca.luck, pets: null },
+    b: { rsn: bName, badge: cardBadgeFor(bName, sb && sb.st ? sb.st.accountType : null), kc: kcB, rank: rankOf(bName), clog: cb.clog, luck: cb.luck, pets: null },
     leader, note,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-boss.png' })], components: await compareComponents('boss', aName, bName, key, ownerId ?? userId, { cat: ui.cat === undefined ? compareCategoryOf(key) : ui.cat, catPage: ui.catPage || 0 }) };
@@ -2448,8 +2468,8 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     };
     const card = await fetchCard('/compare-clog', {
       mode: 'page', page: pageTitle,
-      a: { rsn: aName, got: gap.obtained || 0, total: gap.total || gbp.total || 0 },
-      b: { rsn: bName, got: gbp.obtained || 0, total: gbp.total || gap.total || 0 },
+      a: { rsn: aName, badge: cardBadgeFor(aName, sta ? sta.accountType : null), got: gap.obtained || 0, total: gap.total || gbp.total || 0 },
+      b: { rsn: bName, badge: cardBadgeFor(bName, stb ? stb.accountType : null), got: gbp.obtained || 0, total: gbp.total || gap.total || 0 },
       items, moreCount: Math.max(0, all.length - shown.length),
       pets: pagePets,
       grids,
@@ -2509,7 +2529,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     ? 'TIED ON THE COLLECTION LOG'
     : `${(diff > 0 ? aName : bName).toUpperCase()} LEADS BY ${num(Math.abs(diff))} ITEMS`;
   const card = await fetchCard('/compare-clog', {
-    mode: 'totals', a: { rsn: aName }, b: { rsn: bName }, rows, tally,
+    mode: 'totals', a: { rsn: aName, badge: cardBadgeFor(aName, sta ? sta.accountType : null) }, b: { rsn: bName, badge: cardBadgeFor(bName, stb ? stb.accountType : null) }, rows, tally,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-clog.png' })], components };
   return { content: tally, components };
