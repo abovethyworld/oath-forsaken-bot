@@ -713,6 +713,29 @@ const CLOG_PAGES = {
   clues_master_rare: ['Clues', 'Master Treasure Trails (Rare)'],
   clues_shared: ['Clues', 'Shared Treasure Trail Rewards'],
   clues: ['Clues', 'Shared Treasure Trail Rewards'],
+  scrolls_beginner: ['Clues', 'Beginner Treasure Trails'],
+  scrolls_easy: ['Clues', 'Easy Treasure Trails'],
+  scrolls_medium: ['Clues', 'Medium Treasure Trails'],
+  scrolls_hard: ['Clues', 'Hard Treasure Trails'],
+  scrolls_elite: ['Clues', 'Elite Treasure Trails'],
+  scrolls_master: ['Clues', 'Master Treasure Trails'],
+  beginner_scrolls: ['Clues', 'Beginner Treasure Trails'],
+  easy_scrolls: ['Clues', 'Easy Treasure Trails'],
+  medium_scrolls: ['Clues', 'Medium Treasure Trails'],
+  hard_scrolls: ['Clues', 'Hard Treasure Trails'],
+  elite_scrolls: ['Clues', 'Elite Treasure Trails'],
+  master_scrolls: ['Clues', 'Master Treasure Trails'],
+  beginner_scroll: ['Clues', 'Beginner Treasure Trails'],
+  easy_scroll: ['Clues', 'Easy Treasure Trails'],
+  medium_scroll: ['Clues', 'Medium Treasure Trails'],
+  hard_scroll: ['Clues', 'Hard Treasure Trails'],
+  elite_scroll: ['Clues', 'Elite Treasure Trails'],
+  master_scroll: ['Clues', 'Master Treasure Trails'],
+  scrolls_hard_rare: ['Clues', 'Hard Treasure Trails (Rare)'],
+  scrolls_elite_rare: ['Clues', 'Elite Treasure Trails (Rare)'],
+  scrolls_master_rare: ['Clues', 'Master Treasure Trails (Rare)'],
+  scrolls_shared: ['Clues', 'Shared Treasure Trail Rewards'],
+  scrolls: ['Clues', 'Shared Treasure Trail Rewards'],
   scroll_cases: ['Clues', 'Scroll Cases'],
   ba: ['Minigames', 'Barbarian Assault'],
   barracuda_trials: ['Minigames', 'Barracuda Trials'],
@@ -875,7 +898,7 @@ async function clogPayload(key, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
-  if (key === 'clues') return clueSummaryPayload(rsn, userId);
+  if (key === 'clues' || key === 'scrolls') return clueSummaryPayload(rsn, userId);
   if (key === 'total') {
     if (userId) noteUse(userId); // a real lookup fires: start the cooldown
     const res = await getClogSummary(rsn).catch(() => null);
