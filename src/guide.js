@@ -101,7 +101,7 @@ function topicEmbed(topic) {
   return new EmbedBuilder()
     .setTitle(`⛧ ${topic.title} ⛧`)
     .setColor(ZAMORAK_RED)
-    .setDescription((topic.short || []).join('\n\n'));
+    .setDescription([...(topic.short || []), ...(topic.fullExtra || [])].join('\n\n'));
 }
 
 async function helpCommand(interaction) {
@@ -135,7 +135,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('help')
-      .setDescription('Bot guide: pick a topic, get the short version privately')
+      .setDescription('Bot guide: pick a topic, get the full version privately')
       .addStringOption((o) =>
         o
           .setName('topic')
