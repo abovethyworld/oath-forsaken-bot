@@ -2904,6 +2904,13 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     ? { got: sumA.obtained, total: sumA.total } : ta;
   const headB = sumB && typeof sumB.obtained === 'number'
     ? { got: sumB.obtained, total: sumB.total } : tb;
+  // The totals card carries the same account badges as the page
+  // view. Its stats are fetched here: the page view's sta/stb are
+  // scoped to that branch and do not reach this code.
+  const [staT, stbT] = await Promise.all([
+    getStats(aName).catch(() => null),
+    getStats(bName).catch(() => null),
+  ]);
   const bossA = sumGot(pa, bossTitles);
   const bossB = sumGot(pb, bossTitles);
   const raidA = sumGot(pa, raidTitles);
@@ -2931,7 +2938,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     ? 'TIED ON THE COLLECTION LOG'
     : `${(diff > 0 ? aName : bName).toUpperCase()} LEADS BY ${num(Math.abs(diff))} ITEMS`;
   const card = await fetchCard('/compare-clog', {
-    mode: 'totals', a: { rsn: aName, badge: cardBadgeFor(aName, sta ? sta.accountType : null) }, b: { rsn: bName, badge: cardBadgeFor(bName, stb ? stb.accountType : null) }, rows, tally,
+    mode: 'totals', a: { rsn: aName, badge: cardBadgeFor(aName, staT ? staT.accountType : null) }, b: { rsn: bName, badge: cardBadgeFor(bName, stbT ? stbT.accountType : null) }, rows, tally,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'compare-clog.png' })], components };
   return { content: tally, components };
