@@ -1038,13 +1038,29 @@ const LB_VIEWS = ['overall', 'pvm', 'skills', 'clogs', 'gains'];
 function lbDefaultState() {
   return { v: 'overall', k: null, p: 0, cat: null, cp: 0, ctab: null, cpg: 0, gk: 'xp', gd: 7 };
 }
-function lbEncode(st) { return Buffer.from(JSON.stringify(st), 'utf8').toString('base64url'); }
+// Compact positional state: Discord caps custom ids at 100 chars, and a
+// JSON blob overflows it. Fields join with '|' (never in a page title),
+// '-' means null, the view is one letter.
+const LB_VIEW_LETTER = { overall: 'o', pvm: 'p', skills: 's', clogs: 'c', gains: 'g' };
+const LB_LETTER_VIEW = { o: 'overall', p: 'pvm', s: 'skills', c: 'clogs', g: 'gains' };
+function lbEncode(st) {
+  return [LB_VIEW_LETTER[st.v] || 'o', st.k || '-', st.p || 0, st.cat || '-',
+    st.cp || 0, st.ctab || '-', st.cpg || 0, st.gk === 'kc' ? 'k' : 'x',
+    st.gd === 30 ? '3' : '7'].join('|');
+}
 function lbDecode(s) {
-  try {
-    const st = JSON.parse(Buffer.from(String(s || ''), 'base64url').toString('utf8'));
-    if (st && LB_VIEWS.includes(st.v)) return { ...lbDefaultState(), ...st };
-  } catch { /* fall through to defaults */ }
-  return lbDefaultState();
+  const parts = String(s || '').split('|');
+  const st = lbDefaultState();
+  if (LB_LETTER_VIEW[parts[0]]) st.v = LB_LETTER_VIEW[parts[0]];
+  if (parts[1] && parts[1] !== '-') st.k = parts[1];
+  st.p = parseInt(parts[2], 10) || 0;
+  if (parts[3] && parts[3] !== '-') st.cat = parts[3];
+  st.cp = parseInt(parts[4], 10) || 0;
+  if (parts[5] && parts[5] !== '-') st.ctab = parts[5];
+  st.cpg = parseInt(parts[6], 10) || 0;
+  st.gk = parts[7] === 'k' ? 'kc' : 'xp';
+  st.gd = parts[8] === '3' ? 30 : 7;
+  return st;
 }
 
 function rankedNames() {
@@ -1412,11 +1428,15 @@ async function handleLeaderboardButton(interaction) {
   const kind = parts[0];
   const st = lbDecode(parts[parts.length - 1]);
   if (kind === 'lbtab') {
-    st.v = parts[1];
+    const target = parts[1];
     st.p = 0;
-    if (st.v === 'pvm' && !st.k) st.k = 'zulrah';
-    if (st.v === 'skills' && !st.k) st.k = 'attack';
-    if (st.v === 'clogs' && !st.k) st.k = 'total';
+    if (target !== st.v) {
+      st.v = target;
+      st.k = target === 'pvm' ? 'zulrah'
+        : target === 'skills' ? 'attack'
+        : target === 'clogs' ? 'total' : null;
+      st.cat = null; st.cp = 0; st.ctab = null; st.cpg = 0;
+    }
   } else if (kind === 'lbg') {
     if (parts[1] === 'xp') st.gk = 'xp';
     else if (parts[1] === 'kc') st.gk = 'kc';
