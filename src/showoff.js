@@ -615,16 +615,19 @@ function dryAutocompleteChoices(focused) {
   const q = String(focused || '').toLowerCase();
   return dryScoredKeys()
     .map((value) => ({ name: kcEntry(value).name, value }))
-    .concat(CLUE_TIERS.map(([label]) => ({
-      name: `${label} Clue Scrolls`, value: `clue:${label.toLowerCase()}`,
-    })))
+    .concat([{ name: 'Clue Scrolls (all tiers)', value: 'clue:all' }],
+      CLUE_TIERS.map(([label]) => ({
+        name: `${label} Clue Scrolls`, value: `clue:${label.toLowerCase()}`,
+      })))
     .filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q))
     .slice(0, 25);
 }
 
 async function dryPayload(activity, rsn, userId) {
   if (activity && String(activity).startsWith('clue:')) {
-    return dryCluePayload(String(activity).slice(5), rsn, userId);
+    const tier = String(activity).slice(5);
+    if (tier === 'all') return dryCluesAllPayload(rsn, userId);
+    return dryCluePayload(tier, rsn, userId);
   }
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
@@ -681,6 +684,69 @@ async function dryPayload(activity, rsn, userId) {
     return {
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
       components: [bridgeRow('kc', activity, rsn)],
+    };
+  }
+  return CARD_DOWN;
+}
+
+// !dry clues: one dry report across all six clue tiers. Each
+// item scores against its own tier's completions (the counters
+// map carries them all), and every row names its tier. The
+// word is the merged verdict across the whole clue log.
+async function dryCluesAllPayload(rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
+  if (userId) noteUse(userId, 'dry');
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const kc = st.kc ? st.kc.clue_scrolls_all : null;
+  if (!kc) return { content: `**${rsn}** has not completed any clues yet, so there is no luck to check.` };
+  const pages = await Promise.all(CLUE_TIERS.map(async ([label, title]) => {
+    const res = await getClogPageWithItems(rsn, 'Clues', title).catch(() => null);
+    return { label, res };
+  }));
+  const tierOf = {};
+  const items = [];
+  let anyPage = false;
+  for (const { label, res } of pages) {
+    if (!res || res.notFound) continue;
+    anyPage = true;
+    for (const it of res.items || []) {
+      if (it.id in tierOf) continue;
+      tierOf[it.id] = label;
+      items.push({ id: it.id, qty: it.quantity || 0 });
+    }
+  }
+  if (!anyPage) {
+    const prof = await getProfile(rsn).catch(() => null);
+    if (prof && !prof.notFound && prof.account) {
+      return { content: `The Clue Scrolls pages are not synced for **${rsn}** yet. Their collection log total is in, but the clue pages have not been read. Open the Collection Log in game, go to a Clue Scrolls page, then press the RuneProfile button in the top-left.` };
+    }
+    return { content: `The collection log is not synced for **${rsn}** yet, so there is nothing to score. ${CLOG_SYNC_STEPS}` };
+  }
+  const report = dryReport(countersFor(st, rsn), items);
+  if (!report) return { content: `No scored drops could be checked for Clue Scrolls on **${rsn}** yet.` };
+  const withIcons = async (list) => Promise.all(list.map(async (e) => ({
+    ...e,
+    name: `${e.name} (${tierOf[e.id] || '?'})`,
+    icon: e.id ? await petIconB64(e.id, e.name) : null,
+  })));
+  const card = await fetchCard('/dry', {
+    boss: 'Clue Scrolls', metric: 'clue_scrolls_all', rsn, kc, word: report.word,
+    badge: cardBadgeFor(rsn, st.accountType),
+    missing: await withIcons(report.missing),
+    obtained: await withIcons(report.obtained),
+  });
+  if (card) {
+    return {
+      files: [new AttachmentBuilder(card, { name: 'dry.png' })],
+      components: [bridgeRow('clues', '-', rsn)],
     };
   }
   return CARD_DOWN;
@@ -744,7 +810,11 @@ async function handleDryCommand(message, args) {
   if (/\bclues?\b|\bscrolls?\b/.test(joined)) {
     const t = CLUE_TIERS.find(([label]) => joined.includes(label.toLowerCase()));
     if (!t) {
-      await message.reply({ content: 'Pick a tier: `!dry beginner clues`, `!dry easy clues`, `!dry medium clues`, `!dry hard clues`, `!dry elite clues`, or `!dry master clues`.' }).catch(() => {});
+      const rest = args.filter((a) => !['clue', 'clues', 'scroll', 'scrolls'].includes(String(a).toLowerCase()));
+      const r = resolveName(rest, message.author.id);
+      if (r.error) { await message.reply(r.error).catch(() => {}); return; }
+      if (r.payload) { await message.reply(r.payload).catch(() => {}); return; }
+      await message.reply(await dryCluesAllPayload(r.rsn, message.author.id)).catch(() => {});
       return;
     }
     const drop = new Set(['clue', 'clues', 'scroll', 'scrolls',
