@@ -5,7 +5,7 @@ const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder,
 const { getStats, combatLevel, kcStandings } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow } = require('./teams');
-const { renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, decodePng } = require('./party-board');
+const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
 const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor } = require('./luck');
 
@@ -358,11 +358,6 @@ async function kcPayload(activity, rsn, userId) {
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
   if (!entry.cols.length) return { content: `No kill count is tracked for ${entry.name}.` };
-  const entries = entry.cols.map((c) => ({
-    icon: getBossIcon(c.icon || c.metric),
-    label: c.label || prettyMetric(c.metric),
-    value: fmtKc(st.kc ? st.kc[c.metric] : null),
-  }));
   // Website card first: same numbers, share-card style, plus
   // the player's standing on this boss. The collection log
   // block is the full strip with luck scores, from the same
@@ -371,8 +366,7 @@ async function kcPayload(activity, rsn, userId) {
   const cl = await bossClogLuck(rsn, activity, countersFor(st, rsn));
   const card = await fetchCard('/kc', kcCardBody(rsn, entry, st, cl.clog, cl.luck, null));
   if (card) return { files: [new AttachmentBuilder(card, { name: 'kc.png' })] };
-  const buf = renderKcCard({ title: `${rsn}: ${entry.name}`, entries });
-  return { files: [new AttachmentBuilder(buf, { name: 'kc.png' })] };
+  return CARD_DOWN;
 }
 
 // !dry <boss> [name]: one player's drop luck on one boss, from
@@ -455,10 +449,7 @@ async function dryPayload(activity, rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'dry.png' })] };
-  const top = report.missing.slice(0, 3).map((e) => `${e.name} (${e.score}/100)`).join(', ');
-  return {
-    content: `**${entry.name}** - ${rsn}: ${kc.toLocaleString('en-US')} KC, luck: ${report.word}${top ? `. Driest: ${top}` : ''}`,
-  };
+  return CARD_DOWN;
 }
 
 async function handleDryCommand(message, args) {
@@ -521,9 +512,7 @@ async function gainsPayload(rsn, days, userId) {
     skills: skillGains.slice(0, 5), bosses: kcGains.slice(0, 5),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'gains.png' })] };
-  return {
-    content: `**${rsn}** last ${base.spanDays} days: +${totalXp.toLocaleString('en-US')} XP, +${totalKc.toLocaleString('en-US')} KC`,
-  };
+  return CARD_DOWN;
 }
 
 async function handleGainsCommand(message, args) {
@@ -786,8 +775,7 @@ async function clogPayload(key, rsn, userId) {
       rsn, obtained: res.obtained, total: res.total, tabs: res.tabs,
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
-    const buf = renderClogSummaryCard({ name: rsn, obtained: res.obtained, total: res.total, tabs: res.tabs });
-    return { files: [new AttachmentBuilder(buf, { name: 'clog.png' })] };
+    return CARD_DOWN;
   }
   const page = clogPageForCommand(key);
   if (!page) {
@@ -841,13 +829,7 @@ async function clogPayload(key, rsn, userId) {
     })),
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
-  const buf = renderClogCard({
-    title: `${rsn}: ${page[1]}`,
-    obtained: res.obtained,
-    total: res.total,
-    items: drawn,
-  });
-  return { files: [new AttachmentBuilder(buf, { name: 'clog.png' })] };
+  return CARD_DOWN;
 }
 
 async function handleClogCommand(message, args) {
@@ -885,6 +867,10 @@ async function fetchCard(path, body) {
     return null;
   }
 }
+
+// Card commands have one visual style: the card service. When it is
+// down the command says so; there is no old-style fallback card.
+const CARD_DOWN = { content: 'The card service is down right now. Try again in a bit.' };
 
 // The website builds a share card for every tracked member: the same
 // numbers as the RuneProfile card below, in house style, with clan
@@ -939,12 +925,11 @@ async function profilePayload(rsn, userId) {
     clog: { done: a.collectionLog ? a.collectionLog.obtained : 0, total: a.collectionLog ? a.collectionLog.total : 0 },
     clan: a.clan && a.clan.name ? a.clan.name : null,
   };
-  // House-style card from the card service; the local renderer is
-  // only the fallback if the service is down.
+  // House-style card from the card service. If it is down the
+  // command says so; there is no old-style fallback.
   const card = await fetchCard('/profile', { rsn: fields.name, ...fields });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
-  const buf = renderProfileCard(fields);
-  return { files: [new AttachmentBuilder(buf, { name: 'profile.png' })] };
+  return CARD_DOWN;
 }
 
 async function handleProfileCommand(message, args) {
@@ -985,8 +970,7 @@ async function leaderboardPayload(userId) {
   }
   const card = await fetchCard('/leaderboard', { rows });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })] };
-  const buf = renderClogLeaderboard(rows);
-  return { files: [new AttachmentBuilder(buf, { name: 'leaderboard.png' })] };
+  return CARD_DOWN;
 }
 
 const PLUGIN_MEMBERS_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'members');
@@ -1045,15 +1029,14 @@ async function pbPayload(activity, rsn, userId) {
       killCount: e.killCount || null, at: e.at || null,
     });
     if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
-    return { content: `**${rsn}** - ${boss} personal best: **${pbTime(e)}**${e.killCount ? ` at ${Number(e.killCount).toLocaleString('en-US')} KC` : ''}. Member-reported.` };
+    return CARD_DOWN;
   }
   const rows = all
     .map(([key, e]) => ({ boss: e.boss || key, time: pbTime(e) }))
     .sort((a, b) => a.boss.localeCompare(b.boss));
   const card = await fetchCard('/pb', { mode: 'list', rsn, rows });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
-  const lines = rows.map((r) => `${r.boss}: **${r.time}**`);
-  return { content: `**${rsn}** personal bests (member-reported):\n${lines.join('\n')}` };
+  return CARD_DOWN;
 }
 
 // Like takeActivity, but the activity is optional: only consumes the
@@ -1129,7 +1112,7 @@ async function skillsPayload(rsn, userId) {
     rsn, combat: st.combat, totalLevel, totalXp, skills, skillingBosses,
   });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'skills.png' })] };
-  return { content: `**${rsn}** - Total level ${totalLevel.toLocaleString('en-US')}, total XP ${totalXp.toLocaleString('en-US')}, combat ${st.combat}. The full grid card is down right now.` };
+  return CARD_DOWN;
 }
 
 async function handleSkillsCommand(message, args) {
