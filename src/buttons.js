@@ -9,7 +9,7 @@ const { handleEventButton } = require('./calendar');
 const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
-const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton } = require('./showoff');
+const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLbOpenButton } = require('./showoff');
 const { handleWipeButton } = require('./wipe');
 const config = require('./config');
 
@@ -40,6 +40,7 @@ async function routeButton(interaction) {
   if (kind === 'cmpalt') return handleCompareAltButton(interaction);
   if (kind === 'cmpmine') return handleCompareMineButton(interaction);
   if (kind === 'lbtab' || kind === 'lbg' || kind === 'lbpage') return handleLeaderboardButton(interaction);
+  if (kind === 'lbopen') return handleLbOpenButton(interaction);
   if (kind === 'donate') {
     await interaction.reply({
       content: '⛧ **Support the Clan** ⛧\n\nDonate here: https://ko-fi.com/oathforsaken\n\nChaos takes all.',
