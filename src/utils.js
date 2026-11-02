@@ -71,7 +71,6 @@ function buildGuestWelcome(userId) {
   const guestId = config.recruit?.guestRoleId;
   const introduceId = config.channels?.introduceYourself;
   const rolesId = config.channels?.roles;
-  const staffId = config.tickets?.staffRoleIds?.[0];
   const contactId = config.recruit?.contactStaffChannelId;
 
   return (
@@ -81,7 +80,7 @@ function buildGuestWelcome(userId) {
     `The door's open. Come see what the forsaken built.\n\n` +
     `• Introduce yourself in <#${introduceId}>\n` +
     `• Grab your roles in <#${rolesId}>\n` +
-    `• Ping <@&${staffId}> when you're ready for a clan chat invite\n` +
+    `• Guest in the clan chat any time: type **OathForsaken** in the guest clan tab\n` +
     `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
   );
 }
