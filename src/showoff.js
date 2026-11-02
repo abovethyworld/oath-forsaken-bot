@@ -1444,7 +1444,7 @@ async function siteCardPayload(rsn) {
 // luckier than you"). Cache-only: pages the bot has never seen
 // are skipped, never fetched. Null when nothing scores, or when
 // the driest item sits under the 50% line the boss cards use.
-function driestItemText(rsn, st) {
+function driestItemUnit(rsn, st) {
   if (!st || st.notFound) return null;
   const counters = countersFor(st, rsn);
   const seen = new Set();
@@ -1467,7 +1467,12 @@ function driestItemText(rsn, st) {
   // scale, so the dryness share inverts straight back out.
   const pct = Math.round(100 - 2 * worst.score);
   if (pct < 50) return null;
-  return `${worst.name} (${pct}% luckier than you)`;
+  return { name: worst.name, id: worst.id, score: worst.score, dryness: pct };
+}
+
+function driestItemText(rsn, st) {
+  const u = driestItemUnit(rsn, st);
+  return u ? `${u.name} (${u.dryness}% luckier than you)` : null;
 }
 
 // The website share cards carry the same driest-item fact; the
@@ -1476,12 +1481,19 @@ function driestItemText(rsn, st) {
 // a timer from index.js.
 async function refreshProfileLuck() {
   const out = {};
+  const units = {};
   for (const rsn of await rankedNames()) {
     const st = await getStats(rsn).catch(() => null);
-    const text = driestItemText(rsn, st);
-    if (text) out[rsn.toLowerCase()] = text;
+    const u = driestItemUnit(rsn, st);
+    if (u) {
+      out[rsn.toLowerCase()] = `${u.name} (${u.dryness}% luckier than you)`;
+      units[rsn.toLowerCase()] = u;
+    }
   }
   fs.writeFileSync('data/profile-luck.json', JSON.stringify(out));
+  // Structured twin for the share-card and card-service Overview
+  // renders (driest luck tile: name, item id, percentile, dryness).
+  fs.writeFileSync('data/profile-luck-units.json', JSON.stringify(units));
 }
 
 async function profilePayload(rsn, userId) {
@@ -1510,8 +1522,32 @@ async function profilePayload(rsn, userId) {
   // command says so; there is no old-style fallback.
   const pBadgeId = badgeForAccount(fields.name, null);
   const stL = await getStats(fields.name).catch(() => null);
-  const luckLine = driestItemText(fields.name, stL);
-  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId && !fields.accountLabel ? BADGE_WORDS[pBadgeId] : null, luckLine });
+  const luckUnitRaw = driestItemUnit(fields.name, stL);
+  const luckLine = luckUnitRaw ? `${luckUnitRaw.name} (${luckUnitRaw.dryness}% luckier than you)` : null;
+  const luckUnit = luckUnitRaw
+    ? { ...luckUnitRaw, icon: await petIconB64(luckUnitRaw.id, luckUnitRaw.name) }
+    : null;
+  // Overview redesign inputs: the clues tile count, the pets bar
+  // from the synced All Pets page (its total moves as the game
+  // adds pets), and the 99s bar against the live skill count.
+  const cluesTotal = stL && stL.kc && typeof stL.kc.clue_scrolls_all === 'number'
+    ? stL.kc.clue_scrolls_all : null;
+  let n99 = null;
+  let skillsTotal = null;
+  if (stL && stL.skills) {
+    const levels = SKILL_ORDER.map((k) => {
+      const e = stL.skills[k] || stL.skills[k === 'runecraft' ? 'runecrafting' : k];
+      return e && typeof e.level === 'number' ? e.level : null;
+    });
+    if (levels.every((v) => v !== null)) {
+      skillsTotal = levels.length;
+      n99 = levels.filter((v) => v === 99).length;
+    }
+  }
+  const petsPage = getCachedClogPageItems(fields.name, 'Other', 'All Pets');
+  const pets = petsPage && petsPage.total
+    ? { done: petsPage.obtained || 0, total: petsPage.total } : null;
+  const card = await fetchCard('/profile', { rsn: fields.name, ...fields, badge: lbBadgeIconById(pBadgeId), badgeWord: pBadgeId && !fields.accountLabel ? BADGE_WORDS[pBadgeId] : null, luckLine, luckUnit, cluesTotal, n99, skillsTotal, pets });
   if (card) return { files: [new AttachmentBuilder(card, { name: 'profile.png' })] };
   return CARD_DOWN;
 }
