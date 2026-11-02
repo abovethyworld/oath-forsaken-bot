@@ -9,7 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { atomicWrite } = require('./store');
-const { loadRsnLinks, normalizeRsnEntry, verifiedOwnerOf, renameLinkedRsn, markVerified } = require('./teams');
+const { loadRsnLinks, normalizeRsnEntry, verifiedOwnerOf, renameLinkedRsn, markVerified, moveBadgeStatement } = require('./teams');
 const { getPlayerById, getPlayerIdentity } = require('./wom');
 const { staffLog, recordPath } = require('./plugin-connect');
 
@@ -63,6 +63,7 @@ async function watchRenames(client) {
         continue;
       }
       if (!renameLinkedRsn(userId, rsn, newName)) continue;
+      moveBadgeStatement(userId, rsn, newName);
       const note = migrateRecord(userId, rsn, newName);
       await staffLog(client,
         `Rename confirmed by WOM: <@${userId}>'s **${rsn}** is now **${newName}**. Link updated${note ? `; ${note}` : ''}.`);

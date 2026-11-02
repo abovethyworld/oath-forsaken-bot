@@ -713,7 +713,8 @@ async function partyBoardFile(team, client) {
   let membersById = null;
   const needRoles = ids.some((id, i) => {
     const st = statsList[i];
-    return !getManualBadge(id) && !(st && !st.notFound && WOM_BADGE[st.accountType]);
+    const e = normalizeRsnEntry(links[id]);
+    return !(e && e.active && getStatedBadge(id, e.active)) && !(st && !st.notFound && WOM_BADGE[st.accountType]);
   });
   if (needRoles && client) {
     try {
@@ -755,7 +756,7 @@ async function partyBoardFile(team, client) {
       if (c && !c.notFound) clog = { obtained: c.obtained, total: c.total };
       if (!c || !c.fresh) clogRsns.push(rsn);
     }
-    const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null);
+    const badge = getBadge(id, membersById && membersById[id], st && !st.notFound ? st : null, rsn);
     return { name: rsn || (team.memberNames || {})[id] || 'member', stats, specs, kc, badge, clog };
   });
   if (!rows.some((r) => r.stats)) return null;
@@ -1419,8 +1420,20 @@ async function handleDefWorldModal(interaction) {
     .catch((err) => console.warn('Default world confirm failed:', err.message));
 }
 
-function badgeRows(userId) {
-  const current = getManualBadge(userId);
+// ─── Account Type: the account manager ───────────────────────────────
+// One account goes straight to its mode picker; several accounts get the
+// list first (find-a-team's Switch RSN shape), each account stating its
+// own mode from its own row.
+function badgePickerText(rsn) {
+  return (
+    `Account type for **${rsn}**.\n` +
+    'AUTO reads the account on Wise Old Man and picks its type for you. ' +
+    'Tap one below to set it by hand. (Group iron modes can\'t be detected automatically.)'
+  );
+}
+
+function badgePickerRows(userId, rsn) {
+  const current = getStatedBadge(userId, rsn);
   const rows = [];
   let row = new ActionRowBuilder();
   for (const b of BADGES) {
@@ -1430,17 +1443,16 @@ function badgeRows(userId) {
     }
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`team:badgeset:${b.id}`)
+        .setCustomId(`team:badgeset:${b.id}:${encodeURIComponent(rsn)}`)
         .setLabel(b.id === current ? `✓ ${b.label}` : b.label)
         .setStyle(b.id === current ? ButtonStyle.Danger : ButtonStyle.Secondary)
     );
   }
   if (row.components.length) rows.push(row);
-  // Clear row.
   rows.push(
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('team:badgeset:none')
+        .setCustomId(`team:badgeset:none:${encodeURIComponent(rsn)}`)
         .setLabel(current ? 'clear (use AUTO)' : 'AUTO')
         .setStyle(ButtonStyle.Secondary)
     )
@@ -1448,26 +1460,115 @@ function badgeRows(userId) {
   return rows;
 }
 
+function badgeAccountRows(userId) {
+  const entry = getRsnEntry(userId);
+  const rows = [];
+  let row = new ActionRowBuilder();
+  const push = (btn) => {
+    if (row.components.length >= 5) {
+      rows.push(row);
+      row = new ActionRowBuilder();
+    }
+    row.addComponents(btn);
+  };
+  for (const rsn of entry.rsns) {
+    const stated = getStatedBadge(userId, rsn);
+    const mark = rsn === entry.active ? '✓ ' : '';
+    const label = `${mark}${rsn} - ${stated ? badgeLabel(stated) : 'not set'}`.slice(0, 80);
+    push(
+      new ButtonBuilder()
+        .setCustomId(`team:badgeacct:${encodeURIComponent(rsn)}`)
+        .setLabel(label)
+        .setStyle(ButtonStyle.Danger)
+    );
+  }
+  push(
+    new ButtonBuilder().setCustomId('team:rsnadd').setLabel('Link new').setStyle(ButtonStyle.Danger).setEmoji('➕')
+  );
+  if (row.components.length) rows.push(row);
+  return rows;
+}
+
+const BADGE_MANAGER_TEXT =
+  'Pick an account to set its type.\n' +
+  'AUTO reads the account on Wise Old Man. Group iron modes can\'t be detected, pick those by hand.';
+
 async function handleBadgeButton(interaction) {
+  const entry = getRsnEntry(interaction.user.id);
+  if (!entry.rsns.length) {
+    await interaction
+      .reply({
+        content: 'Link your RuneScape name first, then set its account type.',
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('team:rsn')
+              .setLabel('Link RSN')
+              .setStyle(ButtonStyle.Danger)
+              .setEmoji('<:rsnlink:1561409641399853117>')
+          ),
+        ],
+        ephemeral: true,
+      })
+      .catch(() => {});
+    return;
+  }
+  if (entry.rsns.length === 1) {
+    await interaction
+      .reply({
+        content: badgePickerText(entry.active),
+        components: badgePickerRows(interaction.user.id, entry.active),
+        ephemeral: true,
+      })
+      .catch(() => {});
+    return;
+  }
   await interaction
-    .reply({
-      content: 'AUTO reads your linked RuneScape name and picks your account type for you. Tap one below to override it. (GIM can\'t be detected automatically, pick yours by hand.)',
-      components: badgeRows(interaction.user.id),
-      ephemeral: true,
-    })
+    .reply({ content: BADGE_MANAGER_TEXT, components: badgeAccountRows(interaction.user.id), ephemeral: true })
     .catch(() => {});
 }
 
-async function handleBadgeSet(interaction, badgeId) {
-  const picked = badgeId === 'none' ? null : badgeId;
-  setManualBadge(interaction.user.id, picked);
-  const label = picked ? (BADGES.find((b) => b.id === picked) || {}).label || picked : 'AUTO';
+async function handleBadgeAccountButton(interaction, enc) {
+  const rsn = decodeURIComponent(enc || '');
   await interaction
-    .update({
-      content: `Account type set to **${label}**.\nAUTO reads your linked RuneScape name and picks your account type for you. Tap one below to override it. (GIM can't be detected automatically, pick yours by hand.)`,
-      components: badgeRows(interaction.user.id),
-    })
+    .update({ content: badgePickerText(rsn), components: badgePickerRows(interaction.user.id, rsn) })
     .catch(() => {});
+}
+
+async function handleBadgeSet(interaction, badgeId, enc) {
+  const entry = getRsnEntry(interaction.user.id);
+  const rsn = enc ? decodeURIComponent(enc) : entry.active;
+  if (!rsn) return;
+  const picked = badgeId === 'none' ? null : badgeId;
+  if (picked && badgeValid(picked)) {
+    // Cross-check: refuse a pick that contradicts a type WOM can see.
+    const st = await getStats(rsn).catch(() => null);
+    const womBadge = st && !st.notFound ? WOM_BADGE[st.accountType] : null;
+    if (womBadge && ['ironman', 'hc', 'ult'].includes(womBadge) && picked !== womBadge) {
+      await interaction
+        .reply({
+          content: `**${rsn}** shows as ${BADGE_WORDS[womBadge]} on Wise Old Man, so it can't be set to ${badgeLabel(picked)}.`,
+          ephemeral: true,
+        })
+        .catch(() => {});
+      return;
+    }
+  }
+  setStatedBadge(interaction.user.id, rsn, picked);
+  await syncModeRoles(interaction.client, interaction.user.id);
+  const setLine = `**${rsn}** set to **${picked ? badgeLabel(picked) : 'AUTO'}**.`;
+  if (entry.rsns.length > 1) {
+    await interaction
+      .update({ content: `${setLine}\n${BADGE_MANAGER_TEXT}`, components: badgeAccountRows(interaction.user.id) })
+      .catch(() => {});
+  } else {
+    await interaction
+      .update({
+        content: `${badgePickerText(rsn)}\n\n${setLine}`,
+        components: badgePickerRows(interaction.user.id, rsn),
+      })
+      .catch(() => {});
+  }
   // Refresh open teams so the board picks up the badge now.
   await refreshUserTeams(interaction.client, interaction.user.id, boardApplies);
 }
@@ -1967,7 +2068,12 @@ async function handleRsnButton(interaction) {
   await interaction.showModal(modal).catch(() => {});
 }
 
-// ─── Account badges: manual pick overrides WOM type, else Discord role ──
+// ─── Account game-mode badges: per-account statements on find-a-team's bones ──
+// Each linked account carries its own stated mode in data/badges.json (v2).
+// Resolution everywhere: the account's stated mode, then WOM's type, then
+// (team boards only) the Discord role fallback. A statement keys to the
+// account's WOM player id once known (ids survive name changes), else to
+// the lowercase RSN; rename-watch moves RSN-keyed statements on a rename.
 const BADGES_FILE = path.join(__dirname, '..', 'data', 'badges.json');
 // Badge ids match assets/party-board/badge-icons/<id>.png.
 const BADGES = [
@@ -1975,19 +2081,64 @@ const BADGES = [
   { id: 'hc', label: 'HCIM' },
   { id: 'ult', label: 'UIM' },
   { id: 'gim', label: 'GIM' },
+  { id: 'ugim', label: 'UGIM' },
   { id: 'hcgim', label: 'HCGIM' },
   { id: 'main', label: 'MAIN' },
 ];
+const BADGE_WORDS = {
+  ironman: 'Ironman', hc: 'Hardcore Ironman', ult: 'Ultimate Ironman',
+  gim: 'Group Ironman', ugim: 'Unranked Group Ironman',
+  hcgim: 'Hardcore Group Ironman', main: 'Main', ironsworn: 'Iron Sworn',
+};
+// Game mode roles (the TYPE OF IRON set). Stating a mode grants its role;
+// main has no role in the set.
+const MODE_ROLES = {
+  ironman: '1558469085287682088', hc: '1558469100139716609',
+  ult: '1558469114903666798', gim: '1558469129650839705',
+  ugim: '1558469144381362246', hcgim: '1558469159950614610', main: null,
+};
 const IRON_SWORN_ROLE = '1558540424048803860';
 const UNBOUND_ROLE = '1558540434652008569';
 
+// WOM account types -> badge ids. Regular covers mains AND group irons
+// (WOM can't tell them apart), so regular maps to the main badge and
+// group badges are manual-only.
+const WOM_BADGE = { ironman: 'ironman', hardcore: 'hc', ultimate: 'ult', regular: 'main' };
+
+function badgeValid(id) {
+  return BADGES.some((b) => b.id === id);
+}
+
+function badgeLabel(id) {
+  const b = BADGES.find((x) => x.id === id);
+  return b ? b.label : id;
+}
+
 function loadBadges() {
+  let raw;
   try {
-    const raw = JSON.parse(fs.readFileSync(BADGES_FILE, 'utf8'));
-    return raw && typeof raw === 'object' ? raw : {};
+    raw = JSON.parse(fs.readFileSync(BADGES_FILE, 'utf8'));
   } catch {
-    return {};
+    return { users: {} };
   }
+  if (!raw || typeof raw !== 'object') return { users: {} };
+  if (raw.users && typeof raw.users === 'object') return raw;
+  // v1 migration: { userId: badgeId } becomes a statement on the member's
+  // active account. Runs once; the file is v2 from then on.
+  const users = {};
+  for (const [userId, badgeId] of Object.entries(raw)) {
+    if (!badgeValid(badgeId)) continue;
+    const rec = { accounts: {}, granted: [], pendingRoles: false };
+    const entry = getRsnEntry(userId);
+    if (entry && entry.active) {
+      const wid = entry.womIds ? entry.womIds[entry.active.toLowerCase()] : null;
+      rec.accounts[typeof wid === 'number' ? `w:${wid}` : `r:${entry.active.toLowerCase()}`] = badgeId;
+    }
+    users[userId] = rec;
+  }
+  const migrated = { users };
+  saveBadges(migrated);
+  return migrated;
 }
 
 function saveBadges(badges) {
@@ -1995,26 +2146,97 @@ function saveBadges(badges) {
   atomicWrite(BADGES_FILE, badges);
 }
 
-function getManualBadge(userId) {
-  const id = loadBadges()[userId];
-  return BADGES.some((b) => b.id === id) ? id : null;
+function badgeRec(all, userId, create) {
+  let rec = all.users[userId];
+  if (!rec && create) {
+    rec = { accounts: {}, granted: [], pendingRoles: false };
+    all.users[userId] = rec;
+  }
+  if (rec && !rec.accounts) rec.accounts = {};
+  if (rec && !Array.isArray(rec.granted)) rec.granted = [];
+  return rec || null;
 }
 
-function setManualBadge(userId, badgeId) {
-  const badges = loadBadges();
-  if (badgeId && BADGES.some((b) => b.id === badgeId)) badges[userId] = badgeId;
-  else delete badges[userId];
-  saveBadges(badges);
+function acctWomId(userId, rsn) {
+  const entry = getRsnEntry(userId);
+  const wid = entry && entry.womIds ? entry.womIds[String(rsn).toLowerCase()] : null;
+  return typeof wid === 'number' ? wid : null;
 }
 
-// WOM account types -> badge ids. Regular covers mains AND group irons
-// (WOM can't tell them apart), so regular maps to the main badge and
-// group badges are manual-only.
-const WOM_BADGE = { ironman: 'ironman', hardcore: 'hc', ultimate: 'ult', regular: 'main' };
+function getStatedBadge(userId, rsn) {
+  if (!userId || !rsn) return null;
+  const rec = badgeRec(loadBadges(), userId, false);
+  if (!rec) return null;
+  const wid = acctWomId(userId, rsn);
+  if (wid !== null && badgeValid(rec.accounts[`w:${wid}`])) return rec.accounts[`w:${wid}`];
+  const byRsn = rec.accounts[`r:${String(rsn).toLowerCase()}`];
+  return badgeValid(byRsn) ? byRsn : null;
+}
 
-function getBadge(userId, member, stats) {
-  const manual = getManualBadge(userId);
-  if (manual) return manual;
+function setStatedBadge(userId, rsn, badgeId) {
+  const all = loadBadges();
+  const rec = badgeRec(all, userId, true);
+  const wid = acctWomId(userId, rsn);
+  delete rec.accounts[`r:${String(rsn).toLowerCase()}`];
+  if (wid !== null) delete rec.accounts[`w:${wid}`];
+  if (badgeId && badgeValid(badgeId)) {
+    rec.accounts[wid !== null ? `w:${wid}` : `r:${String(rsn).toLowerCase()}`] = badgeId;
+  }
+  saveBadges(all);
+}
+
+// Called by rename-watch right after renameLinkedRsn moves a link (and its
+// WOM id): carry the account's statement to the new name.
+function moveBadgeStatement(userId, oldRsn, newRsn) {
+  const badge = getStatedBadge(userId, oldRsn);
+  if (!badge) return;
+  const all = loadBadges();
+  const rec = badgeRec(all, userId, false);
+  if (rec) {
+    delete rec.accounts[`r:${String(oldRsn).toLowerCase()}`];
+    saveBadges(all);
+  }
+  setStatedBadge(userId, newRsn, badge);
+}
+
+function hasAnyStatement(userId) {
+  const rec = badgeRec(loadBadges(), userId, false);
+  return !!(rec && Object.values(rec.accounts).some(badgeValid));
+}
+
+function linkOwnerOf(rsn) {
+  if (!rsn) return null;
+  const want = String(rsn).toLowerCase();
+  const links = loadRsnLinks();
+  for (const [userId, raw] of Object.entries(links)) {
+    const entry = normalizeRsnEntry(raw);
+    if (entry && entry.rsns.some((r) => r.toLowerCase() === want)) return userId;
+  }
+  return null;
+}
+
+// The one badge chain for cards and pages: the account's stated mode, else
+// WOM's type for the account. No role fallback (no member context there).
+function badgeForAccount(rsn, accountType) {
+  const owner = linkOwnerOf(rsn);
+  if (owner) {
+    const stated = getStatedBadge(owner, rsn);
+    if (stated) return stated;
+  }
+  return accountType && WOM_BADGE[accountType] ? WOM_BADGE[accountType] : null;
+}
+
+// Team boards: statement for the row's account, then WOM, then roles.
+function getBadge(userId, member, stats, rsn) {
+  if (rsn) {
+    const stated = getStatedBadge(userId, rsn);
+    if (stated) return stated;
+  } else if (hasAnyStatement(userId)) {
+    // Legacy callers without an account: a lone statement wins.
+    const rec = badgeRec(loadBadges(), userId, false);
+    const vals = rec ? Object.values(rec.accounts).filter(badgeValid) : [];
+    if (vals.length === 1) return vals[0];
+  }
   if (stats && WOM_BADGE[stats.accountType]) return WOM_BADGE[stats.accountType];
   const roles = (member && member.roles && member.roles.cache) || null;
   if (roles) {
@@ -2022,6 +2244,72 @@ function getBadge(userId, member, stats) {
     if (roles.has(UNBOUND_ROLE)) return 'main';
   }
   return null;
+}
+
+// Legacy wrappers (active account) so older callers keep working.
+function getManualBadge(userId) {
+  const entry = getRsnEntry(userId);
+  return entry && entry.active ? getStatedBadge(userId, entry.active) : null;
+}
+
+function setManualBadge(userId, badgeId) {
+  const entry = getRsnEntry(userId);
+  if (entry && entry.active) setStatedBadge(userId, entry.active, badgeId);
+}
+
+// ─── Game mode role sync ─────────────────────────────────────────────
+// A member's mode roles are the union across their stated accounts. The
+// bot only removes roles it granted itself (tracked per member); roles
+// taken by hand on the #roles panel are never touched.
+function wantedModeRoles(userId) {
+  const rec = badgeRec(loadBadges(), userId, false);
+  if (!rec) return [];
+  const out = new Set();
+  for (const badgeId of Object.values(rec.accounts)) {
+    const role = MODE_ROLES[badgeId];
+    if (role) out.add(role);
+  }
+  return [...out];
+}
+
+async function syncModeRoles(client, userId) {
+  const all = loadBadges();
+  const rec = badgeRec(all, userId, false);
+  if (!rec) return;
+  const finish = (pending) => {
+    rec.pendingRoles = pending;
+    saveBadges(all);
+  };
+  try {
+    const guild = client && client.guilds
+      ? (client.guilds.cache.get(config.guildId) || (await client.guilds.fetch(config.guildId).catch(() => null)))
+      : null;
+    if (!guild) return finish(true);
+    const member = await guild.members.fetch(userId).catch(() => null);
+    if (!member) return finish(true);
+    const wanted = wantedModeRoles(userId);
+    const granted = new Set(rec.granted);
+    for (const roleId of wanted) {
+      if (member.roles.cache.has(roleId)) continue;
+      const updated = await member.roles.add(roleId).catch(() => null);
+      if (updated) granted.add(roleId);
+    }
+    for (const roleId of [...granted]) {
+      if (wanted.includes(roleId)) continue;
+      const updated = await member.roles.remove(roleId).catch(() => null);
+      if (updated) granted.delete(roleId);
+    }
+    rec.granted = [...granted];
+    finish(false);
+  } catch {
+    finish(true);
+  }
+}
+
+// Retry a role sync that could not run (e.g. the pick happened in a DM).
+async function maybeSyncModeRoles(client, userId) {
+  const rec = badgeRec(loadBadges(), userId, false);
+  if (rec && rec.pendingRoles) await syncModeRoles(client, userId);
 }
 
 // ─── User defaults: region + party hub, set from the panel ──
@@ -3298,7 +3586,8 @@ async function handleTeamButton(interaction) {
   if (action === 'rsnset') return handleRsnSet(interaction, parts[2]);
   if (action === 'rsnadd') return handleRsnAddButton(interaction);
   if (action === 'badge') return handleBadgeButton(interaction);
-  if (action === 'badgeset') return handleBadgeSet(interaction, parts[2]);
+  if (action === 'badgeset') return handleBadgeSet(interaction, parts[2], parts[3]);
+  if (action === 'badgeacct') return handleBadgeAccountButton(interaction, parts[2]);
   if (action === 'teamsize') return handleTeamSizeButton(interaction, parts[2]);
   if (action === 'teamsizeset') return handleTeamSizeSet(interaction, parts[2], parts[3]);
   if (action === 'teamworld') return handleTeamWorldButton(interaction, parts[2]);
@@ -3502,6 +3791,14 @@ module.exports = {
   getBadge,
   getManualBadge,
   setManualBadge,
+  getStatedBadge,
+  setStatedBadge,
+  moveBadgeStatement,
+  badgeForAccount,
+  linkOwnerOf,
+  syncModeRoles,
+  maybeSyncModeRoles,
+  BADGE_WORDS,
   BADGES,
   shouldSweepTeam,
   shouldAutoClose,
