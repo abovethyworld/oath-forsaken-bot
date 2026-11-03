@@ -28,7 +28,7 @@ const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
-const { scheduleEphemeralDelete } = require('./auto-delete');
+const { scheduleEphemeralDelete, scheduleMessageDelete, isPlainEphemeralNote } = require('./auto-delete');
 const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
@@ -179,6 +179,23 @@ client.once(Events.ClientReady, async (c) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    // Plain ephemeral notes (expired-card notes, cooldown notes, error
+    // notes) auto-delete after 10 minutes, wherever they are sent
+    // from. Anything with components, embeds or files is left alone.
+    if (typeof interaction.reply === 'function') {
+      const origReply = interaction.reply.bind(interaction);
+      interaction.reply = async (opts) => {
+        const out = await origReply(opts);
+        if (isPlainEphemeralNote(opts)) scheduleEphemeralDelete(interaction);
+        return out;
+      };
+      const origFollowUp = interaction.followUp.bind(interaction);
+      interaction.followUp = async (opts) => {
+        const out = await origFollowUp(opts);
+        if (isPlainEphemeralNote(opts)) scheduleMessageDelete(out);
+        return out;
+      };
+    }
     if (interaction.isChatInputCommand()) {
       // Cooldown: 3s per user per command (prevents spam)
       const cooldownKey = `${interaction.user.id}:${interaction.commandName}`;
@@ -188,7 +205,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply({
           content: 'Slow down a moment.',
           ephemeral: true,
-        }).then(() => scheduleEphemeralDelete(interaction)).catch(() => {});
+        }).catch(() => {});
         return;
       }
       cooldowns.set(cooldownKey, now);
