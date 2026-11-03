@@ -279,6 +279,7 @@ function pageUnits(counters, pageItems) {
           id: s.pieces[0], name: s.name, has: sc.complete,
           pieces: s.mode === 'pieces'
             ? `${sc.effectiveQty}/${s.pieces.length}` : null,
+          sources: s.sources || [], isSet: true,
           ...sc,
         });
       }
@@ -287,7 +288,7 @@ function pageUnits(counters, pageItems) {
     const t = TABLE[String(id)];
     if (!t) continue;
     const sc = scoreEntry(t, counters, qtyOfItem(it));
-    if (sc) units.push({ id, name: t.name, has: qtyOfItem(it) > 0, ...sc });
+    if (sc) units.push({ id, name: t.name, has: qtyOfItem(it) > 0, sources: t.sources || [], ...sc });
   }
   return units;
 }
@@ -319,6 +320,21 @@ function luckForPage(counters, pageItems) {
   return { word, dry };
 }
 
+// What sits behind a scored unit, for display: the activity
+// count its score is measured against (the counters of its
+// sources, each counted once) and its drop rate when every
+// source shares a single one. Sets carry no single rate: their
+// pieces drop at their own rates.
+function unitDropInfo(u, counters) {
+  const srcs = u.sources || [];
+  const keys = [...new Set(srcs.map((s) => s.c))];
+  const kc = keys.reduce(
+    (a, c) => a + (counters && typeof counters[c] === 'number' ? counters[c] : 0), 0);
+  const rates = [...new Set(srcs.map((s) => s.rate)
+    .filter((r) => typeof r === 'number' && r > 0))];
+  return { kc: kc > 0 ? kc : null, rate: !u.isSet && rates.length === 1 ? rates[0] : null };
+}
+
 // !dry breakdown: every scored unit on the page with its
 // percentile, missing driest first, obtained luckiest
 // first, plus the page verdict.
@@ -327,7 +343,10 @@ function dryReport(counters, pageItems) {
   const units = pageUnits(counters, pageItems);
   if (!units.length) return null;
   const missing = units.filter((u) => !u.has)
-    .map((u) => ({ id: u.id, name: u.name, score: u.score, pieces: u.pieces || undefined }));
+    .map((u) => ({
+      id: u.id, name: u.name, score: u.score, pieces: u.pieces || undefined,
+      ...unitDropInfo(u, counters),
+    }));
   const obtained = units.filter((u) => u.has)
     .map((u) => ({ id: u.id, name: u.name, score: u.score }));
   missing.sort((x, y) => x.score - y.score);
