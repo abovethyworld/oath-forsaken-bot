@@ -666,6 +666,11 @@ async function t(name, fn, needFile = true) {
   ok('dry rate: clue page blended rate', !!pageRow && pageRow.rate > 0.007 && pageRow.rate < 0.009,
     pageRow && String(pageRow.rate));
   ok('dry rate: clue page kc sums tiers', !!pageRow && pageRow.kc === 150);
+  const shard = L.dryReport({ commander_zilyana: 466 }, [{ id: 11822, quantity: 0 }]);
+  const shardRow = shard && shard.missing[0];
+  ok('dry rate: shared single rate shows as-is', !!shardRow
+    && Math.abs(shardRow.rate - 0.0006561679790026247) < 1e-9 && shardRow.kc === 466,
+    shardRow && String(shardRow.rate));
   async function fakeDryMsg(userId, args) {
     const replies = [];
     const msg = {

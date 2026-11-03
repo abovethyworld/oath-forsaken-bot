@@ -323,27 +323,39 @@ function luckForPage(counters, pageItems) {
 
 // What sits behind a scored unit, for display: the activity
 // count its score is measured against (the counters of its
-// sources, each counted once) and a per-attempt drop rate.
-// Entries fed by several counters (clue pages and blessings
-// drop from every tier) blend their sources by the attempts
-// the player actually has at each, rolls folded in, so the
-// rate is per KC shown. A pieces-mode set scores any piece,
-// so its rate scales by the piece count.
+// sources, each counted once) and a drop rate. When every
+// attempted source shares one rate, that rate shows as-is.
+// Entries fed by several counters at different rates (clue
+// pages and blessings drop from every tier) blend their
+// sources by the attempts the player actually has at each,
+// rolls folded in, so the rate is per KC shown. A
+// pieces-mode set scores any piece, so its rate scales by
+// the piece count first.
 function unitDropInfo(u, counters) {
   const srcs = u.sources || [];
   const keys = [...new Set(srcs.map((s) => s.c))];
   const kc = keys.reduce(
     (a, c) => a + (counters && typeof counters[c] === 'number' ? counters[c] : 0), 0);
   if (u.isSet && u.setMode !== 'pieces') return { kc: kc > 0 ? kc : null, rate: null };
+  const attempted = srcs
+    .map((s) => ({
+      n: counters && typeof counters[s.c] === 'number' ? counters[s.c] : 0,
+      rate: typeof s.rate === 'number' ? s.rate : 0,
+      rolls: s.rolls || 1,
+    }))
+    .filter((s) => s.n > 0 && s.rate > 0)
+    .map((s) => (u.isSet
+      ? { ...s, rate: Math.min(1, s.rate * (u.pieceCount || 1)) } : s));
+  if (!attempted.length) return { kc: kc > 0 ? kc : null, rate: null };
+  // One rate behind every attempted source: show it as-is,
+  // the figure the drop tables quote.
+  const distinct = [...new Set(attempted.map((s) => s.rate))];
+  if (distinct.length === 1) return { kc: kc > 0 ? kc : null, rate: distinct[0] };
   let weighted = 0;
   let attempts = 0;
-  for (const s of srcs) {
-    const n = counters && typeof counters[s.c] === 'number' ? counters[s.c] : 0;
-    if (n <= 0 || typeof s.rate !== 'number' || s.rate <= 0) continue;
-    let p = s.rate;
-    if (u.isSet) p = Math.min(1, p * (u.pieceCount || 1));
-    weighted += n * (1 - Math.pow(1 - p, s.rolls || 1));
-    attempts += n;
+  for (const s of attempted) {
+    weighted += s.n * (1 - Math.pow(1 - s.rate, s.rolls));
+    attempts += s.n;
   }
   return { kc: kc > 0 ? kc : null, rate: attempts > 0 ? weighted / attempts : null };
 }
