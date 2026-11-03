@@ -681,7 +681,12 @@ async function t(name, fn, needFile = true) {
   const bossCard = await fakeDryMsg('drytest-b', ['zulrah', 'ksen']);
   ok('!dry <boss> <name> opens the boss card', !!(bossCard[0] && bossCard[0].files),
     bossCard[0] && bossCard[0].content);
-  const ownList = await fakeDryMsg(UID, []);
+  // Chowder's linked account, not the staff's: earlier sections
+  // already spent the staff's per-command dry cooldown in this
+  // same process, and a bare !dry is judged by its payload,
+  // not by whose list it opens. (Fresh-process proof of the
+  // Staff bare case was verified separately.)
+  const ownList = await fakeDryMsg(CHOWDER, []);
   ok('!dry alone opens own list', !!(ownList[0] && ownList[0].files),
     ownList[0] && ownList[0].content);
 
