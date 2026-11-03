@@ -28,6 +28,18 @@ function scheduleMessageDelete(message, delayMs = AUTO_DELETE_MS) {
   return timer;
 }
 
+// How long a plain note lives, by what it is (tiered Nov 2, 2026):
+// spam and cooldown notes are done in seconds, expired-card notes
+// just say rerun the command, and the rest are error notes worth a
+// few minutes to act on. /help keeps the full 10 (reading material)
+// through its own explicit wiring, not this table.
+function delayForNote(content) {
+  const text = String(content || '');
+  if (text.startsWith('Slow down') || text.startsWith('Cooldown:')) return 60 * 1000;
+  if (text.includes('expired')) return 2 * 60 * 1000;
+  return 5 * 60 * 1000;
+}
+
 // A plain ephemeral note: text only, nothing to press, keep or open.
 function isPlainEphemeralNote(opts) {
   if (!opts || typeof opts !== 'object') return false;
@@ -43,5 +55,6 @@ module.exports = {
   scheduleEphemeralDelete,
   scheduleMessageDelete,
   isPlainEphemeralNote,
+  delayForNote,
   AUTO_DELETE_MS,
 };
