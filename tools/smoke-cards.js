@@ -288,8 +288,12 @@ async function t(name, fn, needFile = true) {
   let toClues = null;
   await S.handleBridgeButton({ customId: 'bridge:clues:-:IronVale', user: { id: GAVIN },
     update: async (p) => { toClues = p; }, reply: async (p) => { toClues = p; } });
-  ok('bridge to clues lands with no stale buttons',
-    !!(toClues && toClues.files) && Array.isArray(toClues.components) && toClues.components.length === 0);
+  // The summary carries its own Profile button now (hub wave);
+  // the landing must show that, never the stale bridge row.
+  ok('bridge to clues lands with its Profile button, no stale bridge row',
+    !!(toClues && toClues.files)
+      && flat(toClues).some((c) => c.id.startsWith('prof:clogs:clues:'))
+      && !flat(toClues).some((c) => c.id.startsWith('bridge:')));
   const dryHard = await S.dryPayload('clue:hard', 'IronVale', GAVIN);
   ok('dry renders for hard clues', hasFile(dryHard),
     dryHard && dryHard.content ? dryHard.content.slice(0, 80) : '');
@@ -315,7 +319,8 @@ async function t(name, fn, needFile = true) {
     update: async (p) => { oldLanding = p; }, reply: async (p) => { oldLanding = p; } });
   ok('pre-origin Clues buttons still land clean',
     !!(oldLanding && oldLanding.files)
-      && Array.isArray(oldLanding.components) && oldLanding.components.length === 0);
+      && flat(oldLanding).some((c) => c.id.startsWith('prof:clogs:clues:'))
+      && !flat(oldLanding).some((c) => c.id.startsWith('bridge:')));
   const u2 = '999000111';
   S.noteUse(u2, 'kc');
   ok('cooldown blocks the same family', S.checkCooldown(u2, 'kc').wait > 0);
