@@ -28,7 +28,7 @@ const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
-const { scheduleEphemeralDelete, scheduleMessageDelete, isPlainEphemeralNote } = require('./auto-delete');
+const { scheduleEphemeralDelete, scheduleMessageDelete, isPlainEphemeralNote, delayForNote } = require('./auto-delete');
 const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
@@ -186,13 +186,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const origReply = interaction.reply.bind(interaction);
       interaction.reply = async (opts) => {
         const out = await origReply(opts);
-        if (isPlainEphemeralNote(opts)) scheduleEphemeralDelete(interaction);
+        if (isPlainEphemeralNote(opts)) scheduleEphemeralDelete(interaction, delayForNote(opts.content));
         return out;
       };
       const origFollowUp = interaction.followUp.bind(interaction);
       interaction.followUp = async (opts) => {
         const out = await origFollowUp(opts);
-        if (isPlainEphemeralNote(opts)) scheduleMessageDelete(out);
+        if (isPlainEphemeralNote(opts)) scheduleMessageDelete(out, delayForNote(opts.content));
         return out;
       };
     }
