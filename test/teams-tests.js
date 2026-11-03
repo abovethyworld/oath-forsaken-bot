@@ -20,6 +20,7 @@ const {
   applyLeave,
   applyRoleClaim,
   buildTeamFromData,
+  buildTeamBoardBody,
   creationStepsFor,
   activityRoleId,
   buildTeamEmbed,
@@ -53,7 +54,7 @@ const {
 const { combatLevel, parseStats, cacheLookup, CACHE_MS } = require('../src/wom');
 const { parseClogPage, parseClogTotal, clogCacheKey } = require('../src/runeprofile');
 const { progressBar, prettyMetric } = require('../src/showoff');
-const { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey } = require('../src/party-board');
+const { shortDisplayName, bossIconKey } = require('../src/party-board');
 const { ZAMORAK_RED } = require('../src/utils');
 const config = require('../src/config');
 
@@ -741,15 +742,19 @@ test('progressBar and prettyMetric format show-off output', () => {
   assert.strictEqual(progressBar(0, 0), '░░░░░░░░░░ 0/0 (0%)');
 });
 
-test('renderPartyBoard draws a clog column in skill mode', () => {
+test('team board body: skill mode carries one column plus the clog column', () => {
   const rows = [
     { name: 'IronVale', stats: [99], specs: [], kc: [1240], badge: 'main', clog: { obtained: 15, total: 17 } },
     { name: 'other', stats: [87], specs: [], kc: [412], badge: null, clog: null },
   ];
-  const buf = renderPartyBoard(rows, 0, { kcColumns: [{ metric: 'wintertodt', icon: 'wintertodt' }], skill: 'firemaking', clogColumn: true });
-  assert.ok(buf && buf.length > 1000, 'board with clog column renders');
-  const buf2 = renderPartyBoard([{ name: 'IronVale', stats: [91], specs: [], kc: [], badge: null }], 0, { kcColumns: [], skill: 'agility', clogColumn: false });
-  assert.ok(buf2 && buf2.length > 1000, 'WAG board renders without clog');
+  const body = buildTeamBoardBody({ activity: 'wintertodt' }, rows, { kcColumns: [{ metric: 'wintertodt', icon: 'wintertodt' }], skill: 'firemaking', clogColumn: true });
+  assert.deepStrictEqual(body.columns, ['firemaking'], 'single skill column');
+  assert.strictEqual(body.clogColumn, true, 'clog column on');
+  assert.deepStrictEqual(body.rows[0].clog, { obtained: 15, total: 17 }, 'clog counts carried');
+  assert.strictEqual(typeof body.kcColumns[0].icon, 'string', 'boss icon ships as base64');
+  const wag = buildTeamBoardBody({ activity: 'wag' }, [{ name: 'IronVale', stats: [91], specs: [], kc: [], badge: null }], { kcColumns: [], skill: 'agility', clogColumn: false });
+  assert.strictEqual(wag.kcColumns.length, 0, 'WAG body has no KC column');
+  assert.strictEqual(wag.clogColumn, false, 'WAG body has no clog column');
 });
 
 test('kcColumnsForTeam: minigames use WOM activity metrics, WAG none', () => {
@@ -820,18 +825,16 @@ test('bossIconKey maps directly (all icons exist now)', () => {
   assert.equal(bossIconKey('the_hueycoatl'), 'the_hueycoatl');
 });
 
-test('renderPartyBoard accepts a kc per row', () => {
-  const { renderPartyBoard } = require('../src/party-board');
-  const buf = renderPartyBoard(
+test('team board body accepts a kc per row', () => {
+  const body = buildTeamBoardBody({ activity: 'nex' },
     [{ name: 'IronVale', stats: [124, 99, 99, 99, 99, 98, 99, 85], specs: [], kc: 1240 }],
-    0
-  );
-  assert.ok(Buffer.isBuffer(buf) && buf.length > 1000, 'renders with kc');
-  const buf2 = renderPartyBoard(
+    { kcColumns: [{ metric: 'nex', icon: 'nex' }] });
+  assert.deepStrictEqual(body.rows[0].kc, [1240], 'scalar kc becomes a one-column array');
+  const empty = buildTeamBoardBody({ activity: 'nex' },
     [{ name: 'Nobody', stats: null, specs: [], kc: null }],
-    0
-  );
-  assert.ok(Buffer.isBuffer(buf2), 'renders without kc');
+    { kcColumns: [{ metric: 'nex', icon: 'nex' }] });
+  assert.strictEqual(empty.rows[0].stats, null, 'no stats stays null');
+  assert.deepStrictEqual(empty.rows[0].kc, [null], 'missing kc stays null');
 });
 
 test('SPECS has eighteen weapons in three categories with unique ids', () => {
@@ -954,14 +957,15 @@ test('settings panel shows current defaults and five buttons', () => {
   assert.strictEqual(boardBtn.label, 'Board: Complex');
 });
 
-test('renderPartyBoard compact mode skips spec rows', () => {
+test('team board body compact mode drops spec rows', () => {
   const rows = [
     { name: 'IronVale', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker'], kc: 10, badge: 'ironman' },
   ];
-  const full = renderPartyBoard(rows, 0, {});
-  const compact = renderPartyBoard(rows, 0, { compact: true });
-  assert.ok(Buffer.isBuffer(compact) && compact.length > 1000, 'renders');
-  assert.ok(compact.length < full.length, 'compact is smaller than full');
+  const full = buildTeamBoardBody({ activity: 'nex' }, rows, {});
+  assert.deepStrictEqual(full.rows[0].specs, ['bgs', 'voidwaker'], 'full body keeps the spec ids');
+  const compact = buildTeamBoardBody({ activity: 'nex' }, rows, { compact: true });
+  assert.deepStrictEqual(compact.rows[0].specs, [], 'compact body drops the spec ids');
+  assert.deepStrictEqual(compact.specIcons, {}, 'compact body ships no spec icons');
 });
 
 test('combatLevel matches the OSRS formula', () => {
@@ -1020,20 +1024,14 @@ test('cacheLookup reports fresh/stale and misses cleanly', () => {
   assert.strictEqual(stale.stats, stats);
 });
 
-test('renderPartyBoard produces a valid PNG', () => {
-  const buf = renderPartyBoard(
-    [{ name: 'Alex', stats: [126, 99, 99, 99, 99, 99, 99, 99] }, { name: 'NoLink', stats: null }],
-    0
-  );
-  assert.ok(Buffer.isBuffer(buf), 'returns a buffer');
-  assert.deepStrictEqual(buf.subarray(0, 8), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'PNG signature');
-  assert.strictEqual(renderPartyBoard([], 0), null, 'no rows -> null');
-});
-
-test('boardHeight grows with rows and caps', () => {
-  assert.ok(boardHeight(20) === boardHeight(15), 'capped at MAX_ROWS');
-  assert.ok(boardHeight(4) < boardHeight(8), 'grows with rows');
-  assert.ok(boardHeight(12) < boardHeight(13), '+N more footer appears past the cap');
+test('team board body caps rows at 12 and counts the overflow', () => {
+  const rows = Array.from({ length: 15 }, (_, i) => (
+    { name: `P${i}`, stats: [100, 90, 90, 90, 90, 90, 90, 90], specs: [], kc: [i], badge: null }
+  ));
+  const body = buildTeamBoardBody({ activity: 'nex' }, rows, { kcColumns: [{ metric: 'nex', icon: 'nex' }] });
+  assert.strictEqual(body.rows.length, 12, 'rows capped at 12');
+  assert.strictEqual(body.extraCount, 3, 'overflow counted for the footer');
+  assert.strictEqual(body.memberCount, 15, 'member count keeps the full roster');
 });
 
 test('shortDisplayName truncates long names', () => {
@@ -1073,13 +1071,18 @@ test('getBadge: manual beats WOM beats role', () => {
   }
 });
 
-test('renderPartyBoard draws badges and stacked spec groups', () => {
+test('team board body carries badge and spec icons as base64', () => {
   const rows = [
     { name: 'Irons', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker', 'sgs'], kc: 10, badge: 'ironman' },
     { name: 'Mains', stats: [100, 70, 70, 70, 70, 70, 70, 60], specs: [], kc: null, badge: 'main' },
   ];
-  const buf = renderPartyBoard(rows, 0, {});
-  assert.ok(Buffer.isBuffer(buf) && buf.length > 1000, 'renders a board');
+  const body = buildTeamBoardBody({ activity: 'nex' }, rows, {});
+  assert.strictEqual(typeof body.rows[0].badge, 'string', 'ironman badge ships as base64');
+  assert.strictEqual(typeof body.rows[1].badge, 'string', 'main badge ships as base64');
+  for (const id of ['bgs', 'voidwaker', 'sgs']) {
+    assert.strictEqual(typeof body.specIcons[id], 'string', `${id} icon ships as base64`);
+  }
+  assert.strictEqual(body.title, 'Nex', 'title is the activity name');
 });
 
 test('mutateTeams serializes concurrent mutations (no lost updates)', async () => {

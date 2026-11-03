@@ -1,7 +1,9 @@
-// Party board renderer: draws the OSRS-style combat-stat board as a PNG
-// with zero native dependencies (pure JS, keeps the Docker build portable).
-// Assets in assets/party-board/: 8 real OSRS skill icons + a pre-rendered
-// bitmap font atlas (generated once with PIL, see /tmp/party-mockups/gen-atlas.py).
+// Shared PNG plumbing and icon assets for the card commands: a pure-JS
+// PNG codec (zero native dependencies, keeps the Docker build portable),
+// the bitmap font atlas, and the decoded icon sets under
+// assets/party-board/. The find-a-team board image itself is drawn by
+// the card service (see render_team_board in card_service.py); the bot
+// ships it the row data plus these icons as base64.
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
@@ -10,14 +12,6 @@ const ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
 
 // Column order: combat, attack, strength, ranged, magic, defence, hitpoints, prayer.
 const COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
-
-const BOARD_W = 1630;
-const NAME_W = 520;
-const COL_W = 106;
-const KC_COL_W = 220;
-const HEADER_H = 96;
-const ICON_SIZE = 60;
-
 
 // Crop an icon to its ink bounding box (+pad) so thin shapes like weapons
 // fill the box they're drawn in instead of floating in empty canvas.
@@ -44,7 +38,6 @@ function inkCrop(icon, pad = 2) {
   }
   return { w: cw, h: ch, rgba: out };
 }
-const MAX_ROWS = 12;
 const MAX_NAME_CHARS = 14;
 
 // ─── CRC32 ──────────────────────────────────────────────────────────
@@ -192,13 +185,6 @@ function decodePng(buf) {
 let atlas = null; // { img, glyphs }
 let atlasSmall = null; // 22px variant for labels
 
-const SPEC_LABELS = {
-  bgs: 'BGS', dwh: 'DWH', eldermaul: 'ELDER MAUL', tonalztics: 'TONALZTICS',
-  accursed: 'ACCURSED', emberlight: 'EMBERLIGHT', crystalhalberd: 'C HALBERD',
-  eyeofayak: 'EYE OF AYAK', soulflame: 'SOULFLAME', zcb: 'ZCB',
-  voidwaker: 'VOIDWAKER', dragonclaws: 'D CLAWS', burningclaws: 'B CLAWS',
-  webweaver: 'WEBWEAVER', crimsonkisten: 'KISTEN', sgs: 'SGS', zgs: 'ZGS', dinhs: "DINH'S",
-};
 const icons = {}; // name -> { w, h, rgba }
 const specIcons = {}; // spec id -> { w, h, rgba }
 const bossIcons = {}; // WOM metric -> { w, h, rgba }
@@ -379,147 +365,6 @@ function hline(dst, y, x0, x1, r, g, b, thickness) {
 function shortDisplayName(name) {
   const s = String(name || 'member');
   return s.length > MAX_NAME_CHARS ? `${s.slice(0, MAX_NAME_CHARS - 1)}…` : s;
-}
-
-// rows: [{ name, stats: [cb,atk,str,rng,mag,def,hp,pry] | null, specs: [specId] }]
-// extraCount: members beyond MAX_ROWS not shown.
-// Layout: line 1 has badge + name + stats; below it, spec-weapon icons
-// stacked by category (Defense Lowering, Offensive, Utility), each with
-// a small header. Row height grows with the number of non-empty groups.
-const SPEC_CAT_ORDER = [
-  ['DEFENSE LOWERING', ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'accursed', 'crystalhalberd', 'emberlight', 'eyeofayak']],
-  ['OFFENSIVE', ['soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'webweaver', 'crimsonkisten']],
-  ['UTILITY', ['sgs', 'zgs', 'dinhs']],
-];
-const GROUP_H = 160;
-// Compact mode (hidden for now): one short row per member, no spec
-// icons. For dense teams where the full board gets too tall.
-const COMPACT_ROW_H = 68;
-function specGroupsFor(specs) {
-  const known = (specs || []).filter((id) => specIcons[id]);
-  return SPEC_CAT_ORDER
-    .map(([catName, catIds]) => [catName, known.filter((id) => catIds.includes(id))])
-    .filter(([, ids]) => ids.length);
-}
-function rowHeightFor(specs) {
-  return 62 + specGroupsFor(specs).length * GROUP_H;
-}
-const BADGE_H = 48;
-function renderPartyBoard(rows, extraCount, opts = {}) {
-  loadAssets();
-  if (!rows.length) return null;
-  const compact = !!opts.compact;
-  const shown = rows.slice(0, MAX_ROWS);
-  // Skill mode (minigame boards): a single skill level column instead of the
-  // combat stat columns, no spec rows. The row stats array holds one value.
-  const columns = opts.skill ? [opts.skill] : COLUMNS;
-  const statsW = COL_W * columns.length;
-  // KC columns: [{ icon: 'metric_key' }] or [{ label: 'Text' }]. Defaults to
-  // the legacy single bossIcon column.
-  const kcCols = opts.kcColumns || (opts.bossIcon ? [{ icon: opts.bossIcon }] : []);
-  const kcColW = kcCols.length > 1 ? 260 : KC_COL_W;
-  const kcW = kcColW * kcCols.length;
-  // Optional clog column (minigame boards): RuneProfile page counts.
-  const clogW = opts.clogColumn ? KC_COL_W : 0;
-  const gridW = NAME_W + statsW + kcW + clogW;
-  // A slim board for skill mode: no wide margins, grid fills the canvas.
-  const boardW = opts.skill ? gridW + 48 : BOARD_W - KC_COL_W + kcW + clogW;
-  const ox = Math.round((boardW - gridW) / 2);
-  const kcCx = (i) => ox + NAME_W + statsW + kcColW * i + kcColW / 2;
-  const clogCx = ox + NAME_W + statsW + kcW + KC_COL_W / 2;
-  const footerH = extraCount > 0 ? 56 : 24;
-  const H = compact
-    ? HEADER_H + COMPACT_ROW_H * shown.length + footerH
-    : HEADER_H + shown.reduce((a, r) => a + rowHeightFor(r.specs), 0) + footerH;
-  const cv = newCanvas(boardW, H, 26, 18, 16);
-
-  // Icon header. Each KC column gets its boss icon (WOM's) or a text
-  // label, falling back to "KC" when neither is set.
-  const cy = HEADER_H / 2;
-  columns.forEach((name, i) => {
-    const cx = ox + NAME_W + COL_W * i + COL_W / 2;
-    drawIcon(cv, icons[name], cx, cy, ICON_SIZE);
-  });
-  kcCols.forEach((col, i) => {
-    const cx = kcCx(i);
-    const icon = col.icon && bossIcons[bossIconKey(col.icon)];
-    if (icon) drawIcon(cv, icon, cx, cy, 64);
-    else if (col.label) drawCentered(cv, cx, Math.round(cy - 11), col.label, [180, 180, 180], atlasSmall || atlas);
-    else drawCentered(cv, cx, Math.round(cy - 22), 'KC');
-  });
-  if (opts.clogColumn) {
-    drawCentered(cv, clogCx, Math.round(cy - 22), 'CLOG', [180, 180, 180]);
-  }
-
-  let y = HEADER_H;
-  hline(cv, y, ox, ox + gridW, 107, 14, 14, 3);
-  const gray = [120, 120, 120];
-  const smallA = atlasSmall || atlas;
-  shown.forEach(({ name, stats, specs, kc, badge, clog }) => {
-    const kcs = Array.isArray(kc) ? kc : [kc];
-    const label = shortDisplayName(name);
-    // Line 1: badge + name + stats + KC.
-    const ry = y + 12;
-    let nameX = ox + 20;
-    const badgeIcon = badge && badgeIcons[badge];
-    if (badgeIcon) {
-      drawIcon(cv, badgeIcon, nameX + 24, Math.round(ry + 14), BADGE_H);
-      nameX += 56;
-    }
-    drawText(cv, nameX, Math.round(ry), label, stats ? undefined : gray);
-    columns.forEach((_, i) => {
-      const cx = ox + NAME_W + COL_W * i + COL_W / 2;
-      drawCentered(cv, cx, Math.round(ry), stats ? String(stats[i]) : '-', stats ? undefined : gray);
-    });
-    kcCols.forEach((_, i) => {
-      const val = kcs[i];
-      drawCentered(cv, kcCx(i), Math.round(ry),
-        typeof val === 'number' ? `${val.toLocaleString('en-US')} KC` : '-',
-        stats ? undefined : gray);
-    });
-    if (opts.clogColumn) {
-      drawCentered(cv, clogCx, Math.round(ry),
-        clog ? `${clog.obtained}/${clog.total}` : '-',
-        stats ? undefined : gray);
-    }
-    if (compact) {
-      y += COMPACT_ROW_H;
-      hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
-      return;
-    }
-    // Spec groups, stacked: header + icons + labels each.
-    let sy = y + 62;
-    for (const [catName, ids] of specGroupsFor(specs)) {
-      drawText(cv, ox + 20, Math.round(sy), catName, [150, 150, 150], smallA);
-      sy += 30;
-      const icy = sy + 38;
-      let ix = ox + 20 + 40;
-      const labs = ids.map((id) => SPEC_LABELS[id] || id.toUpperCase());
-      const lws = labs.map((lab) => textWidth(lab, smallA));
-      ids.forEach((specId, idx) => {
-        drawIcon(cv, specIcons[specId], ix, icy, 72);
-        const lw = lws[idx];
-        // Clamp labels inside the content area so long names never clip.
-        const lx = Math.max(Math.round(ix - lw / 2), ox + 20);
-        drawText(cv, lx, Math.round(icy + 40), labs[idx], undefined, smallA);
-        const nextW = idx + 1 < ids.length ? lws[idx + 1] : 0;
-        ix += Math.max(110, (lw + nextW) / 2 + 48);
-      });
-      sy = icy + 78;
-    }
-    y += rowHeightFor(specs);
-    hline(cv, y, ox, ox + gridW, 60, 40, 36, 1);
-  });
-  if (extraCount > 0) {
-    drawCentered(cv, boardW / 2, y + 8, `+${extraCount} more`, [150, 130, 120]);
-  }
-  return encodePng(boardW, H, cv.buf);
-}
-
-function boardHeight(rowCount) {
-  // Estimate: base row height, no spec groups.
-  const shown = Math.min(rowCount, MAX_ROWS);
-  return HEADER_H + 62 * shown + (rowCount > MAX_ROWS ? 56 : 24);
 }
 
 // ─── Game-panel cards (profile / leaderboard / clog) ───────────────
@@ -760,4 +605,4 @@ function renderKcCard(data) {
   return encodePng(W, H, cv.buf);
 }
 
-module.exports = { renderPartyBoard, boardHeight, shortDisplayName, bossIconKey, COLUMNS, MAX_ROWS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, fitTitle, stoneCanvas, fmtNum };
+module.exports = { shortDisplayName, bossIconKey, COLUMNS, encodePng, decodePng, renderProfileCard, renderClogLeaderboard, renderClogCard, renderClogSummaryCard, renderKcCard, getBossIcon, fitTitle, stoneCanvas, fmtNum };
