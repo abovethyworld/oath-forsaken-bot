@@ -2,7 +2,7 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, GAINS_PERIODS } = require('./wom');
+const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -575,6 +575,32 @@ function ownAccountGate(userId, rsn) {
   };
 }
 
+// A Profile button on a standalone card: swaps the message into
+// the /profile hub on the same player at the matching tab. The
+// sub value carries the sub-view (boss key, skill key, dry
+// activity, gains period); '-' means none.
+function encName(rsn) {
+  return String(rsn).replace(/ /g, '_');
+}
+
+function withProfileButton(payload, tab, sub, rsn) {
+  if (!payload || !payload.files) return payload;
+  const btn = new ButtonBuilder()
+    .setCustomId(`prof:${tab}:${sub || '-'}:${encName(rsn)}`)
+    .setLabel('Profile')
+    .setStyle(ButtonStyle.Secondary);
+  const comps = [...(payload.components || [])];
+  const compType = (c) => (c && typeof c.type === 'number' ? c.type
+    : (c && c.data && typeof c.data.type === 'number' ? c.data.type : null));
+  const btnRow = comps.findIndex((r) => (r.components || []).some((c) => compType(c) === 2));
+  if (btnRow >= 0 && comps[btnRow].components.length < 5) {
+    comps[btnRow] = ActionRowBuilder.from(comps[btnRow]).addComponents(btn);
+  } else {
+    comps.push(new ActionRowBuilder().addComponents(btn));
+  }
+  return { ...payload, components: comps };
+}
+
 async function kcPayload(activity, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
@@ -605,10 +631,10 @@ async function kcPayload(activity, rsn, userId) {
     const rows = [];
     if (body.rank) rows.push(lbSwapRow(`boss:${activity}`, `kc:${activity}:${rsn.replace(/ /g, '_')}`));
     if (dryScoredKeys().some((k) => kcEntry(k).name === entry.name)) rows.push(bridgeRow('dry', activity, rsn));
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'kc.png' })],
       components: rows,
-    };
+    }, 'pvm', activity, rsn);
   }
   return CARD_DOWN;
 }
@@ -706,10 +732,10 @@ async function dryPayload(activity, rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
       components: [bridgeRow('kc', activity, rsn)],
-    };
+    }, 'dry', activity, rsn);
   }
   return CARD_DOWN;
 }
@@ -770,10 +796,10 @@ async function dryCluesAllPayload(rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
       components: [bridgeRow('clues', 'all', rsn)],
-    };
+    }, 'dry', 'clue:all', rsn);
   }
   return CARD_DOWN;
 }
@@ -812,6 +838,19 @@ function dryListUnits(rsn, st) {
   }
   return [...byId.values()]
     .sort((a, b) => a.score - b.score || a.name.localeCompare(b.name));
+}
+
+// The driest-list units for one player, memoized briefly: the
+// hub Dry tab needs the same units for its drill-in picker, and
+// rebuilding them per press is the slow path that starved the
+// slash ack before (Nov 2, 2026).
+function dryListUnitsMemo(rsn, st) {
+  const memoKey = String(rsn).toLowerCase();
+  const memo = dryListMemo.get(memoKey);
+  if (memo && Date.now() - memo.at < 5 * 60 * 1000) return memo.units;
+  const units = dryListUnits(rsn, st);
+  if (units.length) dryListMemo.set(memoKey, { at: Date.now(), units });
+  return units;
 }
 
 function dryDrillTarget(u) {
@@ -880,13 +919,7 @@ async function dryListPayload(rsn, userId, cat = 'all') {
   }
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
-  const memoKey = String(rsn).toLowerCase();
-  const memo = dryListMemo.get(memoKey);
-  const units = memo && Date.now() - memo.at < 5 * 60 * 1000
-    ? memo.units : dryListUnits(rsn, st);
-  if (units.length && (!memo || Date.now() - memo.at >= 5 * 60 * 1000)) {
-    dryListMemo.set(memoKey, { at: Date.now(), units });
-  }
+  const units = dryListUnitsMemo(rsn, st);
   if (!units.length) {
     return { content: `Nothing to rank for **${rsn}** yet: no scored drops are missing, or the log is not synced.` };
   }
@@ -906,6 +939,8 @@ async function dryListPayload(rsn, userId, cat = 'all') {
   const components = [dryCatRow(cat, rsn)];
   const pick = dryPickRow(cat, rsn, filtered);
   if (pick) components.push(pick);
+  components.push(new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`prof:dry:list:${encName(rsn)}`).setLabel('Profile').setStyle(ButtonStyle.Secondary)));
   return {
     files: [new AttachmentBuilder(card, { name: 'dry-list.png' })],
     components,
@@ -993,10 +1028,10 @@ async function dryCluePayload(tierKey, rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
       components: [bridgeRow('clues', tierKey, rsn)],
-    };
+    }, 'dry', `clue:${tierKey}`, rsn);
   }
   return CARD_DOWN;
 }
@@ -1085,10 +1120,10 @@ async function gainsPayload(rsn, periodIn, userId) {
     skills: g.skills.slice(0, 5), bosses: g.bosses.slice(0, 5),
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'gains.png' })],
       components: [gainsPeriodRow(period, rsn)],
-    };
+    }, 'gains', period, rsn);
   }
   return CARD_DOWN;
 }
@@ -1467,16 +1502,40 @@ async function clogPayload(key, rsn, userId) {
   if (gate) return gate;
   if (!key) return { content: 'Usage: `!clog <activity|total> [name]`' };
   await ensureSynced(rsn);
-  if (key === 'clues' || key === 'scrolls') return clueSummaryPayload(rsn, userId);
+  if (key === 'clues' || key === 'scrolls') {
+    return withProfileButton(await clueSummaryPayload(rsn, userId), 'clogs', 'clues', rsn);
+  }
   if (key === 'total') {
     if (userId) noteUse(userId, 'clog'); // a real lookup fires: start the cooldown
     const res = await getClogSummary(rsn).catch(() => null);
     if (!res) return { content: 'Could not reach the collection log service right now. Try again in a bit.' };
     if (res.notFound) return { content: RP_GUIDE };
+    // Spruced total card extras: the player's rank on the clogs
+    // board and every cached page sitting one item from complete.
+    // Both read local caches only, never a fetch.
+    let rank = null;
+    try {
+      const board = lbBuildBoard({ ...lbDefaultState(), v: 'clogs', k: 'total' }, await rankedNames());
+      const ri = board.rows.findIndex((r) => normName(r.name) === normName(rsn));
+      if (ri >= 0) rank = ri + 1;
+    } catch { /* rank is decoration; the card posts without it */ }
+    const oneAway = [];
+    const seenPages = new Set();
+    for (const pair of Object.values(CLOG_PAGES)) {
+      const pk = `${pair[0]}|${pair[1]}`;
+      if (seenPages.has(pk)) continue;
+      seenPages.add(pk);
+      const page = getCachedClogPage(rsn, pair[0], pair[1]);
+      if (page && !page.notFound && page.total > 1 && page.total - page.obtained === 1) {
+        oneAway.push({ name: pair[1], obtained: page.obtained, total: page.total });
+      }
+    }
+    oneAway.sort((a, b) => a.name.localeCompare(b.name));
     const card = await fetchCard('/clog-total', {
       rsn, badge: cardBadgeFor(rsn, null), obtained: res.obtained, total: res.total, tabs: res.tabs,
+      rank, oneAway: oneAway.slice(0, 8),
     });
-    if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
+    if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'clog.png' })] }, 'clogs', 'total', rsn);
     return CARD_DOWN;
   }
   const page = clogPageForCommand(key);
@@ -1515,14 +1574,14 @@ async function clogPayload(key, rsn, userId) {
       const body = kcCardBody(rsn, kcEnt, st, strip, luck, null);
       const combined = await fetchCard('/kc', body);
       if (combined) {
-        return {
+        return withProfileButton({
           files: [new AttachmentBuilder(combined, { name: 'clog.png' })],
           // The same card !kc posts, so it carries the same
           // Leaderboard swap when it shows a rank.
           components: body.rank
             ? [lbSwapRow(`boss:${key}`, `kc:${key}:${rsn.replace(/ /g, '_')}`)]
             : [],
-        };
+        }, 'clogs', key, rsn);
       }
     }
   }
@@ -1544,7 +1603,7 @@ async function clogPayload(key, rsn, userId) {
       score: pageScores[d.id] != null ? pageScores[d.id] : null,
     })),
   });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'clog.png' })] };
+  if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'clog.png' })] }, 'clogs', key, rsn);
   return CARD_DOWN;
 }
 
@@ -1836,7 +1895,7 @@ async function handleProfileCommand(message, args) {
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
-  await replyPayload(message, rsn, profilePayload(rsn, message.author.id));
+  await replyPayload(message, rsn, hubPayload(rsn, message.author.id, {}));
 }
 
 // Leaderboard rows from cached clog totals (instant); missing profiles get a
@@ -2188,7 +2247,9 @@ function lbComponents(st, pages, scoped = false) {
   const rows = [new ActionRowBuilder().addComponents(
     tabBtn('overall', 'Overall'), tabBtn('pvm', 'PvM'), tabBtn('skills', 'Skills'),
     tabBtn('clogs', 'Clogs'), tabBtn('gains', 'Gains')),
-    new ActionRowBuilder().addComponents(tabBtn('driest', 'Driest'))];
+    new ActionRowBuilder().addComponents(
+      tabBtn('driest', 'Driest'),
+      new ButtonBuilder().setCustomId(`lbprof:${enc}`).setLabel('Open profile').setStyle(ButtonStyle.Secondary))];
   if (st.v === 'pvm') {
     const vr = lbVariantRow(st);
     if (vr) rows.push(vr);
@@ -2353,23 +2414,42 @@ async function leaderboardPayload(userId, boardArg, scoped = false) {
   return lbView(lbStateForArg(boardArg), userId, scoped);
 }
 
-async function lbUpdate(interaction, st) {
-  // A board swapped in from a card carries that card's return
-  // button on the message. Its presence marks the board as scoped:
-  // flips keep the scoped components and the return button.
-  const rows = (interaction.message && interaction.message.components) || [];
-  let backId = null;
-  for (const row of rows) {
+// A board swapped in from a card carries that card's return
+// button on the message; a board opened from the profile hub
+// carries the hub's. Find either so flips can keep it.
+function findBackRow(message) {
+  for (const row of (message && message.components) || []) {
     for (const comp of row.components || []) {
       const cid = comp.customId || (comp.data && comp.data.custom_id);
-      if (cid && cid.startsWith('lbback:')) backId = cid.slice('lbback:'.length);
+      if (!cid) continue;
+      if (cid.startsWith('lbback:')) return { kind: 'lb', id: cid };
+      if (cid.startsWith('hubback:')) {
+        return { kind: 'hub', id: cid, label: comp.label || (comp.data && comp.data.label) || '← Profile card' };
+      }
     }
   }
-  const payload = await lbView(st, interaction.user.id, !!backId);
+  return null;
+}
+
+function backRowFor(found) {
+  if (!found) return null;
+  if (found.kind === 'lb') return lbBackRow(found.id.slice('lbback:'.length));
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(found.id).setLabel(found.label).setStyle(ButtonStyle.Secondary));
+}
+
+async function lbUpdate(interaction, st) {
+  // The lb return row's presence marks the board as scoped:
+  // flips keep the scoped components and the return button.
+  // A hub return row keeps the board unscoped instead.
+  const found = findBackRow(interaction.message);
+  const scoped = !!(found && found.kind === 'lb');
+  const payload = await lbView(st, interaction.user.id, scoped);
   const msg = { content: payload.content || '', components: payload.components || [] };
   if (payload.files) { msg.files = payload.files; msg.attachments = []; }
   else { msg.files = []; msg.attachments = []; }
-  if (backId) msg.components = [...msg.components, lbBackRow(backId)];
+  const back = backRowFor(found);
+  if (back) msg.components = [...msg.components, back].slice(0, 5);
   await interaction.update(msg).catch(() => {});
 }
 
@@ -2504,14 +2584,14 @@ async function pbPayload(activity, rsn, userId) {
       mode: 'single', rsn, badge: cardBadgeFor(rsn, null), boss, time: pbTime(e),
       killCount: e.killCount || null, at: e.at || null,
     });
-    if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
+    if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'pb.png' })] }, 'pbs', '-', rsn);
     return CARD_DOWN;
   }
   const rows = all
     .map(([key, e]) => ({ boss: e.boss || key, time: pbTime(e) }))
     .sort((a, b) => a.boss.localeCompare(b.boss));
   const card = await fetchCard('/pb', { mode: 'list', rsn, badge: cardBadgeFor(rsn, null), rows });
-  if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })] };
+  if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'pb.png' })] }, 'pbs', '-', rsn);
   return CARD_DOWN;
 }
 
@@ -2592,10 +2672,10 @@ async function skillsPayload(rsn, userId) {
     rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), combat: st.combat, totalLevel, totalXp, skills, skillingBosses, rank,
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'skills.png' })],
       components: rank ? [lbSwapRow('overall', `skills:${rsn.replace(/ /g, '_')}`)] : [],
-    };
+    }, 'skills', '-', rsn);
   }
   return CARD_DOWN;
 }
@@ -2694,10 +2774,10 @@ async function skillPayload(rsn, skillKey, userId) {
     noSections: !pageList.length,
   });
   if (card) {
-    return {
+    return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'skill.png' })],
       components: rank ? [lbSwapRow(`skill:${skillKey}`, `skill:${skillKey}:${rsn.replace(/ /g, '_')}`)] : [],
-    };
+    }, 'skills', skillKey, rsn);
   }
   return CARD_DOWN;
 }
@@ -3340,7 +3420,62 @@ function clogAutocompleteChoices(focused) {
   return all.filter((c) => !q || c.name.toLowerCase().includes(q) || c.value.includes(q)).slice(0, 25);
 }
 
+// Compare player autocomplete: the tapper's linked accounts
+// first, then clan members and Friends of the Clan, then other
+// names the bot already knows. An unmatched fragment (2+
+// characters) gets one Wise Old Man player search through the
+// existing limiter, cached, so a never-seen name can still be
+// typed in full once and is then cached.
+const cmpKnownNames = new Set();
+const cmpSearchMemo = new Map();
+
+async function compareAutocompleteChoices(interaction) {
+  const focused = interaction.options.getFocused(true);
+  const q = String(focused.value || '').trim().toLowerCase();
+  const uid = interaction.user.id;
+  const otherName = focused.name === 'player_a' ? 'player_b' : 'player_a';
+  const other = interaction.options.getString(otherName);
+  const ordered = [];
+  const seen = new Set();
+  const push = (n) => {
+    const name = String(n || '').trim();
+    const k = normName(name);
+    if (name && !seen.has(k)) { seen.add(k); ordered.push(name); }
+  };
+  for (const n of savedRsnsFor(uid)) push(n);
+  for (const n of await rankedNames()) push(n);
+  for (const entry of Object.values(loadRsnLinks() || {})) {
+    const e = entry && typeof entry === 'object' ? entry : {};
+    if (Array.isArray(e.rsns)) for (const n of e.rsns) push(n);
+    else if (e.rsn) push(e.rsn);
+  }
+  for (const n of Object.keys(mergedPlayers() || {})) push(n);
+  for (const n of cmpKnownNames) push(n);
+  let matches = ordered.filter((n) => !q || n.toLowerCase().includes(q));
+  if (other) matches = matches.filter((n) => normName(n) !== normName(other));
+  if (!matches.length && q.length >= 2) {
+    const memo = cmpSearchMemo.get(q);
+    let found = memo && Date.now() - memo.at < 10 * 60 * 1000 ? memo.names : null;
+    if (!found) {
+      found = await Promise.race([
+        searchPlayers(String(focused.value || '').trim()),
+        new Promise((r) => setTimeout(() => r(null), 2500)),
+      ]);
+      if (found) {
+        cmpSearchMemo.set(q, { at: Date.now(), names: found });
+        for (const n of found) cmpKnownNames.add(n);
+      }
+    }
+    if (found) matches = found.filter((n) => !other || normName(n) !== normName(other));
+  }
+  return matches.slice(0, 25).map((n) => ({ name: n.slice(0, 100), value: n.slice(0, 100) }));
+}
+
 async function handleAutocomplete(interaction) {
+  if (interaction.commandName === 'compare') {
+    await interaction.respond(await compareAutocompleteChoices(interaction)).catch(() => {});
+    return;
+  }
   const focused = interaction.options.getFocused();
   const choices = interaction.commandName === 'dry'
     ? dryAutocompleteChoices(focused)
@@ -4023,6 +4158,13 @@ async function editCompareMessage(interaction, payload) {
   const edit = { ...payload, attachments: [] };
   if (!payload.components) edit.components = [];
   delete edit.ephemeral;
+  // A compare opened from the profile hub carries the hub's
+  // return row; compare rebuilds its own rows on every press,
+  // so carry the row over like the scoped-board back rows.
+  const found = findBackRow(interaction.message);
+  if (found && found.kind === 'hub') {
+    edit.components = [...edit.components, backRowFor(found)].slice(0, 5);
+  }
   await interaction.editReply(edit).catch(() => {});
 }
 
@@ -4278,21 +4420,31 @@ const commands = [
     data: new SlashCommandBuilder()
       .setName('profile')
       .setDescription("Show a player's profile card")
-      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)'))
+      .addStringOption((o) => o.setName('tab').setDescription('Open the profile on this tab')
+        .addChoices(
+          { name: 'Overview', value: 'overview' },
+          { name: 'Skills', value: 'skills' },
+          { name: 'PvM', value: 'pvm' },
+          { name: 'Clogs', value: 'clogs' },
+          { name: 'Dry', value: 'dry' },
+          { name: 'Gains', value: 'gains' },
+          { name: 'PBs', value: 'pbs' })),
     run: async (interaction) => {
       const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
       if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
       if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
       if (await slashCooldown(interaction, 'player')) return;
-      await slashReply(interaction, () => profilePayload(rsn, interaction.user.id));
+      await slashReply(interaction, () => hubPayload(rsn, interaction.user.id,
+        { tab: interaction.options.getString('tab') || 'overview' }));
     },
   },
   {
     data: new SlashCommandBuilder()
       .setName('compare')
       .setDescription('Compare two players overall')
-      .addStringOption((o) => o.setName('player_a').setDescription('First player (blank = you)'))
-      .addStringOption((o) => o.setName('player_b').setDescription('Second player (blank = you)')),
+      .addStringOption((o) => o.setName('player_a').setDescription('First player (blank = you)').setAutocomplete(true))
+      .addStringOption((o) => o.setName('player_b').setDescription('Second player (blank = you)').setAutocomplete(true)),
     run: async (interaction) => {
       const pair = await resolveComparePair(interaction);
       if (!pair) return;
@@ -4384,6 +4536,888 @@ const commands = [
   },
 ];
 
+// ---- Profile hub (Alex, Nov 2, 2026) ---------------------------
+// One message that walks every card: tab rows (Overview, Skills,
+// PvM, Clogs / Dry, Gains, PBs), a divider, and a branch row
+// (Leaderboard, Compare, Change player). Every tab reuses the
+// standalone card builders, so the numbers never drift from the
+// commands. Discord caps a message at 5 component rows: the shell
+// takes 3, leaving at most 2 rows for a tab's own controls.
+// Hub state travels in custom ids, compare/leaderboard style:
+// fields join with '|' (never in a name), '-' means empty, the
+// RSN's spaces are '_'. Owner is the member who opened the hub;
+// only they change its player.
+const HUB_TABS = ['overview', 'skills', 'pvm', 'clogs', 'dry', 'gains', 'pbs'];
+const HUB_TAB_LABEL = {
+  overview: 'Overview', skills: 'Skills', pvm: 'PvM', clogs: 'Clogs',
+  dry: 'Dry', gains: 'Gains', pbs: 'PBs',
+};
+const PLUGIN_LINE = 'This feature works when our clan plugin is live.';
+
+function hubEncode(st) {
+  const f = (v) => (v ? String(v).replace(/ /g, '_') : '-');
+  return [st.tab || 'overview', f(st.rsn), f(st.sub), f(st.ui), st.owner || '-', st.mode || '-'].join('|');
+}
+
+function hubDecode(s) {
+  const p = String(s || '').split('|');
+  const st = { tab: 'overview', rsn: '', sub: '', ui: '', owner: '', mode: '' };
+  if (HUB_TABS.includes(p[0])) st.tab = p[0];
+  // Only the RSN is underscore-encoded (names never contain
+  // one); sub keys do (toa_expert, phantom_muspah) and stay raw.
+  st.rsn = p[1] && p[1] !== '-' ? String(p[1]).replace(/_/g, ' ') : '';
+  st.sub = p[2] && p[2] !== '-' ? p[2] : '';
+  st.ui = p[3] && p[3] !== '-' ? p[3] : '';
+  if (p[4] && p[4] !== '-') st.owner = p[4];
+  if (p[5] && p[5] !== '-') st.mode = p[5];
+  return st;
+}
+
+function hubTabRows(st) {
+  const btn = (tab) => new ButtonBuilder()
+    .setCustomId(`hub:tab:${tab}:${hubEncode(st)}`)
+    .setLabel(HUB_TAB_LABEL[tab])
+    .setStyle(st.tab === tab ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(st.tab === tab);
+  return [
+    new ActionRowBuilder().addComponents(btn('overview'), btn('skills'), btn('pvm'), btn('clogs')),
+    new ActionRowBuilder().addComponents(btn('dry'), btn('gains'), btn('pbs')),
+  ];
+}
+
+function hubBranchRow(st) {
+  const enc = hubEncode(st);
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`hub:lb:${enc}`).setLabel('Leaderboard').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`hub:cmp:${enc}`).setLabel('Compare').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`hub:chg:${enc}`).setLabel('Change player').setStyle(ButtonStyle.Secondary));
+}
+
+// The return-button label names the card it returns to (Nov 2
+// rule): a bare "Back" does not say where it goes.
+function hubCardLabel(st) {
+  switch (st.tab) {
+    case 'skills': return st.sub
+      ? `\u2190 ${st.sub.charAt(0).toUpperCase() + st.sub.slice(1)} card` : '\u2190 Skills card';
+    case 'pvm': return '\u2190 KC card';
+    case 'clogs': return '\u2190 Clogs card';
+    case 'dry': return '\u2190 Dry card';
+    case 'gains': return '\u2190 Gains card';
+    default: return '\u2190 Profile card';
+  }
+}
+
+function hubBackRow(st) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`hubback:${hubEncode(st)}`)
+    .setLabel(hubCardLabel(st))
+    .setStyle(ButtonStyle.Secondary));
+}
+
+function hubMineRow(st) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`hubmine:${hubEncode(st)}`)
+    .setLabel('Make my own')
+    .setStyle(ButtonStyle.Danger));
+}
+
+// Only the hub's owner changes its player (compare's rule, same
+// note and offer). View controls stay open to everyone.
+async function hubOwnerGate(interaction, st) {
+  if (st.owner && interaction.user.id !== st.owner) {
+    await interaction.reply({
+      content: "You can't change the players on this one. Would you like to make your own card?",
+      components: [hubMineRow(st)],
+      ephemeral: true,
+    }).catch(() => {});
+    return false;
+  }
+  return true;
+}
+
+// Variant toggles for the PvM tab: the multi-variant families
+// where separate KC cards exist (raids, Nightmare). Index 0 is
+// the combined card; the rest are the variant cards, in the same
+// order as the leaderboard's labels. Families whose variants
+// share one card already (Gauntlet, Dagannoth Kings, the
+// wilderness pairs) get no toggles: the card shows every variant
+// with its own rank.
+const HUB_VARIANT_KEYS = {
+  tombs_of_amascut: { keys: ['tombs', 'toa', 'toa_expert'], labels: ['Normal', 'Expert'] },
+  chambers_of_xeric: { keys: ['cox', 'cox', 'cox_cm'], labels: ['Normal', 'CM'] },
+  theatre_of_blood: { keys: ['tob', 'tob', 'tob_hard'], labels: ['Regular', 'Hard Mode'] },
+  nightmare: { keys: ['nightmare', 'nightmare', 'phosani'], labels: ['Nightmare', "Phosani's"] },
+  phosanis_nightmare: { keys: ['nightmare', 'nightmare', 'phosani'], labels: ['Nightmare', "Phosani's"] },
+};
+
+function hubVariantFamily(sub) {
+  const entry = kcEntry(sub);
+  if (!entry || !entry.cols.length) return null;
+  for (const c of entry.cols) {
+    const fam = HUB_VARIANT_KEYS[c.metric];
+    if (fam) return fam;
+  }
+  return null;
+}
+
+function hubVariantButtons(st) {
+  const fam = hubVariantFamily(st.sub);
+  if (!fam) return [];
+  const enc = hubEncode(st);
+  const activeIdx = st.sub === fam.keys[0] ? -1 : fam.keys.indexOf(st.sub, 1);
+  const mk = (sel, label, active) => new ButtonBuilder()
+    .setCustomId(`hub:var:${sel}:${enc}`).setLabel(label)
+    .setStyle(active ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(active);
+  return [mk('-', 'Total', activeIdx === -1),
+    ...fam.labels.map((l, i) => mk(String(i), l, activeIdx === i + 1))];
+}
+
+function hubPvmControls(st) {
+  const enc = hubEncode(st);
+  const btns = [new ButtonBuilder().setCustomId(`hub:pickboss:${enc}`)
+    .setLabel('Pick a boss').setStyle(ButtonStyle.Secondary)];
+  const entry = kcEntry(st.sub);
+  if (entry && dryScoredKeys().some((k) => kcEntry(k).name === entry.name)) {
+    btns.push(new ButtonBuilder().setCustomId(`hub:todry:${enc}`)
+      .setLabel('Dry card').setStyle(ButtonStyle.Danger));
+  }
+  btns.push(...hubVariantButtons(st));
+  return new ActionRowBuilder().addComponents(btns.slice(0, 5));
+}
+
+// The PvM boss picker: category select, then the bosses in that
+// category (22 per page, like compare's picker). The boss list is
+// the same catalog the compare picker draws.
+function hubBossPickerRows(st) {
+  const enc = hubEncode(st);
+  const catalog = bossCatalog();
+  const parts = String(st.ui || '').split(':');
+  let cat = parts[1] && catalog.byCat[parts[1]] ? parts[1] : null;
+  if (!cat) cat = compareCategoryOf(st.sub);
+  const cats = CMP_CATEGORIES.filter((c) => catalog.byCat[c.id] && catalog.byCat[c.id].length);
+  const catRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+    .setCustomId(`hub:bosscat:${enc}`)
+    .setPlaceholder('Pick a category...')
+    .addOptions(cats.map((c) => ({ label: c.label, value: c.id, default: c.id === cat }))));
+  const list = catalog.byCat[cat] || [];
+  const pg = Math.max(0, Math.min(parseInt(parts[2], 10) || 0, Math.ceil(list.length / CMP_PAGE_SIZE) - 1 || 0));
+  const options = [];
+  if (pg > 0) options.push({ label: '← Previous bosses', value: `page:${pg - 1}` });
+  for (const o of list.slice(pg * CMP_PAGE_SIZE, pg * CMP_PAGE_SIZE + CMP_PAGE_SIZE)) {
+    options.push({ label: String(o.name).slice(0, 100), value: o.key });
+  }
+  if ((pg + 1) * CMP_PAGE_SIZE < list.length) {
+    options.push({ label: 'More bosses →', value: `page:${pg + 1}` });
+  }
+  const catLabel = (CMP_CATEGORIES.find((c) => c.id === cat) || {}).label || 'Bosses';
+  const bossRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+    .setCustomId(`hub:bosspick:${enc}`)
+    .setPlaceholder(`Pick a boss (${catLabel})...`)
+    .addOptions(options.length ? options : [{ label: catLabel, value: 'none' }]));
+  return [catRow, bossRow];
+}
+
+// The Clogs page picker: five category buttons, then the pages in
+// that category (22 per page). The Clues category opens with the
+// Clue Scrolls summary page.
+const HUB_CLOG_CATS = ['Bosses', 'Raids', 'Minigames', 'Clues', 'Other'];
+function hubClogPickerRows(st) {
+  const enc = hubEncode(st);
+  const parts = String(st.ui || '').split(':');
+  const cat = HUB_CLOG_CATS.includes(parts[1]) ? parts[1] : 'Bosses';
+  const catRow = new ActionRowBuilder().addComponents(HUB_CLOG_CATS.map((c) => new ButtonBuilder()
+    .setCustomId(`hub:clogcat:${c}:${enc}`).setLabel(c)
+    .setStyle(c === cat ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(c === cat)));
+  const seen = new Map();
+  for (const [key, pair] of Object.entries(CLOG_PAGES)) {
+    if (pair[0] === cat && !seen.has(pair[1])) seen.set(pair[1], key);
+  }
+  const titles = [...seen.keys()].sort((a, b) => a.localeCompare(b));
+  const size = 22;
+  const pg = Math.max(0, Math.min(parseInt(parts[2], 10) || 0, Math.ceil(titles.length / size) - 1 || 0));
+  const options = [];
+  if (cat === 'Clues' && pg === 0) options.push({ label: 'Clue Scrolls', value: 'clues' });
+  if (pg > 0) options.push({ label: '← Previous pages', value: `pg:${pg - 1}` });
+  for (const t of titles.slice(pg * size, pg * size + size)) {
+    options.push({ label: t.slice(0, 100), value: seen.get(t) });
+  }
+  if ((pg + 1) * size < titles.length) {
+    options.push({ label: 'More pages →', value: `pg:${pg + 1}` });
+  }
+  const selRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+    .setCustomId(`hub:clogpage:${enc}`)
+    .setPlaceholder(`Pick a page (${cat})...`)
+    .addOptions(options.slice(0, 25)));
+  return [catRow, selRow];
+}
+
+function hubDryCatRow(st, cat) {
+  const enc = hubEncode(st);
+  const btn = (c, label) => new ButtonBuilder()
+    .setCustomId(`hub:drycat:${c}:${enc}`).setLabel(label)
+    .setStyle(c === cat ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(c === cat);
+  return new ActionRowBuilder().addComponents(
+    btn('all', 'All'), btn('Bosses', 'Bosses'), btn('Clues', 'Clues'),
+    btn('Minigames', 'Minigames'), btn('Other', 'Other'));
+}
+
+// Drill-in picker for the Dry tab: same page list as the
+// standalone list card's picker, wearing hub ids.
+function hubDryPickRow(st, cat, units) {
+  const byPage = new Map();
+  for (const u of units) {
+    const target = dryDrillTarget(u);
+    if (!target) continue;
+    const cur = byPage.get(u.page);
+    if (!cur || u.score < cur.score) byPage.set(u.page, { page: u.page, score: u.score, target });
+  }
+  const pages = [...byPage.values()].sort((a, b) => a.score - b.score).slice(0, 24);
+  if (!pages.length) return null;
+  const label = cat === 'Bosses' ? 'Pick a boss to open its page'
+    : cat === 'Clues' ? 'Pick a tier to open its page'
+      : 'Pick a page to open';
+  return new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+    .setCustomId(`hub:drypick:${hubEncode(st)}`)
+    .setPlaceholder(label)
+    .addOptions(pages.map((p) => ({ label: p.page.slice(0, 100), value: p.target }))));
+}
+
+// Return row on a dry page inside the hub: back to the category
+// list the presser came from, and to the full driest list.
+function hubDryReturnRow(st) {
+  const cat = DRY_LIST_CATS.includes(st.ui) ? st.ui : 'all';
+  const row = new ActionRowBuilder();
+  const mk = (targetUi, label) => new ButtonBuilder()
+    .setCustomId(`hub:drylist:${hubEncode({ ...st, sub: 'list', ui: targetUi })}`)
+    .setLabel(label).setStyle(ButtonStyle.Secondary);
+  if (cat !== 'all') row.addComponents(mk(cat, `\u2190 ${cat} driest`));
+  row.addComponents(mk('all', cat !== 'all' ? 'Driest list' : '\u2190 Driest list'));
+  return row;
+}
+
+// The player's highest-KC boss: first key per boss name, totals
+// summed across its variant counters.
+async function hubTopBoss(rsn) {
+  const st = await getStats(rsn).catch(() => null);
+  if (!st || st.notFound || !st.kc) return null;
+  const seen = new Set();
+  let best = null;
+  let bestKc = 0;
+  for (const key of Object.keys(KC_KEYS)) {
+    const e = kcEntry(key);
+    if (!e || !e.cols.length || seen.has(e.name)) continue;
+    seen.add(e.name);
+    let total = 0;
+    for (const c of e.cols) if (typeof st.kc[c.metric] === 'number') total += st.kc[c.metric];
+    if (total > bestKc) { bestKc = total; best = key; }
+  }
+  return best;
+}
+
+// One tab's card: { files, rows } for the hub to wrap, or
+// { passthrough: true, payload } for content-only answers
+// (gates, empty-state notes): those answer privately and leave
+// the hub message alone, the way the standalone cards' notes
+// already work. Content-only payloads are never wrapped: the
+// shell only goes on file payloads, the bridge rule.
+async function hubTabCard(st, userId) {
+  const rsn = st.rsn;
+  const pass = (payload) => ({ passthrough: true, payload });
+  switch (st.tab) {
+    case 'skills': {
+      if (st.sub && SKILL_ORDER.includes(st.sub)) {
+        const p = await skillPayload(rsn, st.sub, userId);
+        if (!p.files) return pass(p);
+        const back = new ActionRowBuilder().addComponents(new ButtonBuilder()
+          .setCustomId(`hub:skillgrid:${hubEncode(st)}`).setLabel('\u2190 Skills card').setStyle(ButtonStyle.Secondary));
+        return { files: p.files, rows: [back] };
+      }
+      const p = await skillsPayload(rsn, userId);
+      if (!p.files) return pass(p);
+      const sel = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+        .setCustomId(`hub:skillpick:${hubEncode(st)}`)
+        .setPlaceholder('Pick a skill...')
+        .addOptions([...SKILL_ORDER].sort((a, b) => a.localeCompare(b)).map((key) => ({
+          label: key.charAt(0).toUpperCase() + key.slice(1), value: key,
+        }))));
+      return { files: p.files, rows: [sel] };
+    }
+    case 'pvm': {
+      let sub = st.sub;
+      if (!sub || !kcEntry(sub)) {
+        sub = await hubTopBoss(rsn);
+        if (!sub) return pass(await kcPayload(null, rsn, userId));
+        st.sub = sub;
+      }
+      const p = await kcPayload(sub, rsn, userId);
+      if (!p.files) return pass(p);
+      if (st.ui && st.ui.startsWith('P')) return { files: p.files, rows: hubBossPickerRows(st) };
+      return { files: p.files, rows: [hubPvmControls(st)] };
+    }
+    case 'clogs': {
+      const sub = st.sub || 'total';
+      if (sub === 'total') {
+        const p = await clogPayload('total', rsn, userId);
+        if (!p.files) return pass(p);
+        if (st.ui && st.ui.startsWith('P')) return { files: p.files, rows: hubClogPickerRows(st) };
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder()
+          .setCustomId(`hub:clogpick:${hubEncode(st)}`).setLabel('Pick a page').setStyle(ButtonStyle.Secondary));
+        return { files: p.files, rows: [row] };
+      }
+      const p = await clogPayload(sub, rsn, userId);
+      if (!p.files) return pass(p);
+      const row = new ActionRowBuilder();
+      if (sub === 'clues' && st.ui && st.ui.startsWith('from:')) {
+        row.addComponents(new ButtonBuilder().setCustomId(`hub:todrypage:${hubEncode(st)}`)
+          .setLabel('Dry card').setStyle(ButtonStyle.Danger));
+      }
+      row.addComponents(new ButtonBuilder().setCustomId(`hub:clogtotal:${hubEncode(st)}`)
+        .setLabel('\u2190 Clogs card').setStyle(ButtonStyle.Secondary));
+      return { files: p.files, rows: [row] };
+    }
+    case 'dry': {
+      const sub = st.sub || 'list';
+      if (sub === 'list') {
+        const cat = DRY_LIST_CATS.includes(st.ui) ? st.ui : 'all';
+        const p = await dryListPayload(rsn, userId, cat);
+        if (!p.files) return pass(p);
+        const rows = [hubDryCatRow(st, cat)];
+        const stats = await getStats(rsn).catch(() => null);
+        if (stats && !stats.notFound) {
+          const units = dryListUnitsMemo(rsn, stats);
+          const filtered = cat === 'all' ? units : units.filter((u) => u.tab === cat);
+          const pick = hubDryPickRow(st, cat, filtered);
+          if (pick) rows.push(pick);
+        }
+        return { files: p.files, rows };
+      }
+      const p = await dryPayload(sub, rsn, userId);
+      if (!p.files) return pass(p);
+      const enc = hubEncode(st);
+      const bridge = new ActionRowBuilder();
+      if (sub.startsWith('clue:')) {
+        bridge.addComponents(new ButtonBuilder().setCustomId(`hub:toclues:${enc}`)
+          .setLabel('Clues card').setStyle(ButtonStyle.Danger));
+      } else {
+        bridge.addComponents(new ButtonBuilder().setCustomId(`hub:topvm:${enc}`)
+          .setLabel('KC card').setStyle(ButtonStyle.Danger));
+      }
+      return { files: p.files, rows: [bridge, hubDryReturnRow(st)] };
+    }
+    case 'gains': {
+      const period = gainsPeriod(st.ui || 'week');
+      const p = await gainsPayload(rsn, period, userId);
+      if (!p.files) return pass(p);
+      const enc = hubEncode({ ...st, ui: period });
+      const btn = (per) => new ButtonBuilder()
+        .setCustomId(`hub:gain:${per}:${enc}`)
+        .setLabel(GAINS_PERIOD_LABEL[per])
+        .setStyle(per === period ? ButtonStyle.Danger : ButtonStyle.Secondary)
+        .setDisabled(per === period);
+      return { files: p.files, rows: [new ActionRowBuilder().addComponents(
+        btn('day'), btn('week'), btn('month'), btn('year'))] };
+    }
+    case 'pbs': {
+      const card = await fetchCard('/pb-notice', { rsn, badge: cardBadgeFor(rsn, null) });
+      if (card) return { files: [new AttachmentBuilder(card, { name: 'pb.png' })], rows: [] };
+      return { content: PLUGIN_LINE, rows: [] };
+    }
+    case 'overview':
+    default: {
+      const p = await profilePayload(rsn, userId);
+      if (!p.files) return pass(p);
+      return { files: p.files, rows: [] };
+    }
+  }
+}
+
+// The switcher rows: the opener's linked accounts (minus the
+// player on show), a clan-member picker, and Type a name. The
+// tab's own control rows drop while the switcher is open so the
+// message never exceeds the 5-row cap.
+async function hubSwitcherRows(st, userId) {
+  const enc = hubEncode({ ...st, mode: '' });
+  const row = new ActionRowBuilder();
+  const alts = savedRsnsFor(userId)
+    .filter((r) => normName(r) !== normName(st.rsn)).slice(0, 3);
+  alts.forEach((alt, i) => {
+    row.addComponents(new ButtonBuilder()
+      .setCustomId(`hub:alt:${i}:${enc}`)
+      .setLabel(String(alt).slice(0, 80))
+      .setStyle(ButtonStyle.Secondary));
+  });
+  row.addComponents(new ButtonBuilder().setCustomId(`hub:name:${enc}`)
+    .setLabel('Type a name').setStyle(ButtonStyle.Secondary));
+  row.addComponents(new ButtonBuilder().setCustomId(`hub:swx:${enc}`)
+    .setLabel('Cancel').setStyle(ButtonStyle.Secondary));
+  const rows = [row];
+  const names = (await rankedNames())
+    .filter((n) => normName(n) !== normName(st.rsn)).slice(0, 25);
+  if (names.length) {
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+      .setCustomId(`hub:clanpick:${enc}`)
+      .setPlaceholder('Pick a clan member...')
+      .addOptions(names.map((n) => ({ label: n.slice(0, 100), value: n })))));
+  }
+  return rows;
+}
+
+// The compare-branch picker: the presser's other linked accounts
+// or Type a name, filling the second side of the matchup.
+function hubComparePickerRows(st, userId) {
+  const enc = hubEncode({ ...st, mode: '' });
+  const rows = [];
+  const others = savedRsnsFor(userId)
+    .filter((r) => normName(r) !== normName(st.rsn)).slice(0, 25);
+  if (others.length) {
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+      .setCustomId(`hub:cmppick:${enc}`)
+      .setPlaceholder('Pick a player...')
+      .addOptions(others.map((n) => ({ label: n.slice(0, 100), value: n })))));
+  }
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`hub:cmpname:${enc}`).setLabel('Type a name').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`hub:swx:${enc}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)));
+  return rows;
+}
+
+async function hubRender(st, userId) {
+  const card = await hubTabCard(st, userId);
+  if (!card) return null;
+  if (card.passthrough) return card.payload;
+  let rows;
+  if (st.mode === 'sw') {
+    rows = [...hubTabRows(st), ...await hubSwitcherRows(st, userId)];
+  } else if (st.mode === 'cmp') {
+    rows = [...hubTabRows(st), ...hubComparePickerRows(st, userId)];
+  } else {
+    rows = [...(card.rows || []), ...hubTabRows(st), hubBranchRow(st)];
+  }
+  const out = { components: rows.slice(0, 5) };
+  if (card.files) out.files = card.files;
+  if (card.content) out.content = card.content;
+  return out;
+}
+
+async function hubPayload(rsn, userId, init = {}) {
+  const st = {
+    tab: HUB_TABS.includes(init.tab) ? init.tab : 'overview',
+    rsn,
+    sub: init.sub || '',
+    ui: init.ui || '',
+    owner: userId || '',
+    mode: '',
+  };
+  return hubRender(st, userId);
+}
+
+function hubMsg(payload) {
+  const msg = { content: payload.content || '', components: payload.components || [] };
+  if (payload.files) { msg.files = payload.files; msg.attachments = []; }
+  else { msg.files = []; msg.attachments = []; }
+  return msg;
+}
+
+// Button press on a posted hub: swap the card in place. A
+// content-only result answers privately and leaves the hub.
+async function hubUpdate(interaction, st) {
+  const payload = await hubRender(st, interaction.user.id);
+  if (!payload) return;
+  if (payload.files || st.tab === 'pbs') {
+    await interaction.update(hubMsg(payload)).catch(() => {});
+  } else {
+    await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
+  }
+}
+
+// Select/modal flow on a posted hub: the interaction was already
+// deferred, so the new view goes through editReply.
+async function hubEditReply(interaction, st) {
+  const payload = await hubRender(st, interaction.user.id);
+  if (!payload) return;
+  if (payload.files || st.tab === 'pbs') {
+    await interaction.editReply(hubMsg(payload)).catch(() => {});
+  } else {
+    await interaction.followUp({ ...payload, ephemeral: true }).catch(() => {});
+  }
+}
+
+// The board matching the hub's tab: Overview -> Overall,
+// Skills -> Skills, Clogs -> Clogs, Dry -> Driest, Gains ->
+// Gains, PvM -> the open boss's board (variant included),
+// PBs -> Overall.
+function hubBoardStateFor(st) {
+  const lb = lbDefaultState();
+  if (st.tab === 'skills') {
+    lb.v = 'skills';
+    lb.k = st.sub && SKILL_ORDER.includes(st.sub) ? st.sub : 'attack';
+  } else if (st.tab === 'pvm') {
+    lb.v = 'pvm';
+    const fam = hubVariantFamily(st.sub);
+    if (fam) {
+      lb.k = fam.keys[1];
+      lb.var = st.sub === fam.keys[0] ? null : Math.max(0, fam.keys.indexOf(st.sub, 1) - 1);
+    } else lb.k = st.sub || 'zulrah';
+  } else if (st.tab === 'clogs') {
+    lb.v = 'clogs';
+    if (!st.sub || st.sub === 'total' || st.sub === 'clues') lb.k = 'total';
+    else lb.k = (CLOG_PAGES[st.sub] || [])[1] || 'total';
+  } else if (st.tab === 'dry') {
+    lb.v = 'driest';
+  } else if (st.tab === 'gains') {
+    lb.v = 'gains';
+    lb.gd = gainsPeriod(st.ui || 'week');
+  }
+  return lb;
+}
+
+async function hubLbBranch(interaction, st) {
+  const payload = await lbView(hubBoardStateFor(st), interaction.user.id, false);
+  if (!payload) return;
+  if (payload.files) {
+    await interaction.update(hubMsg({ ...payload, components: [...(payload.components || []), hubBackRow(st)] })).catch(() => {});
+  } else {
+    await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
+  }
+}
+
+// A compare opened from the hub: the presser's main linked
+// account fills the second side, unless they have no linked
+// account or the profile on show is their own — then a picker
+// (their other linked accounts or Type a name) fills it.
+async function hubCmpBranch(interaction, st) {
+  const uid = interaction.user.id;
+  const linked = savedRsnsFor(uid);
+  const main = getRsn(uid);
+  const hubIsOwn = linked.some((r) => normName(r) === normName(st.rsn));
+  if (!linked.length || hubIsOwn || !main || normName(main) === normName(st.rsn)) {
+    await hubUpdate(interaction, { ...st, mode: 'cmp' });
+    return;
+  }
+  await hubCmpRender(interaction, st, main);
+}
+
+async function hubCmpRender(interaction, st, other) {
+  const uid = interaction.user.id;
+  const deferred = !!(interaction.deferred || interaction.replied);
+  const priv = (msg) => (deferred
+    ? interaction.followUp(msg).catch(() => {})
+    : interaction.reply(msg).catch(() => {}));
+  if (normName(other) === normName(st.rsn)) {
+    await priv({ content: 'Pick two different players to compare.', ephemeral: true });
+    return;
+  }
+  const gate = ownAccountGate(uid, st.rsn) || ownAccountGate(uid, other);
+  if (gate) {
+    await priv({ ...gate, ephemeral: true });
+    return;
+  }
+  const payload = await compareOverallPayload(st.rsn, other, uid, uid);
+  if (!payload || !payload.files) {
+    if (payload && payload.content) await priv({ content: payload.content, ephemeral: true });
+    return;
+  }
+  const msg = hubMsg({ ...payload, components: [...(payload.components || []), hubBackRow(st)] });
+  if (deferred) await interaction.editReply(msg).catch(() => {});
+  else await interaction.update(msg).catch(() => {});
+}
+
+async function handleHubButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const kind = parts[1];
+  const uid = interaction.user.id;
+  if (kind === 'tab') {
+    const st = hubDecode(parts.slice(3).join(':'));
+    const tab = parts[2];
+    if (!st.rsn || !HUB_TABS.includes(tab)) return;
+    await hubUpdate(interaction, { tab, rsn: st.rsn, sub: '', ui: '', owner: st.owner, mode: '' });
+    return;
+  }
+  // Two-segment kinds carry an argument before the state.
+  const argKinds = new Set(['alt', 'var', 'gain', 'clogcat', 'drycat']);
+  const st = hubDecode((argKinds.has(kind) ? parts.slice(3) : parts.slice(2)).join(':'));
+  if (!st.rsn) return;
+  switch (kind) {
+    case 'lb': await hubLbBranch(interaction, st); return;
+    case 'cmp': await hubCmpBranch(interaction, st); return;
+    case 'chg': {
+      if (!await hubOwnerGate(interaction, st)) return;
+      await hubUpdate(interaction, { ...st, mode: 'sw' });
+      return;
+    }
+    case 'swx': await hubUpdate(interaction, { ...st, mode: '' }); return;
+    case 'alt': {
+      if (!await hubOwnerGate(interaction, st)) return;
+      const idx = parseInt(parts[2], 10) || 0;
+      const alts = savedRsnsFor(uid)
+        .filter((r) => normName(r) !== normName(st.rsn)).slice(0, 3);
+      const alt = alts[idx];
+      if (!alt) return;
+      await hubUpdate(interaction, { ...st, rsn: alt, mode: '' });
+      return;
+    }
+    case 'name': {
+      if (!await hubOwnerGate(interaction, st)) return;
+      const modal = new ModalBuilder()
+        .setCustomId(`hubmodal:sw:${hubEncode({ ...st, mode: '' })}`)
+        .setTitle('Type a name')
+        .addComponents(new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('name').setLabel('RuneScape name')
+            .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(12)));
+      await interaction.showModal(modal).catch(() => {});
+      return;
+    }
+    case 'cmpname': {
+      const modal = new ModalBuilder()
+        .setCustomId(`hubmodal:cmp:${hubEncode({ ...st, mode: '' })}`)
+        .setTitle('Type a name')
+        .addComponents(new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('name').setLabel('RuneScape name')
+            .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(12)));
+      await interaction.showModal(modal).catch(() => {});
+      return;
+    }
+    case 'pickboss': {
+      await hubUpdate(interaction, { ...st, ui: `P:${compareCategoryOf(st.sub)}:0` });
+      return;
+    }
+    case 'clogpick': await hubUpdate(interaction, { ...st, ui: 'P:Bosses:0' }); return;
+    case 'clogcat': await hubUpdate(interaction, { ...st, ui: `P:${parts[2]}:0` }); return;
+    case 'clogtotal': {
+      await hubUpdate(interaction, { tab: 'clogs', rsn: st.rsn, sub: 'total', ui: '', owner: st.owner, mode: '' });
+      return;
+    }
+    case 'todry': {
+      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: st.sub, ui: '', owner: st.owner, mode: '' });
+      return;
+    }
+    case 'topvm': {
+      await hubUpdate(interaction, { tab: 'pvm', rsn: st.rsn, sub: st.sub, ui: '', owner: st.owner, mode: '' });
+      return;
+    }
+    case 'toclues': {
+      await hubUpdate(interaction, { tab: 'clogs', rsn: st.rsn, sub: 'clues', ui: `from:${st.sub}`, owner: st.owner, mode: '' });
+      return;
+    }
+    case 'todrypage': {
+      const from = st.ui && st.ui.startsWith('from:') ? st.ui.slice(5) : 'list';
+      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: from, ui: '', owner: st.owner, mode: '' });
+      return;
+    }
+    case 'skillgrid': {
+      await hubUpdate(interaction, { tab: 'skills', rsn: st.rsn, sub: '', ui: '', owner: st.owner, mode: '' });
+      return;
+    }
+    case 'drylist': await hubUpdate(interaction, { ...st, mode: '' }); return;
+    case 'gain': await hubUpdate(interaction, { ...st, ui: gainsPeriod(parts[2]) }); return;
+    case 'var': {
+      const fam = hubVariantFamily(st.sub);
+      if (!fam) return;
+      const sub = parts[2] === '-' ? fam.keys[0] : fam.keys[parseInt(parts[2], 10) + 1];
+      if (!sub) return;
+      await hubUpdate(interaction, { ...st, sub });
+      return;
+    }
+    case 'drycat': {
+      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: 'list', ui: parts[2], owner: st.owner, mode: '' });
+      return;
+    }
+    default: return;
+  }
+}
+
+async function handleHubSelect(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const kind = parts[1];
+  const value = String((interaction.values || [])[0] || '');
+  const st = hubDecode(parts.slice(2).join(':'));
+  if (!st.rsn || !value) return;
+  await interaction.deferUpdate().catch(() => {});
+  if (kind === 'skillpick') {
+    if (!SKILL_ORDER.includes(value)) return;
+    await hubEditReply(interaction, { ...st, sub: value, mode: '' });
+  } else if (kind === 'bosscat') {
+    await hubEditReply(interaction, { ...st, ui: `P:${value}:0` });
+  } else if (kind === 'bosspick') {
+    if (value.startsWith('page:')) {
+      const cat = String(st.ui || '').split(':')[1] || compareCategoryOf(st.sub);
+      await hubEditReply(interaction, { ...st, ui: `P:${cat}:${value.slice(5)}` });
+    } else if (value !== 'none' && kcEntry(value)) {
+      await hubEditReply(interaction, { ...st, sub: value, ui: '', mode: '' });
+    }
+  } else if (kind === 'clogpage') {
+    if (value.startsWith('pg:')) {
+      const cat = String(st.ui || '').split(':')[1] || 'Bosses';
+      await hubEditReply(interaction, { ...st, ui: `P:${cat}:${value.slice(3)}` });
+    } else if (value === 'clues') {
+      await hubEditReply(interaction, { ...st, sub: 'clues', ui: '', mode: '' });
+    } else {
+      await hubEditReply(interaction, { ...st, sub: value, ui: '', mode: '' });
+    }
+  } else if (kind === 'drypick') {
+    if (value.startsWith('b:')) await hubEditReply(interaction, { ...st, sub: value.slice(2), mode: '' });
+    else if (value.startsWith('c:')) await hubEditReply(interaction, { ...st, sub: `clue:${value.slice(2)}`, mode: '' });
+  } else if (kind === 'clanpick') {
+    if (st.owner && interaction.user.id !== st.owner) {
+      await interaction.followUp({
+        content: "You can't change the players on this one. Would you like to make your own card?",
+        components: [hubMineRow(st)],
+        ephemeral: true,
+      }).catch(() => {});
+      return;
+    }
+    await hubEditReply(interaction, { ...st, rsn: value, mode: '' });
+  } else if (kind === 'cmppick') {
+    await hubCmpRender(interaction, st, value);
+  }
+}
+
+async function handleHubModal(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const purpose = parts[1];
+  const st = hubDecode(parts.slice(2).join(':'));
+  if (!st.rsn) return;
+  const name = String(interaction.fields.getTextInputValue('name') || '').trim().replace(/\s+/g, ' ');
+  if (!RSN_RE.test(name)) {
+    await interaction.reply({ content: 'That name has characters RuneScape does not allow. Try again.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (purpose === 'sw') {
+    if (st.owner && interaction.user.id !== st.owner) {
+      await interaction.reply({
+        content: "You can't change the players on this one. Would you like to make your own card?",
+        components: [hubMineRow(st)],
+        ephemeral: true,
+      }).catch(() => {});
+      return;
+    }
+    await interaction.deferUpdate().catch(() => {});
+    await hubEditReply(interaction, { ...st, rsn: name, mode: '' });
+    return;
+  }
+  if (purpose === 'cmp') {
+    await interaction.deferUpdate().catch(() => {});
+    await hubCmpRender(interaction, st, name);
+  }
+}
+
+async function handleHubBackButton(interaction) {
+  const st = hubDecode(String(interaction.customId || '').slice('hubback:'.length));
+  if (!st.rsn) return;
+  if (interaction.deferred || interaction.replied) {
+    await hubEditReply(interaction, { ...st, mode: '' });
+  } else {
+    await hubUpdate(interaction, { ...st, mode: '' });
+  }
+}
+
+// The Make my own button on the not-your-card note: posts the
+// same hub in the channel as the presser's own card.
+async function handleHubMineButton(interaction) {
+  const st = hubDecode(String(interaction.customId || '').slice('hubmine:'.length));
+  if (!st.rsn) return;
+  const payload = await hubPayload(st.rsn, interaction.user.id, {
+    tab: st.tab, sub: st.sub, ui: st.tab === 'gains' ? st.ui : '',
+  });
+  if (!payload) return;
+  const sent = interaction.channel && payload.files
+    ? await interaction.channel.send(hubMsg(payload)).catch(() => null) : null;
+  if (sent) {
+    await interaction.update({ content: 'Your card is posted in the channel.', components: [] }).catch(() => {});
+  } else if (payload.files) {
+    await interaction.update({ ...hubMsg(payload) }).catch(() => {});
+  } else {
+    await interaction.update({ content: payload.content || 'Could not load that player.', components: [] }).catch(() => {});
+  }
+}
+
+// The Profile button on a standalone card: swaps the message
+// into the hub on the same player at the matching tab/sub-view.
+async function handleProfileButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const tab = parts[1];
+  const rsn = String(parts[parts.length - 1] || '').replace(/_/g, ' ');
+  const sub = parts.slice(2, -1).join(':');
+  if (!rsn || !HUB_TABS.includes(tab)) return;
+  const init = { tab, sub: '', ui: '' };
+  if (tab === 'skills') init.sub = sub !== '-' && SKILL_ORDER.includes(sub) ? sub : '';
+  else if (tab === 'pvm') init.sub = sub !== '-' ? sub : '';
+  else if (tab === 'clogs') init.sub = !sub || sub === '-' ? 'total' : sub;
+  else if (tab === 'dry') init.sub = !sub || sub === '-' ? 'list' : sub;
+  else if (tab === 'gains') init.ui = gainsPeriod(sub);
+  const payload = await hubPayload(rsn, interaction.user.id, init);
+  if (!payload) return;
+  if (payload.files) {
+    await interaction.update(hubMsg(payload)).catch(() => {});
+  } else {
+    await interaction.reply({ ...payload, ephemeral: true }).catch(() => {});
+  }
+}
+
+// The Open profile button on a leaderboard: a picker listing the
+// board's current page of players; picking one swaps into their
+// hub on the matching tab.
+async function handleLbProfileButton(interaction) {
+  const st = lbDecode(String(interaction.customId || '').slice('lbprof:'.length));
+  const board = lbBuildBoard(st, await rankedNames());
+  if (board.unavailable || !board.rows.length) {
+    await interaction.reply({
+      content: board.unavailable || 'No ranked members have numbers for this board yet.',
+      ephemeral: true,
+    }).catch(() => {});
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(board.rows.length / LB_PAGE_SIZE));
+  const page = Math.min(st.p || 0, pages - 1);
+  const slice = board.rows.slice(page * LB_PAGE_SIZE, page * LB_PAGE_SIZE + LB_PAGE_SIZE);
+  const payload = await lbView(st, interaction.user.id, false);
+  if (!payload || !payload.files) {
+    if (payload && payload.content) {
+      await interaction.reply({ content: payload.content, ephemeral: true }).catch(() => {});
+    }
+    return;
+  }
+  let tab = 'overview';
+  let sub = '-';
+  if (st.v === 'skills') { tab = 'skills'; sub = st.k && SKILL_ORDER.includes(st.k) ? st.k : '-'; }
+  else if (st.v === 'pvm') { tab = 'pvm'; sub = st.k || '-'; }
+  else if (st.v === 'clogs') {
+    tab = 'clogs';
+    sub = !st.k || st.k === 'total' ? 'total'
+      : (Object.keys(CLOG_PAGES).find((k) => CLOG_PAGES[k][1] === st.k) || 'total');
+  } else if (st.v === 'gains') tab = 'gains';
+  else if (st.v === 'driest') tab = 'dry';
+  const sel = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+    .setCustomId(`lbprofpick:${tab}:${sub}`)
+    .setPlaceholder('Pick a player...')
+    .addOptions(slice.map((r) => ({ label: String(r.name).slice(0, 100), value: String(r.name) }))));
+  const components = [...(payload.components || [])];
+  const back = backRowFor(findBackRow(interaction.message));
+  if (back) components.push(back);
+  components.push(sel);
+  await interaction.update(hubMsg({ ...payload, components: components.slice(0, 5) })).catch(() => {});
+}
+
+async function handleLbProfileSelect(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const tab = parts[1];
+  const sub = parts.slice(2).join(':');
+  const rsn = String((interaction.values || [])[0] || '');
+  if (!rsn || !HUB_TABS.includes(tab)) return;
+  await interaction.deferUpdate().catch(() => {});
+  const init = { tab, sub: '', ui: '' };
+  if (tab === 'skills') init.sub = sub !== '-' ? sub : '';
+  else if (tab === 'pvm') init.sub = sub !== '-' ? sub : '';
+  else if (tab === 'clogs') init.sub = sub || 'total';
+  else if (tab === 'dry') init.sub = 'list';
+  const payload = await hubPayload(rsn, interaction.user.id, init);
+  if (!payload) return;
+  await interaction.editReply(hubMsg(payload)).catch(() => {});
+}
+
 // Daily Wise Old Man sync (Nov 2, 2026): ask WOM to refresh
 // every ranked player's snapshot from the hiscores, then warm
 // all four gains periods into the file cache. The refresh also
@@ -4404,4 +5438,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };

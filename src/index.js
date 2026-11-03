@@ -29,7 +29,7 @@ const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, handleAgeSelect } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
@@ -211,6 +211,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId.startsWith('lbpick:')) {
         await handleLeaderboardSelect(interaction);
+      } else if (interaction.customId.startsWith('hub:')) {
+        await handleHubSelect(interaction);
+      } else if (interaction.customId.startsWith('lbprofpick:')) {
+        await handleLbProfileSelect(interaction);
       } else if (interaction.customId.startsWith('drypick:')) {
         await handleDryPickSelect(interaction);
       } else if (interaction.customId.startsWith('cmpboss:')) {
@@ -240,6 +244,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const [modalKind] = interaction.customId.split(':');
       if (modalKind === 'suggest') {
         await handleSuggestModal(interaction);
+      } else if (modalKind === 'hubmodal') {
+        await handleHubModal(interaction);
       } else if (modalKind === 'cmpmodal') {
         await handleCompareSwapModal(interaction);
       } else if (modalKind === 'team') {

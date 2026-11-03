@@ -357,6 +357,284 @@ async function t(name, fn, needFile = true) {
   const drb = await S.leaderboardPayload(null, 'driest');
   ok('driest board renders', !!(drb && drb.files), JSON.stringify(drb && drb.content || ''));
 
+  // ── M. Profile hub: shell, tabs, switcher, branches ──
+  function hubIx(customId, messageComponents, userId) {
+    const ix = fakeIx(customId, messageComponents, userId);
+    ix.deferred = false;
+    ix.deferUpdate = async () => { ix.deferred = true; };
+    ix.editReply = async (msg) => { ix.last = msg; };
+    ix.followUp = async (msg) => { ix.followedUp = msg; };
+    ix.showModal = async (modal) => { ix.modal = modal; };
+    ix.channel = { send: async (msg) => { ix.sent = msg; return { id: 'x' }; } };
+    ix.fields = { getTextInputValue: () => ix._field || '' };
+    return ix;
+  }
+  function selOptions(payload, prefix) {
+    for (const row of (payload && payload.components) || []) {
+      const j = row.toJSON ? row.toJSON() : row;
+      for (const c of j.components || []) {
+        if ((c.custom_id || '').startsWith(prefix)) return c.options || [];
+      }
+    }
+    return [];
+  }
+  const hub = await t('hub overview renders', () => S.hubPayload('IronVale', GAVIN, {}));
+  ok('hub overview has tab + branch rows',
+    !!hub && flat(hub).some((c) => c.id.startsWith('hub:tab:skills:'))
+      && flat(hub).some((c) => c.id.startsWith('hub:lb:'))
+      && flat(hub).some((c) => c.id.startsWith('hub:cmp:'))
+      && flat(hub).some((c) => c.id.startsWith('hub:chg:')));
+  ok('hub overview within the 5-row cap', !!hub && (hub.components || []).length <= 5,
+    hub ? `${hub.components.length} rows` : 'none');
+  for (const tab of ['skills', 'pvm', 'clogs', 'dry', 'gains']) {
+    const p = await t(`hub tab renders: ${tab}`, () => S.hubPayload('IronVale', GAVIN, { tab }));
+    ok(`hub tab within the 5-row cap: ${tab}`, !!p && (p.components || []).length <= 5,
+      p ? `${(p.components || []).length} rows` : 'none');
+  }
+  const hubPb = await S.hubPayload('IronVale', GAVIN, { tab: 'pbs' });
+  ok('hub PBs tab is the plugin notice',
+    !!hubPb && (hasFile(hubPb) || String(hubPb.content || '').includes('clan plugin is live')),
+    hubPb && hubPb.content ? hubPb.content.slice(0, 80) : 'no payload');
+  ok('hub PBs tab carries only the shell',
+    !!hubPb && flat(hubPb).every((c) => /^(hub:tab:|hub:lb:|hub:cmp:|hub:chg:)/.test(c.id)),
+    JSON.stringify(flat(hubPb || {}).map((c) => c.id)));
+  // Tab press swaps the card in place.
+  const skillsTabBtn = flat(hub).find((c) => c.id.startsWith('hub:tab:skills:'));
+  const ixTab = hubIx(skillsTabBtn.id, hub.components, GAVIN);
+  await S.handleHubButton(ixTab);
+  ok('hub tab press opens Skills with its picker',
+    !!ixTab.last && hasFile(ixTab.last)
+      && flat(ixTab.last).some((c) => c.id.startsWith('hub:skillpick:')));
+  // Solo skill in place, with the named return above the tabs.
+  const ixSkill = hubIx(flat(ixTab.last).find((c) => c.id.startsWith('hub:skillpick:')).id,
+    ixTab.last.components, GAVIN);
+  ixSkill.values = ['fishing'];
+  await S.handleHubSelect(ixSkill);
+  ok('hub skill pick opens the solo card in place',
+    !!ixSkill.last && hasFile(ixSkill.last)
+      && flat(ixSkill.last).some((c) => c.id.startsWith('hub:skillgrid:') && c.label === '← Skills card'));
+  ok('hub solo skill has no Leaderboard button',
+    !!ixSkill.last && !flat(ixSkill.last).some((c) => c.id.startsWith('lbswap:')));
+  // PvM picker: category + boss selects, then the controls return.
+  const hubPvm = await S.hubPayload('IronVale', GAVIN, { tab: 'pvm' });
+  const pickBtn = flat(hubPvm).find((c) => c.id.startsWith('hub:pickboss:'));
+  ok('hub PvM tab has Pick a boss', !!pickBtn);
+  const ixPick = hubIx(pickBtn.id, hubPvm.components, GAVIN);
+  await S.handleHubButton(ixPick);
+  ok('hub boss picker shows category + boss selects',
+    !!ixPick.last && flat(ixPick.last).some((c) => c.id.startsWith('hub:bosscat:'))
+      && flat(ixPick.last).some((c) => c.id.startsWith('hub:bosspick:')));
+  const bossOpts = selOptions(ixPick.last, 'hub:bosspick:')
+    .map((o) => o.value).filter((v) => v && !v.startsWith('page:') && v !== 'none');
+  ok('hub boss picker lists bosses', bossOpts.length > 0);
+  if (bossOpts.length) {
+    const ixBoss = hubIx(flat(ixPick.last).find((c) => c.id.startsWith('hub:bosspick:')).id,
+      ixPick.last.components, GAVIN);
+    ixBoss.values = [bossOpts[0]];
+    await S.handleHubSelect(ixBoss);
+    ok('hub boss pick returns to the controls row',
+      !!ixBoss.last && hasFile(ixBoss.last)
+        && flat(ixBoss.last).some((c) => c.id.startsWith('hub:pickboss:')));
+  }
+  // ToA variant toggles ride the PvM controls row.
+  const hubToa = await S.hubPayload('IronVale', GAVIN, { tab: 'pvm', sub: 'toa' });
+  const varBtns = flat(hubToa).filter((c) => c.id.startsWith('hub:var:'));
+  ok('hub ToA controls carry variant toggles',
+    JSON.stringify(varBtns.map((b) => b.label)) === JSON.stringify(['Total', 'Normal', 'Expert']),
+    JSON.stringify(varBtns.map((b) => b.label)));
+  // The Expert toggle's state carries an underscored boss key;
+  // a later press must decode it back to the same key.
+  const expertBtn = varBtns.find((c) => c.id.startsWith('hub:var:1:'));
+  if (expertBtn) {
+    const ixVar = hubIx(expertBtn.id, hubToa.components, GAVIN);
+    await S.handleHubButton(ixVar);
+    ok('hub variant press renders the variant card',
+      !!ixVar.last && hasFile(ixVar.last)
+        && flat(ixVar.last).some((c) => c.id.startsWith('hub:pickboss:')));
+    const tabBtn2 = flat(ixVar.last || {}).find((c) => c.id.startsWith('hub:tab:pvm:'));
+    ok('variant state round-trips the underscored key',
+      !!tabBtn2 && tabBtn2.id.includes('toa_expert'), tabBtn2 ? tabBtn2.id : 'missing');
+  }
+  // Clogs picker: category buttons + page select, page view returns.
+  const hubClogs = await S.hubPayload('IronVale', GAVIN, { tab: 'clogs' });
+  const clogPickBtn = flat(hubClogs).find((c) => c.id.startsWith('hub:clogpick:'));
+  ok('hub Clogs tab has Pick a page', !!clogPickBtn);
+  const ixCP = hubIx(clogPickBtn.id, hubClogs.components, GAVIN);
+  await S.handleHubButton(ixCP);
+  ok('hub clog picker shows categories + pages',
+    !!ixCP.last && flat(ixCP.last).filter((c) => c.id.startsWith('hub:clogcat:')).length === 5
+      && flat(ixCP.last).some((c) => c.id.startsWith('hub:clogpage:')));
+  const pageOpts = selOptions(ixCP.last, 'hub:clogpage:')
+    .map((o) => o.value).filter((v) => v && !v.startsWith('pg:'));
+  if (pageOpts.length) {
+    const ixPage = hubIx(flat(ixCP.last).find((c) => c.id.startsWith('hub:clogpage:')).id,
+      ixCP.last.components, GAVIN);
+    ixPage.values = [pageOpts[0]];
+    await S.handleHubSelect(ixPage);
+    ok('hub clog page carries the Clogs return, no Leaderboard button',
+      !!ixPage.last && hasFile(ixPage.last)
+        && flat(ixPage.last).some((c) => c.id.startsWith('hub:clogtotal:') && c.label === '← Clogs card')
+        && !flat(ixPage.last).some((c) => c.id.startsWith('lbswap:')));
+  }
+  // Dry tab: drill into a page, return to the list.
+  const hubDry = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
+  ok('hub Dry tab has category buttons',
+    !!hubDry && flat(hubDry).filter((c) => c.id.startsWith('hub:drycat:')).length === 5);
+  const dryOpts = selOptions(hubDry, 'hub:drypick:').map((o) => o.value).filter(Boolean);
+  ok('hub Dry tab has a drill-in picker', dryOpts.length > 0);
+  if (dryOpts.length) {
+    const ixDrill = hubIx(flat(hubDry).find((c) => c.id.startsWith('hub:drypick:')).id,
+      hubDry.components, GAVIN);
+    ixDrill.values = [dryOpts[0]];
+    await S.handleHubSelect(ixDrill);
+    ok('hub dry drill-in carries return buttons',
+      !!ixDrill.last && hasFile(ixDrill.last)
+        && flat(ixDrill.last).some((c) => c.id.startsWith('hub:drylist:')));
+    const backBtn = flat(ixDrill.last).find((c) => c.id.startsWith('hub:drylist:'));
+    const ixBack = hubIx(backBtn.id, ixDrill.last.components, GAVIN);
+    await S.handleHubButton(ixBack);
+    ok('hub dry return restores the list',
+      !!ixBack.last && hasFile(ixBack.last)
+        && flat(ixBack.last).some((c) => c.id.startsWith('hub:drycat:')));
+  }
+  // Gains flips inside the hub.
+  const hubGains = await S.hubPayload('IronVale', GAVIN, { tab: 'gains' });
+  const gainBtn = flat(hubGains).find((c) => c.id.startsWith('hub:gain:year:'));
+  ok('hub Gains tab has period buttons', !!gainBtn);
+  if (gainBtn) {
+    const ixGain = hubIx(gainBtn.id, hubGains.components, GAVIN);
+    await S.handleHubButton(ixGain);
+    ok('hub gains flip swaps in place', !!ixGain.last && hasFile(ixGain.last));
+  }
+  // Switcher: owner opens it, picks an alt; non-owner gets the note.
+  const chgBtn = flat(hub).find((c) => c.id.startsWith('hub:chg:'));
+  const ixChg = hubIx(chgBtn.id, hub.components, GAVIN);
+  await S.handleHubButton(ixChg);
+  ok('switcher opens with Type a name + clan picker',
+    !!ixChg.last && flat(ixChg.last).some((c) => c.id.startsWith('hub:name:'))
+      && flat(ixChg.last).some((c) => c.id.startsWith('hub:clanpick:')));
+  const altBtn = flat(ixChg.last || {}).find((c) => c.id.startsWith('hub:alt:'));
+  ok('switcher lists the opener\'s other accounts', !!altBtn);
+  if (altBtn) {
+    const ixAlt = hubIx(altBtn.id, ixChg.last.components, GAVIN);
+    await S.handleHubButton(ixAlt);
+    ok('switcher pick reloads the hub and closes',
+      !!ixAlt.last && hasFile(ixAlt.last)
+        && !flat(ixAlt.last).some((c) => c.id.startsWith('hub:clanpick:')));
+  }
+  const ixChgX = hubIx(chgBtn.id, hub.components, CHOWDER);
+  await S.handleHubButton(ixChgX);
+  ok('non-owner Change player gets the make-my-own note',
+    !!ixChgX.replied && String(ixChgX.replied.content || '').includes("can't change the players")
+      && flat(ixChgX.replied).some((c) => c.id.startsWith('hubmine:')));
+  // Leaderboard branch: matching board + named return, and the
+  // return row survives board flips.
+  const lbBtn = flat(hubClogs).find((c) => c.id.startsWith('hub:lb:'));
+  const ixLb = hubIx(lbBtn.id, hubClogs.components, GAVIN);
+  await S.handleHubButton(ixLb);
+  ok('hub Leaderboard branch opens a board with the hub return',
+    !!ixLb.last && hasFile(ixLb.last)
+      && flat(ixLb.last).some((c) => c.id.startsWith('hubback:') && c.label === '← Clogs card'));
+  const lbTabBtn = flat(ixLb.last).find((c) => c.id.startsWith('lbtab:skills:'));
+  const ixLbFlip = hubIx(lbTabBtn.id, ixLb.last.components, GAVIN);
+  await S.handleLeaderboardButton(ixLbFlip);
+  ok('hub return row survives board flips',
+    !!ixLbFlip.last && flat(ixLbFlip.last).some((c) => c.id.startsWith('hubback:')));
+  // Open profile: picker on a standalone board, pick opens the hub.
+  const board = await S.leaderboardPayload(GAVIN, 'overall');
+  const profBtn = flat(board).find((c) => c.id.startsWith('lbprof:'));
+  ok('standalone board carries Open profile', !!profBtn);
+  if (profBtn) {
+    const ixOP = hubIx(profBtn.id, board.components, GAVIN);
+    await S.handleLbProfileButton(ixOP);
+    ok('Open profile reveals the player picker',
+      !!ixOP.last && flat(ixOP.last).some((c) => c.id.startsWith('lbprofpick:')));
+    const names = selOptions(ixOP.last, 'lbprofpick:').map((o) => o.value).filter(Boolean);
+    if (names.length) {
+      const ixPickP = hubIx(flat(ixOP.last).find((c) => c.id.startsWith('lbprofpick:')).id,
+        ixOP.last.components, GAVIN);
+      ixPickP.values = [names[0]];
+      await S.handleLbProfileSelect(ixPickP);
+      ok('Open profile pick opens that player\'s hub',
+        !!ixPickP.last && hasFile(ixPickP.last)
+          && flat(ixPickP.last).some((c) => c.id.startsWith('hub:tab:')));
+    }
+  }
+  // Compare branch: opens at once for another member, and the
+  // hub return survives compare view flips.
+  const hubC = await S.hubPayload('IronVale', CHOWDER, {});
+  const cmpBtn = flat(hubC).find((c) => c.id.startsWith('hub:cmp:'));
+  const ixCmp = hubIx(cmpBtn.id, hubC.components, CHOWDER);
+  await S.handleHubButton(ixCmp);
+  ok('hub Compare branch opens the matchup with the hub return',
+    !!ixCmp.last && hasFile(ixCmp.last)
+      && flat(ixCmp.last).some((c) => c.id.startsWith('hubback:') && c.label === '← Profile card'));
+  if (ixCmp.last) {
+    const viewBtn = flat(ixCmp.last).find((c) => c.id.startsWith('cmp:skills:'));
+    if (viewBtn) {
+      const ixView = hubIx(viewBtn.id, ixCmp.last.components, CHOWDER);
+      await S.handleCompareButton(ixView);
+      ok('hub return survives compare view flips',
+        !!ixView.last && flat(ixView.last).some((c) => c.id.startsWith('hubback:')));
+    }
+  }
+  // Profile buttons on the standalone cards.
+  const kcP = await S.kcPayload('zulrah', 'IronVale', GAVIN);
+  ok('kc card carries a Profile button',
+    flat(kcP).some((c) => c.id.startsWith('prof:pvm:zulrah:')));
+  const skP = await S.skillsPayload('IronVale', GAVIN);
+  ok('skills card carries a Profile button',
+    flat(skP).some((c) => c.id.startsWith('prof:skills:')));
+  const dlP = await S.dryListPayload('IronVale', GAVIN, 'all');
+  ok('dry list carries a Profile button',
+    flat(dlP).some((c) => c.id.startsWith('prof:dry:list:')));
+  const ctP = await S.clogPayload('total', 'IronVale', GAVIN);
+  ok('clog total carries a Profile button',
+    flat(ctP).some((c) => c.id.startsWith('prof:clogs:total:')));
+  const profBtnKc = flat(kcP).find((c) => c.id.startsWith('prof:'));
+  const ixProf = hubIx(profBtnKc.id, kcP.components, GAVIN);
+  await S.handleProfileButton(ixProf);
+  ok('Profile button opens the hub on the boss',
+    !!ixProf.last && hasFile(ixProf.last)
+      && flat(ixProf.last).some((c) => c.id.startsWith('hub:pickboss:')));
+  // Compare autocomplete: linked + clan names first, capped at 25.
+  const acIx = {
+    commandName: 'compare', user: { id: GAVIN }, choices: null,
+    options: {
+      getFocused: () => ({ name: 'player_a', value: 'pt' }),
+      getString: () => null,
+    },
+    respond: async (c) => { acIx.choices = c; },
+  };
+  await S.handleAutocomplete(acIx);
+  ok('compare autocomplete returns linked/clan matches',
+    Array.isArray(acIx.choices) && acIx.choices.length > 0 && acIx.choices.length <= 25
+      && acIx.choices.some((c) => c.value === 'IronVale'),
+    JSON.stringify(acIx.choices || []).slice(0, 120));
+  const acIx2 = {
+    commandName: 'compare', user: { id: GAVIN }, choices: null,
+    options: {
+      getFocused: () => ({ name: 'player_b', value: 'qqqqzz' }),
+      getString: () => null,
+    },
+    respond: async (c) => { acIx2.choices = c; },
+  };
+  let acThrew = false;
+  try { await S.handleAutocomplete(acIx2); } catch { acThrew = true; }
+  ok('compare autocomplete survives an unmatched fragment',
+    !acThrew && Array.isArray(acIx2.choices));
+  // Malformed hub states survive.
+  for (const id of ['hub:tab:skills:💥💥', 'hub:lb:garbage', 'hub:chg:x|y', 'prof:pvm::IronVale', 'hubback:💥']) {
+    const ix = hubIx(id, [], GAVIN);
+    let threw = false;
+    try {
+      if (id.startsWith('prof:')) await S.handleProfileButton(ix);
+      else if (id.startsWith('hubback:')) await S.handleHubBackButton(ix);
+      else await S.handleHubButton(ix);
+    } catch { threw = true; }
+    ok(`malformed hub id survives: ${id.slice(0, 24)}`, !threw);
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown

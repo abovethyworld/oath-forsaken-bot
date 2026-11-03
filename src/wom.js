@@ -463,15 +463,18 @@ function getGainsTotals(username, period) {
 }
 
 // Ask WOM to refresh a player's snapshot from the hiscores
-// (POST /players/update). True when WOM accepted it. The
-// response seeds the stats cache, so every WOM-fed card gets
-// the fresher numbers, not just gains.
+// (POST /players/:username, the update/track endpoint). True
+// when WOM accepted it. The response seeds the stats cache, so
+// every WOM-fed card gets the fresher numbers, not just gains.
+// This used to POST /players/update with a JSON body, an
+// endpoint that does not exist: every call 404'd, res.ok was
+// false, and the daily sync reported 0/15 updated (Nov 2, 2026).
 async function updatePlayer(username) {
   const key = String(username || '').toLowerCase().trim();
   if (!key) return false;
   return paced(async () => {
     try {
-      const res = await womFetch('POST', '/players/update', { username: key });
+      const res = await womFetch('POST', `/players/${encodeURIComponent(key)}`);
       if (!res.ok) return false;
       const player = await res.json().catch(() => null);
       const stats = player ? parseStats(player) : null;
@@ -489,4 +492,26 @@ async function updatePlayer(username) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };
+// Player search for the compare autocomplete: partial-name
+// matches from Wise Old Man, paced and limiter-gated like every
+// other live request. Returns display names; empty on any
+// failure, because the autocomplete falls back to local names.
+async function searchPlayers(username) {
+  const q = String(username || '').trim();
+  if (!q) return [];
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/players/search?username=${encodeURIComponent(q)}&limit=25`);
+      if (!res.ok) return [];
+      const arr = await res.json().catch(() => null);
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .map((p) => p && (p.displayName || p.username))
+        .filter((n) => typeof n === 'string' && n);
+    } catch {
+      return [];
+    }
+  });
+}
+
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };
