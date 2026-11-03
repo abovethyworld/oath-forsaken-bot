@@ -381,7 +381,7 @@ function unitDropInfo(u, counters) {
 // pooled total the score is measured against.
 const POOL_FAMILIES = [
   { counters: ['commander_zilyana', 'general_graardor', 'kreearra', 'kril_tsutsaroth'], label: 'GWD' },
-  { counters: ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], label: 'DT2' },
+  { counters: ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], label: 'Forgotten Four' },
 ];
 
 function poolLabelFor(u) {
