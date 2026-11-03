@@ -4799,7 +4799,9 @@ function hubDryReturnRow(st) {
 }
 
 // The player's highest-KC boss: first key per boss name, totals
-// summed across its variant counters.
+// summed across its variant counters. Kill counts only: scores
+// that are not kills (Colosseum Glory above all) never count
+// toward the top spot.
 async function hubTopBoss(rsn) {
   const st = await getStats(rsn).catch(() => null);
   if (!st || st.notFound || !st.kc) return null;
@@ -4811,7 +4813,10 @@ async function hubTopBoss(rsn) {
     if (!e || !e.cols.length || seen.has(e.name)) continue;
     seen.add(e.name);
     let total = 0;
-    for (const c of e.cols) if (typeof st.kc[c.metric] === 'number') total += st.kc[c.metric];
+    for (const c of e.cols) {
+      if (NON_KC_SCORES.has(c.metric)) continue;
+      if (typeof st.kc[c.metric] === 'number') total += st.kc[c.metric];
+    }
     if (total > bestKc) { bestKc = total; best = key; }
   }
   return best;
