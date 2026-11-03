@@ -160,7 +160,7 @@ function suggestPanelPayload() {
         new ButtonBuilder()
           .setCustomId('suggest:open')
           .setLabel('Submit Suggestion')
-          .setStyle(ButtonStyle.Primary)
+          .setStyle(ButtonStyle.Danger)
           .setEmoji('💡'),
         new ButtonBuilder()
           .setCustomId('suggest:open:anon')

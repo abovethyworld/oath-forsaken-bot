@@ -229,7 +229,7 @@ function reviewButtons(threadId) {
       new ButtonBuilder()
         .setCustomId(`bounty:grant:${threadId}`)
         .setLabel('Grant Winnings')
-        .setStyle(ButtonStyle.Success),
+        .setStyle(ButtonStyle.Danger),
       new ButtonBuilder()
         .setCustomId(`bounty:reject:${threadId}`)
         .setLabel('Reject')
@@ -237,7 +237,7 @@ function reviewButtons(threadId) {
       new ButtonBuilder()
         .setCustomId(`bounty:lock:${threadId}`)
         .setLabel('Lock & Archive Thread')
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Secondary)
     ),
   ];
 }

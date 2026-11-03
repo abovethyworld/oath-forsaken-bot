@@ -65,7 +65,7 @@ async function postApplicationPanel(channel) {
       new ButtonBuilder()
         .setCustomId(`apply:type:${key}`)
         .setLabel(t.buttonLabel || t.label)
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Danger)
         .setEmoji(t.emoji || '📝')
     );
   }
@@ -101,7 +101,7 @@ async function applyCommand(interaction) {
       new ButtonBuilder()
         .setCustomId(`apply:type:${key}`)
         .setLabel(t.buttonLabel || t.label)
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Danger)
         .setEmoji(t.emoji || '📝')
     );
   }
@@ -225,7 +225,7 @@ async function handleModalSubmit(interaction) {
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('✅'),
+    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Accept').setStyle(ButtonStyle.Danger).setEmoji('✅'),
     new ButtonBuilder().setCustomId(`apply:denyreason:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny with Reason').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
     new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('✖️')
   );

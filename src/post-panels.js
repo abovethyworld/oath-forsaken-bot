@@ -86,7 +86,7 @@ function sectionsDesc(intro, sections, footer) {
       {
         type: 1,
         components: [
-          { type: 2, style: 1, label: t.buttonLabel, custom_id: 'ticket:create', emoji: { name: '🎫' } },
+          { type: 2, style: 4, label: t.buttonLabel, custom_id: 'ticket:create', emoji: { name: '🎫' } },
         ],
       },
     ],
