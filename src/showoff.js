@@ -109,6 +109,23 @@ function takeActivity(args, table) {
   return clean(args.shift() || '');
 }
 
+// !dry only: take the activity off the front of the args
+// when the front actually names one. takeActivity always
+// shifts a token, which eats a player name whole; !dry
+// <name> must reach the driest list instead.
+function takeDryActivity(args) {
+  const clean = (s) => String(s).toLowerCase().replace(/['’]/g, '');
+  if (args.length >= 2) {
+    const two = `${clean(args[0])}_${clean(args[1])}`;
+    if (KC_KEYS[two]) {
+      args.splice(0, 2);
+      return two;
+    }
+  }
+  if (args.length && KC_KEYS[clean(args[0])]) return clean(args.shift());
+  return null;
+}
+
 // Payload builders: return what to reply with ({ files }, { embeds }, or
 // { content }), shared by the !-commands and the slash commands.
 // !kc beyond the team-finder activities: every other kill-count
@@ -1072,7 +1089,7 @@ async function handleDryCommand(message, args) {
     await replyPayload(message, r.rsn, dryCluePayload(t[2], r.rsn, message.author.id));
     return;
   }
-  const activity = takeActivity(args, KC_KEYS);
+  const activity = takeDryActivity(args);
   const { rsn, error, payload } = resolveName(args, message.author.id);
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }

@@ -280,6 +280,7 @@ function pageUnits(counters, pageItems) {
           pieces: s.mode === 'pieces'
             ? `${sc.effectiveQty}/${s.pieces.length}` : null,
           sources: s.sources || [], isSet: true,
+          setMode: s.mode, pieceCount: s.pieces.length,
           ...sc,
         });
       }
@@ -322,17 +323,29 @@ function luckForPage(counters, pageItems) {
 
 // What sits behind a scored unit, for display: the activity
 // count its score is measured against (the counters of its
-// sources, each counted once) and its drop rate when every
-// source shares a single one. Sets carry no single rate: their
-// pieces drop at their own rates.
+// sources, each counted once) and a per-attempt drop rate.
+// Entries fed by several counters (clue pages and blessings
+// drop from every tier) blend their sources by the attempts
+// the player actually has at each, rolls folded in, so the
+// rate is per KC shown. A pieces-mode set scores any piece,
+// so its rate scales by the piece count.
 function unitDropInfo(u, counters) {
   const srcs = u.sources || [];
   const keys = [...new Set(srcs.map((s) => s.c))];
   const kc = keys.reduce(
     (a, c) => a + (counters && typeof counters[c] === 'number' ? counters[c] : 0), 0);
-  const rates = [...new Set(srcs.map((s) => s.rate)
-    .filter((r) => typeof r === 'number' && r > 0))];
-  return { kc: kc > 0 ? kc : null, rate: !u.isSet && rates.length === 1 ? rates[0] : null };
+  if (u.isSet && u.setMode !== 'pieces') return { kc: kc > 0 ? kc : null, rate: null };
+  let weighted = 0;
+  let attempts = 0;
+  for (const s of srcs) {
+    const n = counters && typeof counters[s.c] === 'number' ? counters[s.c] : 0;
+    if (n <= 0 || typeof s.rate !== 'number' || s.rate <= 0) continue;
+    let p = s.rate;
+    if (u.isSet) p = Math.min(1, p * (u.pieceCount || 1));
+    weighted += n * (1 - Math.pow(1 - p, s.rolls || 1));
+    attempts += n;
+  }
+  return { kc: kc > 0 ? kc : null, rate: attempts > 0 ? weighted / attempts : null };
 }
 
 // !dry breakdown: every scored unit on the page with its
