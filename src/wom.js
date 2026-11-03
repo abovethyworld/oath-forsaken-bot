@@ -475,7 +475,10 @@ async function updatePlayer(username) {
   return paced(async () => {
     try {
       const res = await womFetch('POST', `/players/${encodeURIComponent(key)}`);
-      if (!res.ok) return false;
+      if (!res.ok) {
+        console.warn(`WOM update rejected for ${key}: HTTP ${res.status}`);
+        return false;
+      }
       const player = await res.json().catch(() => null);
       const stats = player ? parseStats(player) : null;
       if (stats) {
