@@ -324,13 +324,14 @@ function luckForPage(counters, pageItems) {
 // What sits behind a scored unit, for display: the activity
 // count its score is measured against (the counters of its
 // sources, each counted once) and a drop rate. When every
-// attempted source shares one rate, that rate shows as-is.
-// Entries fed by several counters at different rates (clue
-// pages and blessings drop from every tier) blend their
-// sources by the attempts the player actually has at each,
-// rolls folded in, so the rate is per KC shown. A
-// pieces-mode set scores any piece, so its rate scales by
-// the piece count first.
+// attempted source shares one rate, that rate shows per
+// counter counted (boss rolls folded in, clue rates as
+// quoted). Entries fed by several counters at different
+// rates (clue pages and blessings drop from every tier)
+// blend their sources by the attempts the player actually
+// has at each, rolls folded in, so the rate is per KC
+// shown. A pieces-mode set scores any piece, so its rate
+// scales by the piece count first.
 function unitDropInfo(u, counters) {
   const srcs = u.sources || [];
   const keys = [...new Set(srcs.map((s) => s.c))];
@@ -339,6 +340,7 @@ function unitDropInfo(u, counters) {
   if (u.isSet && u.setMode !== 'pieces') return { kc: kc > 0 ? kc : null, rate: null };
   const attempted = srcs
     .map((s) => ({
+      c: s.c,
       n: counters && typeof counters[s.c] === 'number' ? counters[s.c] : 0,
       rate: typeof s.rate === 'number' ? s.rate : 0,
       rolls: s.rolls || 1,
@@ -347,10 +349,22 @@ function unitDropInfo(u, counters) {
     .map((s) => (u.isSet
       ? { ...s, rate: Math.min(1, s.rate * (u.pieceCount || 1)) } : s));
   if (!attempted.length) return { kc: kc > 0 ? kc : null, rate: null };
-  // One rate behind every attempted source: show it as-is,
-  // the figure the drop tables quote.
+  // One rate behind every attempted source: show it as the
+  // drop tables quote it, per counter counted. Boss counters
+  // count kills and a kill can roll the drop more than once
+  // (Zulrah rolls twice, a godsword shard can fall from the
+  // general or a bodyguard), so boss rates fold their rolls
+  // into a per-kill figure. Clue rates stay per roll, the
+  // way their tables quote them.
   const distinct = [...new Set(attempted.map((s) => s.rate))];
-  if (distinct.length === 1) return { kc: kc > 0 ? kc : null, rate: distinct[0] };
+  if (distinct.length === 1) {
+    const rollSet = [...new Set(attempted.map((s) => s.rolls))];
+    const clueOnly = attempted.every((s) => String(s.c).startsWith('clue_scrolls_'));
+    if (rollSet.length === 1 && !clueOnly) {
+      return { kc: kc > 0 ? kc : null, rate: 1 - Math.pow(1 - distinct[0], rollSet[0]) };
+    }
+    return { kc: kc > 0 ? kc : null, rate: distinct[0] };
+  }
   let weighted = 0;
   let attempts = 0;
   for (const s of attempted) {
@@ -358,6 +372,25 @@ function unitDropInfo(u, counters) {
     attempts += s.n;
   }
   return { kc: kc > 0 ? kc : null, rate: attempts > 0 ? weighted / attempts : null };
+}
+
+// Drops pooled across a whole boss family name the family
+// on the driest list, not the one boss page they were read
+// from: godsword shards fall at all four generals, Virtus
+// and the ingot at all four DT2 bosses. Their KC stays the
+// pooled total the score is measured against.
+const POOL_FAMILIES = [
+  { counters: ['commander_zilyana', 'general_graardor', 'kreearra', 'kril_tsutsaroth'], label: 'GWD' },
+  { counters: ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], label: 'DT2' },
+];
+
+function poolLabelFor(u) {
+  const have = [...new Set((u.sources || []).map((s) => s.c))].sort();
+  for (const f of POOL_FAMILIES) {
+    const want = [...f.counters].sort();
+    if (have.length === want.length && have.every((c, i) => c === want[i])) return f.label;
+  }
+  return null;
 }
 
 // !dry breakdown: every scored unit on the page with its
@@ -370,6 +403,7 @@ function dryReport(counters, pageItems) {
   const missing = units.filter((u) => !u.has)
     .map((u) => ({
       id: u.id, name: u.name, score: u.score, pieces: u.pieces || undefined,
+      pool: poolLabelFor(u) || undefined,
       ...unitDropInfo(u, counters),
     }));
   const obtained = units.filter((u) => u.has)

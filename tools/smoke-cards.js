@@ -666,11 +666,27 @@ async function t(name, fn, needFile = true) {
   ok('dry rate: clue page blended rate', !!pageRow && pageRow.rate > 0.007 && pageRow.rate < 0.009,
     pageRow && String(pageRow.rate));
   ok('dry rate: clue page kc sums tiers', !!pageRow && pageRow.kc === 150);
-  const shard = L.dryReport({ commander_zilyana: 466 }, [{ id: 11822, quantity: 0 }]);
+  const shard = L.dryReport(
+    { commander_zilyana: 124, general_graardor: 23, kril_tsutsaroth: 318, kreearra: 1 },
+    [{ id: 11822, quantity: 0 }]);
   const shardRow = shard && shard.missing[0];
-  ok('dry rate: shared single rate shows as-is', !!shardRow
-    && Math.abs(shardRow.rate - 0.0006561679790026247) < 1e-9 && shardRow.kc === 466,
+  ok('dry rate: shard per-kill rate folds boss and bodyguard rolls', !!shardRow
+    && shardRow.rate > 0.0032 && shardRow.rate < 0.0034,
     shardRow && String(shardRow.rate));
+  ok('dry pool: shard names GWD with pooled kc', !!shardRow
+    && shardRow.pool === 'GWD' && shardRow.kc === 466,
+    shardRow && `${shardRow.pool} ${shardRow.kc}`);
+  const fang = L.dryReport({ zulrah: 512 }, [{ id: 12922, quantity: 0 }]);
+  const fangRow = fang && fang.missing[0];
+  ok('dry rate: zulrah fang per-kill rate folds two rolls', !!fangRow
+    && Math.abs(fangRow.rate - 0.0019531) < 0.0001 && fangRow.kc === 512 && !fangRow.pool,
+    fangRow && String(fangRow.rate));
+  const virtus = L.dryReport(
+    { the_whisperer: 10, duke_sucellus: 10, the_leviathan: 10, vardorvis: 10 },
+    [{ id: 26241, quantity: 0 }]);
+  const virtusRow = virtus && virtus.missing[0];
+  ok('dry pool: virtus names DT2', !!virtusRow && virtusRow.pool === 'DT2' && virtusRow.kc === 40,
+    virtusRow && `${virtusRow.pool} ${virtusRow.kc}`);
   async function fakeDryMsg(userId, args) {
     const replies = [];
     const msg = {
