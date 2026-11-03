@@ -13,6 +13,7 @@ const {
   StringSelectMenuBuilder,
 } = require('discord.js');
 const { ZAMORAK_RED } = require('./utils');
+const { scheduleEphemeralDelete } = require('./auto-delete');
 const { getRsnEntry, getStatedBadge } = require('./teams');
 
 const CONTENT_FILE = path.join(__dirname, '..', 'data', 'guide-content.json');
@@ -119,6 +120,7 @@ async function helpCommand(interaction) {
       components: [topicMenu(), guideButton(topic.id)],
       ephemeral: true,
     });
+    scheduleEphemeralDelete(interaction);
     return;
   }
   await interaction.reply({
@@ -126,6 +128,7 @@ async function helpCommand(interaction) {
     components: [topicMenu(), guideButton(null)],
     ephemeral: true,
   });
+  scheduleEphemeralDelete(interaction);
 }
 
 async function handleHelpSelect(interaction) {

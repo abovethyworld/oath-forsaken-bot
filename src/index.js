@@ -28,6 +28,7 @@ const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
+const { scheduleEphemeralDelete } = require('./auto-delete');
 const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
@@ -187,7 +188,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.reply({
           content: 'Slow down a moment.',
           ephemeral: true,
-        }).catch(() => {});
+        }).then(() => scheduleEphemeralDelete(interaction)).catch(() => {});
         return;
       }
       cooldowns.set(cooldownKey, now);
