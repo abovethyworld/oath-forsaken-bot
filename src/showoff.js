@@ -944,6 +944,8 @@ async function dryListPayload(rsn, userId, cat = 'all') {
     rows: (await withIcons(top)).map((e) => ({
       id: e.id, name: e.name, page: e.page, score: e.score,
       pieces: e.pieces || null, icon: e.icon,
+      rateText: e.rate && Math.round(1 / e.rate) >= 2 ? `1/${Math.round(1 / e.rate)}` : null,
+      kc: e.kc || null,
     })),
   });
   if (!card) return CARD_DOWN;
