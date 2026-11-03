@@ -959,7 +959,7 @@ async function dryListPayload(rsn, userId, cat = 'all') {
   const card = await fetchCard('/dry-list', {
     rsn, cat, badge: cardBadgeFor(rsn, st ? st.accountType : null),
     rows: (await withIcons(top)).map((e) => ({
-      id: e.id, name: e.name, page: e.page, score: e.score,
+      id: e.id, name: e.name, page: e.pool || e.page, score: e.score,
       pieces: e.pieces || null, icon: e.icon,
       rateText: e.rate && Math.round(1 / e.rate) >= 2 ? `1/${Math.round(1 / e.rate)}` : null,
       kc: e.kc || null,
