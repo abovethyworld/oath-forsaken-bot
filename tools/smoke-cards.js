@@ -357,6 +357,10 @@ async function t(name, fn, needFile = true) {
   timings.push({ name: 'dry list (section L)', ms: Date.now() - dlStarted });
   ok('dry list renders for IronVale', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
   ok('dry list carries category buttons', !!dl && (dl.components || []).length >= 1);
+  ok('dry list hides IronVale\'s empty categories',
+    !!dl && flat(dl).filter((c) => c.id.startsWith('drycat:')).length === 3
+      && !flat(dl).some((c) => c.id.startsWith('drycat:Minigames'))
+      && !flat(dl).some((c) => c.id.startsWith('drycat:Other')));
   const dlb = await S.dryListPayload('IronVale', null, 'Bosses');
   ok('dry list Bosses category renders', !!(dlb && dlb.files));
   const drb = await S.leaderboardPayload(null, 'driest');
@@ -483,8 +487,12 @@ async function t(name, fn, needFile = true) {
   }
   // Dry tab: drill into a page, return to the list.
   const hubDry = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
-  ok('hub Dry tab has category buttons',
-    !!hubDry && flat(hubDry).filter((c) => c.id.startsWith('hub:drycat:')).length === 5);
+  // IronVale has scored drops only in Bosses and Clues, so the empty
+  // Minigames and Other buttons hide for him (set Nov 2, 2026).
+  ok('hub Dry tab shows only his non-empty categories',
+    !!hubDry && flat(hubDry).filter((c) => c.id.startsWith('hub:drycat:')).length === 3
+      && !flat(hubDry).some((c) => c.id.startsWith('hub:drycat:Minigames'))
+      && !flat(hubDry).some((c) => c.id.startsWith('hub:drycat:Other')));
   const dryOpts = selOptions(hubDry, 'hub:drypick:').map((o) => o.value).filter(Boolean);
   ok('hub Dry tab has a drill-in picker', dryOpts.length > 0);
   if (dryOpts.length) {

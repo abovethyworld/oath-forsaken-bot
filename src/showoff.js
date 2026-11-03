@@ -273,7 +273,9 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     // Nov 2, 2026). Clues stay off it: their All tile already is
     // the total. Single-variant cards and the Colosseum have none.
     totalValue: combined && !isClues && typeof myKc === 'number' ? myKc : null,
-    totalLabel: combined && !isClues ? `${entry.name.replace(/^The /, '')} Total` : null,
+    totalLabel: combined && !isClues
+      ? ((lbVariantInfo(entry) || {}).totalTitle || `${entry.name.replace(/^The /, '')} Total`)
+      : null,
     rankOf: standings.length,
     clanTotal: standings.length ? standings.reduce((s, r) => s + r.kc, 0) : null,
     members: standings.length,
@@ -861,16 +863,25 @@ function dryDrillTarget(u) {
   return kcEntry(u.actKey) ? `b:${u.actKey}` : null;
 }
 
-function dryCatRow(cat, rsn) {
+// Category buttons hide the categories that hold nothing scored
+// for this player (set Nov 2, 2026): a button that opens an
+// empty card is noise. 'all' and the open category always show;
+// without a present set (unknown), everything shows.
+function dryCatRow(cat, rsn, present) {
   const enc = String(rsn).replace(/ /g, '_');
   const btn = (c, label) => new ButtonBuilder()
     .setCustomId(`drycat:${c}:${enc}`)
     .setLabel(label)
     .setStyle(c === cat ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(c === cat);
-  return new ActionRowBuilder().addComponents(
-    btn('all', 'All'), btn('Bosses', 'Bosses'), btn('Clues', 'Clues'),
-    btn('Minigames', 'Minigames'), btn('Other', 'Other'));
+  const show = (c) => c === 'all' || c === cat || !present || present.has(c);
+  const row = new ActionRowBuilder();
+  if (show('all')) row.addComponents(btn('all', 'All'));
+  if (show('Bosses')) row.addComponents(btn('Bosses', 'Bosses'));
+  if (show('Clues')) row.addComponents(btn('Clues', 'Clues'));
+  if (show('Minigames')) row.addComponents(btn('Minigames', 'Minigames'));
+  if (show('Other')) row.addComponents(btn('Other', 'Other'));
+  return row;
 }
 
 function dryPickRow(cat, rsn, units) {
@@ -936,7 +947,7 @@ async function dryListPayload(rsn, userId, cat = 'all') {
     })),
   });
   if (!card) return CARD_DOWN;
-  const components = [dryCatRow(cat, rsn)];
+  const components = [dryCatRow(cat, rsn, new Set(units.map((u) => u.tab)))];
   const pick = dryPickRow(cat, rsn, filtered);
   if (pick) components.push(pick);
   components.push(new ActionRowBuilder().addComponents(new ButtonBuilder()
@@ -1950,7 +1961,7 @@ function lbDecode(s) {
 // with its cols order. The Colosseum is absent on purpose: its
 // second column is Glory, not kills.
 const LB_VARIANT_INFO = {
-  tombs_of_amascut: { labels: ['Normal', 'Expert'], titles: ['Tombs of Amascut', 'Tombs of Amascut Expert'] },
+  tombs_of_amascut: { labels: ['Normal', 'Expert'], titles: ['Tombs of Amascut Normal', 'Tombs of Amascut Expert'], totalTitle: 'Tombs of Amascut Total' },
   chambers_of_xeric: { labels: ['Normal', 'CM'], titles: ['Chambers of Xeric', 'Chambers of Xeric CM'] },
   theatre_of_blood: { labels: ['Regular', 'Hard Mode'], titles: ['Theatre of Blood', 'Hard Mode Theatre of Blood'] },
   the_gauntlet: { labels: ['Gauntlet', 'Corrupted Gauntlet'], titles: ['The Gauntlet', 'The Corrupted Gauntlet'] },
@@ -2126,7 +2137,7 @@ function lbBuildBoard(st, names) {
     }
     rows.sort((a, b) => b.value - a.value);
     const title = vi != null ? vInfo.titles[vi]
-      : vInfo ? `${entry.name} Total` : entry.name;
+      : vInfo ? (vInfo.totalTitle || `${entry.name} Total`) : entry.name;
     return { title, unit: 'KC', rows };
   }
   if (st.v === 'clogs') {
@@ -4753,15 +4764,20 @@ function hubClogPickerRows(st) {
   return [catRow, selRow];
 }
 
-function hubDryCatRow(st, cat) {
+function hubDryCatRow(st, cat, present) {
   const enc = hubEncode(st);
   const btn = (c, label) => new ButtonBuilder()
     .setCustomId(`hub:drycat:${c}:${enc}`).setLabel(label)
     .setStyle(c === cat ? ButtonStyle.Danger : ButtonStyle.Secondary)
     .setDisabled(c === cat);
-  return new ActionRowBuilder().addComponents(
-    btn('all', 'All'), btn('Bosses', 'Bosses'), btn('Clues', 'Clues'),
-    btn('Minigames', 'Minigames'), btn('Other', 'Other'));
+  const show = (c) => c === 'all' || c === cat || !present || present.has(c);
+  const row = new ActionRowBuilder();
+  if (show('all')) row.addComponents(btn('all', 'All'));
+  if (show('Bosses')) row.addComponents(btn('Bosses', 'Bosses'));
+  if (show('Clues')) row.addComponents(btn('Clues', 'Clues'));
+  if (show('Minigames')) row.addComponents(btn('Minigames', 'Minigames'));
+  if (show('Other')) row.addComponents(btn('Other', 'Other'));
+  return row;
 }
 
 // Drill-in picker for the Dry tab: same page list as the
@@ -4889,14 +4905,17 @@ async function hubTabCard(st, userId) {
         const cat = DRY_LIST_CATS.includes(st.ui) ? st.ui : 'all';
         const p = await dryListPayload(rsn, userId, cat);
         if (!p.files) return pass(p);
-        const rows = [hubDryCatRow(st, cat)];
         const stats = await getStats(rsn).catch(() => null);
+        let present = null;
+        let pick = null;
         if (stats && !stats.notFound) {
           const units = dryListUnitsMemo(rsn, stats);
+          present = new Set(units.map((u) => u.tab));
           const filtered = cat === 'all' ? units : units.filter((u) => u.tab === cat);
-          const pick = hubDryPickRow(st, cat, filtered);
-          if (pick) rows.push(pick);
+          pick = hubDryPickRow(st, cat, filtered);
         }
+        const rows = [hubDryCatRow(st, cat, present)];
+        if (pick) rows.push(pick);
         return { files: p.files, rows };
       }
       const p = await dryPayload(sub, rsn, userId);
