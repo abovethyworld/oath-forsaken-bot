@@ -648,6 +648,43 @@ async function t(name, fn, needFile = true) {
     ok(`malformed hub id survives: ${id.slice(0, 24)}`, !threw);
   }
 
+  // N. Dry list rate/KC fields and the !dry text parse
+  // (Nov 2, 2026, late): dryReport missing units carry the
+  // activity count and a per-attempt rate, blended across
+  // sources; a name after !dry opens the list, a boss opens
+  // its card (takeActivity used to eat the name whole).
+  const L = require(path.join(__dirname, '..', 'src', 'luck.js'));
+  const blud = L.dryReport({ abyssal_sire: 1077 },
+    [{ id: 13274, quantity: 0 }, { id: 13275, quantity: 0 }, { id: 13276, quantity: 0 }]);
+  const bludRow = blud && blud.missing.find((m) => m.name === 'Abyssal bludgeon');
+  ok('dry rate: bludgeon any-piece rate', !!bludRow && bludRow.rate > 0.004 && bludRow.rate < 0.0055,
+    bludRow && String(bludRow.rate));
+  ok('dry rate: bludgeon kc', !!bludRow && bludRow.kc === 1077);
+  const page = L.dryReport({ clue_scrolls_hard: 100, clue_scrolls_master: 50 },
+    [{ id: 12624, quantity: 0 }]);
+  const pageRow = page && page.missing[0];
+  ok('dry rate: clue page blended rate', !!pageRow && pageRow.rate > 0.007 && pageRow.rate < 0.009,
+    pageRow && String(pageRow.rate));
+  ok('dry rate: clue page kc sums tiers', !!pageRow && pageRow.kc === 150);
+  async function fakeDryMsg(userId, args) {
+    const replies = [];
+    const msg = {
+      author: { id: userId },
+      reply: async (p) => { replies.push(p); return { edit: async (p2) => { replies.push(p2); } }; },
+    };
+    await S.handleDryCommand(msg, args);
+    return replies;
+  }
+  const nameList = await fakeDryMsg('drytest-a', ['ksen']);
+  ok('!dry <name> opens the driest list', !!(nameList[0] && nameList[0].files),
+    nameList[0] && nameList[0].content);
+  const bossCard = await fakeDryMsg('drytest-b', ['zulrah', 'ksen']);
+  ok('!dry <boss> <name> opens the boss card', !!(bossCard[0] && bossCard[0].files),
+    bossCard[0] && bossCard[0].content);
+  const ownList = await fakeDryMsg(GAVIN, []);
+  ok('!dry alone opens own list', !!(ownList[0] && ownList[0].files),
+    ownList[0] && ownList[0].content);
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
