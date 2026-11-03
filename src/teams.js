@@ -22,7 +22,6 @@ const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, DAY_MS, clampDesc } = require('./utils');
 const { getStats, getCachedStats } = require('./wom');
 const { getClogPage, getCachedClogPage } = require('./runeprofile');
-const { renderPartyBoard, MAX_ROWS } = require('./party-board');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 
@@ -685,6 +684,93 @@ function kcColumnsForTeam(team) {
   return [{ metric, icon: metric }];
 }
 
+// ─── Team board image (card service) ────────────────────────────────
+// The board is drawn by the card service in the same house style as
+// the card commands; the bot sends the row data plus the board's PNG
+// icons as base64. A failed call returns null and the listing posts
+// with no board, the same as any other board failure.
+const CARD_API = 'https://oathforsaken.cc/api/cards';
+const BOARD_ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
+const BOARD_MAX_ROWS = 12;
+const BOARD_COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
+const boardIconCache = new Map();
+
+function boardIconB64(subdir, key) {
+  if (!key) return null;
+  const cacheKey = `${subdir}/${key}`;
+  if (!boardIconCache.has(cacheKey)) {
+    let b64 = null;
+    try {
+      b64 = fs.readFileSync(path.join(BOARD_ASSET_DIR, subdir, `${key}.png`)).toString('base64');
+    } catch { /* icon missing: that slot just draws without one */ }
+    boardIconCache.set(cacheKey, b64);
+  }
+  return boardIconCache.get(cacheKey);
+}
+
+async function fetchBoardCard(body) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(CARD_API + '/team-board', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+// The card-service request body for a team's board. Pure apart from
+// the cached icon reads, so tests can assert the shape directly.
+function buildTeamBoardBody(team, rows, opts = {}) {
+  const kcCols = opts.kcColumns || [];
+  const columns = opts.skill ? [opts.skill] : BOARD_COLUMNS;
+  const shown = rows.slice(0, BOARD_MAX_ROWS);
+  const statIcons = {};
+  for (const c of columns) statIcons[c] = boardIconB64('icons', c);
+  const specIcons = {};
+  if (!opts.compact) {
+    for (const r of shown) {
+      for (const id of r.specs || []) {
+        if (!(id in specIcons)) specIcons[id] = boardIconB64('spec-icons', id);
+      }
+    }
+  }
+  const act = ACTIVITIES[team.activity] || {};
+  const pre = preLabel(team.activity, team.pre);
+  let title = act.name || act.short || 'Team';
+  if (pre) title += ` (${pre})`;
+  if (team.status === 'closed') title += ' (Closed)';
+  return {
+    title,
+    memberCount: rows.length,
+    compact: !!opts.compact,
+    columns,
+    statIcons,
+    kcColumns: kcCols.map((c) => ({
+      label: c.label || null,
+      icon: c.icon ? boardIconB64('boss-icons', c.icon) : null,
+    })),
+    clogColumn: !!opts.clogColumn,
+    specIcons,
+    rows: shown.map((r) => ({
+      name: r.name,
+      badge: r.badge ? boardIconB64('badge-icons', r.badge) : null,
+      stats: r.stats || null,
+      kc: Array.isArray(r.kc) ? r.kc : [r.kc],
+      clog: r.clog || null,
+      specs: opts.compact ? [] : (r.specs || []),
+    })),
+    extraCount: Math.max(0, rows.length - BOARD_MAX_ROWS),
+  };
+}
+
 // Builds the party-board image for a team, or null when it shouldn't show
 // (not a board team, or nobody has linked an RSN yet).
 async function partyBoardFile(team, client) {
@@ -761,7 +847,9 @@ async function partyBoardFile(team, client) {
   });
   if (!rows.some((r) => r.stats)) return null;
   const compact = getUserDefaults(team.organizerId).boardMode === 'compact';
-  const buf = renderPartyBoard(rows, Math.max(0, rows.length - MAX_ROWS), { kcColumns: kcCols, compact, skill, clogColumn: !!clogPage });
+  const body = buildTeamBoardBody(team, rows, { kcColumns: kcCols, compact, skill, clogColumn: !!clogPage });
+  const buf = await fetchBoardCard(body);
+  if (!buf) return null;
   return { file: new AttachmentBuilder(buf, { name: 'party-board.png' }), staleRsns, clogRsns };
 }
 
@@ -3756,6 +3844,7 @@ module.exports = {
   applyJoin,
   applyLeave,
   applyRoleClaim,
+  buildTeamBoardBody,
   mutateTeams,
   buildTeamFromData,
   creationStepsFor,
