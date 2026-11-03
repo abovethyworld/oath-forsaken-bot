@@ -685,7 +685,7 @@ async function t(name, fn, needFile = true) {
     { the_whisperer: 10, duke_sucellus: 10, the_leviathan: 10, vardorvis: 10 },
     [{ id: 26241, quantity: 0 }]);
   const virtusRow = virtus && virtus.missing[0];
-  ok('dry pool: virtus names DT2', !!virtusRow && virtusRow.pool === 'DT2' && virtusRow.kc === 40,
+  ok('dry pool: virtus names the Forgotten Four', !!virtusRow && virtusRow.pool === 'Forgotten Four' && virtusRow.kc === 40,
     virtusRow && `${virtusRow.pool} ${virtusRow.kc}`);
   async function fakeDryMsg(userId, args) {
     const replies = [];
