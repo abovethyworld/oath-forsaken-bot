@@ -41,7 +41,7 @@ const TUNING_FILE = path.join(__dirname, '..', 'data', 'luck-tuning.json');
 const DEFAULT_TUNING = {
   rateScale: { yama: 0.8, the_hueycoatl: 1 / 3 },
   rateScalePets: [30888, 30152],
-  unscoredItems: [33382],
+  unscoredItems: [33382, 30637],
 };
 function loadTuning() {
   let parsed = null;
@@ -102,7 +102,9 @@ const RATE_SCALE_PETS = new Set(TUNING.rateScalePets); // Yami, Huberte
 // (Immaculate mole skin) was added to the Giant Mole with
 // the gem sack content, long after lifetime mole KC
 // existed: scoring it charges kills that never had a
-// chance to drop it, and its dryness is fake.
+// chance to drop it, and its dryness is fake. 30637
+// (Giantsoul amulet (uncharged)) is excluded on the
+// clan's call: it is not treated as a dry chase.
 const UNSCORED_ITEMS = new Set(TUNING.unscoredItems);
 function scaledSources(sources, keepListed) {
   return (sources || []).map((s) => {
