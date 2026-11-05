@@ -41,7 +41,7 @@ const TUNING_FILE = path.join(__dirname, '..', 'data', 'luck-tuning.json');
 const DEFAULT_TUNING = {
   rateScale: { yama: 0.8, the_hueycoatl: 1 / 3 },
   rateScalePets: [30888, 30152],
-  unscoredItems: [33382, 30637],
+  unscoredItems: [33382, 30637, 33133],
 };
 function loadTuning() {
   let parsed = null;
@@ -104,7 +104,10 @@ const RATE_SCALE_PETS = new Set(TUNING.rateScalePets); // Yami, Huberte
 // existed: scoring it charges kills that never had a
 // chance to drop it, and its dryness is fake. 30637
 // (Giantsoul amulet (uncharged)) is excluded on the
-// clan's call: it is not treated as a dry chase.
+// clan's call: it is not treated as a dry chase. 33133
+// (Pristine spider silk) was added to Sarachnis long
+// after lifetime Sarachnis KC existed, the same disease
+// as the mole skin: its dryness is fake.
 const UNSCORED_ITEMS = new Set(TUNING.unscoredItems);
 function scaledSources(sources, keepListed) {
   return (sources || []).map((s) => {
