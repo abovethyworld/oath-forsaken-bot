@@ -341,6 +341,35 @@ async function getGroupMembers(groupId) {
   });
 }
 
+// Same group read as getGroupMembers, but keeps the dates the tenure
+// ledger seeds from (src/tenure.js): the synced in-game join date when
+// present, else the WOM group membership creation date.
+async function getGroupMemberships(groupId) {
+  if (!groupId) return null;
+  return paced(async () => {
+    try {
+      const res = await womFetch('GET', `/groups/${encodeURIComponent(groupId)}`);
+      if (!res.ok) return null;
+      const group = await res.json();
+      const out = [];
+      for (const m of group.memberships || []) {
+        const name = m.player && (m.player.displayName || m.player.username);
+        if (name) {
+          out.push({
+            name,
+            createdAt: m.createdAt || null,
+            clientSyncJoinedAt: m.clientSyncJoinedAt || null,
+          });
+        }
+      }
+      return out;
+    } catch (err) {
+      console.warn('WOM group lookup failed:', err.message);
+      return null;
+    }
+  });
+}
+
 // The group's competitions (staff create them on Wise Old Man). Returns
 // the raw list, or null on failure so callers keep their last good data.
 async function getGroupCompetitions(groupId) {
@@ -517,4 +546,4 @@ async function searchPlayers(username) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };
+module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupMemberships, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };
