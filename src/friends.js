@@ -11,7 +11,8 @@ const config = require('./config');
 const { atomicWrite } = require('./store');
 const { getMembers } = require('./guild-cache');
 const { getRsnEntry } = require('./teams');
-const { getGroupMembers } = require('./wom');
+const { getGroupMembers, getGroupMemberships } = require('./wom');
+const tenure = require('./tenure');
 
 const FRIENDS_FILE = path.join(__dirname, '..', 'data', 'friends.json');
 const GROUP_FILE = path.join(__dirname, '..', 'data', 'wom-group.json');
@@ -38,10 +39,27 @@ async function syncFriends(client) {
 // The website's members list is the clan's WOM group. Publish its display
 // names to data/wom-group.json on the same cadence as the friends list. A
 // failed lookup keeps the last good list instead of emptying the roster.
+// The same refresh drives the tenure ledger (src/tenure.js): seed it once
+// from the dates WOM holds, then start and bank stretches against each
+// fresh list, so seniority tracks time in the clan chat.
 async function syncWomGroup() {
   const names = await getGroupMembers(config.womGroupId);
   if (!names) return 0;
   names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  // Tenure upkeep is best-effort: its failure must not block the roster
+  // publish below.
+  try {
+    if (!tenure.isSeeded()) {
+      const memberships = await getGroupMemberships(config.womGroupId);
+      if (memberships) {
+        const seeded = tenure.seedFromMemberships(memberships);
+        if (seeded) console.log(`Tenure: seeded ${seeded} member(s) from WOM join dates.`);
+      }
+    }
+    tenure.reconcileAll(names, Date.now());
+  } catch (err) {
+    console.error('Tenure upkeep failed:', err.message);
+  }
   atomicWrite(GROUP_FILE, names.map((rsn) => ({ rsn })));
   return names.length;
 }

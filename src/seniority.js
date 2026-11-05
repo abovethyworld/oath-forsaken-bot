@@ -1,27 +1,38 @@
 // Time-in-service (tenure) ranks, shown as separate groups in the member list.
-// A daily loop assigns each member the seniority role matching their server
-// join date: Initiate (<1 mo) -> Acolyte (1-2) -> Devout (3-5) ->
-// Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
-// Only Iron Sworn/Unbound members get ranks (guard set 2026-10-25);
-// everyone else is skipped and stripped of any seniority rank they hold.
+// A daily loop assigns each clan member the seniority role matching their
+// accrued time in the clan chat: Initiate (<1 mo) -> Acolyte (1-2) ->
+// Devout (3-5) -> Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
+// Membership and tenure follow the clan rule (set Nov 5, 2026): nobody is a
+// member until they are in the clan chat, and only time in the clan
+// chat counts. Membership = any linked RSN on the WOM group list
+// (src/membership.js); accrued time comes from the tenure ledger
+// (src/tenure.js), which banks time across leaves, so time away never
+// counts. Non-members are skipped and stripped of any seniority rank
+// they hold. Ascendant is hand-picked and is not in
+// config.seniorityRanks, so this sync never assigns or removes it.
+// After each run the assigned ranks are published to
+// data/seniority.json for the website, so site and bot cannot disagree.
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
 // On rank-up, the bot pings the member in #general with their story.
 // Stories finalized 2026-10-13: unified single arc (no iron/main split).
 // Format is PLAIN TEXT (not embeds) because Discord doesn't render role
 // mentions in embed titles.
+const path = require('path');
 const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { getOriginalJoinDate, backfill } = require('./join-dates');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getMembers } = require('./guild-cache');
 const { MONTH_MS, buildInitiateWelcome } = require('./utils');
+const membership = require('./membership');
+const tenure = require('./tenure');
+
+// The website reads its roster ranks from this published file.
+const SENIORITY_FILE = path.join(__dirname, '..', 'data', 'seniority.json');
 
 // All IDs from config.json
 const SEN = config.seniority || {};
 const GENERAL_CHANNEL_ID = SEN.generalChannelId;
-const IRON_ROLE_ID = SEN.ironRoleId;
-const MAIN_ROLE_ID = SEN.mainRoleId;
 
 const RANK_IDS = SEN.rankIds || {};
 
@@ -83,17 +94,13 @@ async function postRankUpStory(guild, member, rankName) {
     if (key === 'initiate') {
       const channel0 = guild.channels.cache.get(GENERAL_CHANNEL_ID);
       if (!channel0) return;
-      const isIron0 = member.roles.cache.has(IRON_ROLE_ID);
-      const isMain0 = member.roles.cache.has(MAIN_ROLE_ID);
-      if (!isIron0 && !isMain0) return; // guests don't get rank-up stories
+      if (!membership.isMember(member.id)) return; // only clan members get rank-up stories
       await channel0.send({ content: buildInitiateWelcome(member.id), allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       return;
     }
     const ann = RANK_ANNOUNCEMENTS[key];
     if (!ann) return;
-    const isIron = member.roles.cache.has(IRON_ROLE_ID);
-    const isMain = member.roles.cache.has(MAIN_ROLE_ID);
-    if (!isIron && !isMain) return; // guests don't get rank-up stories
+    if (!membership.isMember(member.id)) return; // only clan members get rank-up stories
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
     const message = `${ann.header}\n${ann.divider}\n${ann.tagline(member.id)}\n\n${ann.story}`;
@@ -124,10 +131,12 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     const members = await getMembers(guild);
     if (!members) return changes;
 
-    // Fail closed: without both member role IDs configured there is no way
-    // to tell clan members from guests, so abort before any role changes.
-    if (!IRON_ROLE_ID || !MAIN_ROLE_ID) {
-      console.error('[seniority] config.seniority.ironRoleId and config.seniority.mainRoleId must both be set. Aborting seniority sync.');
+    // Fail closed: membership comes from the published WOM group list
+    // (the clan chat mirror). If it cannot be read there is no safe way
+    // to tell members from non-members, so abort before any role changes.
+    const memberIds = membership.memberIds();
+    if (memberIds === null) {
+      console.error('[seniority] WOM group list (data/wom-group.json) is unreadable. Aborting seniority sync.');
       return changes;
     }
 
@@ -142,36 +151,29 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (m.user.bot) continue;
       // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
       if (seniorityHolds.has(m.id)) continue;
-      // Only clan members (Iron Sworn or Unbound) get seniority roles.
-      // Guests, Friends of the Clan, and joiners who have not applied yet
-      // hold neither role: strip any seniority rank they hold, then skip.
+      // Only clan members get seniority roles: a linked RSN on the WOM
+      // group list (clan chat mirror). Everyone else, including account
+      // holders whose characters sit in another clan, is stripped of
+      // any seniority rank they hold, then skipped.
       // The permission-audit canary account must stay @everyone-only.
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
-      const memberRoleIds = [IRON_ROLE_ID, MAIN_ROLE_ID].filter(Boolean);
-      const isMember = memberRoleIds.some((id) => m.roles.cache.has(id));
+      const isMember = memberIds.has(m.id);
       if (!isMember) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
           if (dryRun) {
             changes.push(`${m.user.tag}: strip seniority (not a clan member)`);
           } else {
-            await m.roles.remove(rankIds, 'Seniority sync: only clan members (Iron Sworn/Unbound) hold seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
+            await m.roles.remove(rankIds, 'Seniority sync: only clan members hold seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
             updatedCount++;
           }
         }
         continue;
       }
-      // Use original join date (survives leave/rejoin). Fall back to Discord's.
-      const original = getOriginalJoinDate(m.id);
-      const joinedAt = original || m.joinedAt;
-      if (!joinedAt) continue;
-      let months = (now - joinedAt.getTime()) / MONTH_MS;
-      if (months < 0) {
-        // Clock skew or bad data: clamp to 0 and log so it doesn't silently skip
-        console.warn(`[seniority] Member ${m.id} has future join date ${joinedAt.toISOString()}, clamping to 0 months`);
-        months = 0;
-      }
+      // Accrued time in the clan chat, from the tenure ledger. A member
+      // with no ledger record yet has no accrued time.
+      const months = tenure.accruedMs(tenure.getRecord(m.id), now) / MONTH_MS;
       const want = rankForMonths(months);
       if (!want) continue;
       const has = m.roles.cache.has(want.roleId);
@@ -199,6 +201,37 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // new member carries the default icon in the clan chat anyway, so
       // there is nothing for staff to set until the first real rank-up.
       else if (newRankName !== 'Initiate') firstRanks.push({ member: m, newRankName });
+    }
+
+    // Publish the result for the website, so its roster ranks are the
+    // ranks assigned here and the two cannot disagree. Members only,
+    // keyed by Discord id, read back off the roles as they now stand;
+    // a held Ascendant outranks the tenure ladder.
+    if (!dryRun) {
+      try {
+        const ladder = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
+        const published = {};
+        for (const m of members.values()) {
+          if (m.user.bot || !memberIds.has(m.id)) continue;
+          let rank = null;
+          for (const key of ladder) {
+            if (RANK_IDS[key] && m.roles.cache.has(RANK_IDS[key])) {
+              rank = key.charAt(0).toUpperCase() + key.slice(1);
+              break;
+            }
+          }
+          const rec = tenure.getRecord(m.id);
+          published[m.id] = {
+            rank,
+            months: Math.round((tenure.accruedMs(rec, now) / MONTH_MS) * 100) / 100,
+            stretchStart: rec ? rec.stretchStart : null,
+            bankedMs: rec && typeof rec.bankedMs === 'number' ? rec.bankedMs : 0,
+          };
+        }
+        store.atomicWrite(SENIORITY_FILE, { generatedAt: new Date(now).toISOString(), ranks: published });
+      } catch (err) {
+        console.error('Seniority publish failed:', err.message);
+      }
     }
 
     // Second pass: stories + CC checklist entries, paced

@@ -102,6 +102,10 @@ client.once(Events.ClientReady, async (c) => {
       const n = await backfill(guild, members);
       if (n) console.log(`Join dates: backfilled ${n} member(s).`);
 
+      // Publish the WOM group membership first: the tenure ledger
+      // reconciles against it, and the seniority sync reads both.
+      await syncWomGroup();
+
       // Seniority sync (uses cached members)
       await syncSeniority(client);
 
@@ -123,9 +127,6 @@ client.once(Events.ClientReady, async (c) => {
 
       // Publish Friend of the Clan role holders for the website roster.
       await syncFriends(client);
-
-      // Publish the WOM group membership: the website's members list.
-      await syncWomGroup();
 
       // Archive any finished WOM competitions for the hall of champions.
       const newChamps = await syncChampions();
