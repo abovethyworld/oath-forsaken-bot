@@ -802,6 +802,49 @@ async function t(name, fn, needFile = true) {
       hubDry2 && hubDry2.content);
   }
 
+  // ── P. Contribution-scaled boss rates (Nov 4, 2026):
+  // Yama and the Hueycoatl scale unique rates by damage
+  // share; the luck layer scores them at fixed team
+  // strength (Yama duo x0.8, Hueycoatl 3-man x1/3) applied
+  // in code over the published solo table. Pets roll flat
+  // per player and keep their listed rates.
+  {
+    const RAW = require(path.join(__dirname, '..', 'src', 'luck-data.json'));
+    const rawRate = (id) => RAW.items[String(id)].sources[0].rate;
+    const row = (rep, name) => rep && rep.missing.find((m) => m.name === name);
+    const helm = row(L.dryReport({ yama: 438 }, [{ id: 30750, quantity: 0 }], 'full'),
+      'Oathplate helm');
+    ok('scaled rates: Yama piece scores at the duo rate (1/750)',
+      !!helm && Math.abs(helm.rate - rawRate(30750) * 0.8) < 1e-12
+        && Math.abs(helm.rate - 1 / 750) < 1e-9,
+      helm && String(helm.rate));
+    const horn = row(L.dryReport({ yama: 438 }, [{ id: 30759, quantity: 0 }], 'full'),
+      'Soulflame horn');
+    ok('scaled rates: Yama horn scores at the duo rate (1/375)',
+      !!horn && Math.abs(horn.rate - 1 / 375) < 1e-9,
+      horn && String(horn.rate));
+    const oldHornDry = 1 - L.binomCdfLE(438, rawRate(30759), 0);
+    const oldHornScore = Math.round((1 - oldHornDry) * 50);
+    ok('scaled rates: Yama horn is less dry than the solo table said',
+      !!horn && horn.score > oldHornScore,
+      horn && `${horn.score} vs solo-table ${oldHornScore}`);
+    const yami = row(L.dryReport({ yama: 438 }, [{ id: 30888, quantity: 0 }], 'full'),
+      'Yami');
+    ok('scaled rates: Yami pet keeps its listed rate',
+      !!yami && Math.abs(yami.rate - rawRate(30888)) < 1e-12,
+      yami && String(yami.rate));
+    const wand = row(L.dryReport({ the_hueycoatl: 62 }, [{ id: 30070, quantity: 0 }], 'full'),
+      'Dragon hunter wand');
+    ok('scaled rates: Huey wand scores at the 3-man rate (solo / 3)',
+      !!wand && Math.abs(wand.rate - rawRate(30070) / 3) < 1e-12,
+      wand && String(wand.rate));
+    const hub = row(L.dryReport({ the_hueycoatl: 62 }, [{ id: 30152, quantity: 0 }], 'full'),
+      'Huberte');
+    ok('scaled rates: Huberte pet keeps its listed rate',
+      !!hub && Math.abs(hub.rate - rawRate(30152)) < 1e-12,
+      hub && String(hub.rate));
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
