@@ -7,7 +7,7 @@ const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getPro
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
 const { getItemIcon } = require('./item-icons');
-const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor } = require('./luck');
+const { luckForPage, itemLuckScores, dryReport, scoredCounters, pluginCountersFor, inDryView } = require('./luck');
 
 // A player's full luck counter set: WOM boss/activity
 // counts plus any plugin-synced log-header counters.
@@ -831,6 +831,31 @@ async function dryCluesAllPayload(rsn, userId) {
 // wearing return buttons). Categories are the collection
 // log's own sections minus Raids, which luck never scores.
 const DRY_LIST_CATS = ['all', 'Bosses', 'Clues', 'Minigames', 'Other'];
+// The three dry views (Alex, Nov 4, 2026): Uniques is the
+// headline list (legit drops only, clues quarantined,
+// Barrows and Moons hidden), Clues is clue dryness alone,
+// Full clog is the whole scored list with its category
+// buttons. Every dry list surface opens on Uniques.
+const DRY_VIEWS = ['uniques', 'clues', 'full'];
+const DRY_VIEW_LABELS = { uniques: 'Uniques', clues: 'Clues', full: 'Full clog' };
+
+// Hub state for the dry list rides in st.ui: a view name, or
+// 'full:<cat>' while browsing the Full clog categories.
+// Older states carried a bare category; those read as the
+// Full clog view at that category. Anything else (including
+// the blank state a fresh Dry tab opens with) is Uniques.
+function dryUiParse(ui) {
+  const s = String(ui || '');
+  if (s === 'uniques' || s === 'clues') return { view: s, cat: 'all' };
+  if (s === 'full') return { view: 'full', cat: 'all' };
+  if (s.startsWith('full:')) {
+    const cat = s.slice(5);
+    return { view: 'full', cat: DRY_LIST_CATS.includes(cat) ? cat : 'all' };
+  }
+  if (DRY_LIST_CATS.includes(s)) return { view: 'full', cat: s };
+  return { view: 'uniques', cat: 'all' };
+}
+
 const dryListMemo = new Map();
 
 function dryListUnits(rsn, st) {
@@ -901,7 +926,7 @@ function dryCatRow(cat, rsn, present) {
   return row;
 }
 
-function dryPickRow(cat, rsn, units) {
+function dryPickRow(scope, rsn, units) {
   const byPage = new Map();
   for (const u of units) {
     const target = dryDrillTarget(u);
@@ -912,12 +937,12 @@ function dryPickRow(cat, rsn, units) {
   const pages = [...byPage.values()].sort((a, b) => a.score - b.score).slice(0, 24);
   if (!pages.length) return null;
   const enc = String(rsn).replace(/ /g, '_');
-  const label = cat === 'Bosses' ? 'Pick a boss to open its page'
-    : cat === 'Clues' ? 'Pick a tier to open its page'
+  const label = scope === 'Bosses' ? 'Pick a boss to open its page'
+    : scope === 'Clues' || scope === 'clues' ? 'Pick a tier to open its page'
       : 'Pick a page to open';
   return new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId(`drypick:${cat}:${enc}`)
+      .setCustomId(`drypick:${scope}:${enc}`)
       .setPlaceholder(label)
       .addOptions(pages.map((p) => ({ label: p.page.slice(0, 100), value: p.target }))));
 }
@@ -934,7 +959,29 @@ function dryHubReturnRow(cat, rsn) {
   return row;
 }
 
-async function dryListPayload(rsn, userId, cat = 'all') {
+// The view switcher on the dry list card: three buttons,
+// the open view lit and disabled.
+function dryViewRow(view, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  const btn = (v) => new ButtonBuilder()
+    .setCustomId(`dryview:${v}:${enc}`)
+    .setLabel(DRY_VIEW_LABELS[v])
+    .setStyle(v === view ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(v === view);
+  return new ActionRowBuilder().addComponents(DRY_VIEWS.map(btn));
+}
+
+// Return from a drilled-in dry page to the view list the
+// presser came from.
+function dryViewReturnRow(view, rsn) {
+  const enc = String(rsn).replace(/ /g, '_');
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId(`dryview:${view}:${enc}`)
+    .setLabel('\u2190 Driest list')
+    .setStyle(ButtonStyle.Secondary));
+}
+
+async function dryListPayload(rsn, userId, view = 'uniques', cat = 'all') {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   if (userId) noteUse(userId, 'dry');
@@ -947,17 +994,22 @@ async function dryListPayload(rsn, userId, cat = 'all') {
   }
   if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
   if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  if (!DRY_VIEWS.includes(view)) view = 'uniques';
+  if (!DRY_LIST_CATS.includes(cat)) cat = 'all';
   const units = dryListUnitsMemo(rsn, st);
   if (!units.length) {
     return { content: `Nothing to rank for **${rsn}** yet: no scored drops are missing, or the log is not synced.` };
   }
-  const filtered = cat === 'all' ? units : units.filter((u) => u.tab === cat);
+  const viewUnits = units.filter((u) => inDryView(u.cls, view));
+  const filtered = view === 'full' && cat !== 'all'
+    ? viewUnits.filter((u) => u.tab === cat) : viewUnits;
   const top = filtered.slice(0, 10);
   const withIcons = async (list) => Promise.all(list.map(async (e) => ({
     ...e, icon: e.id ? await petIconB64(e.id, e.name) : null,
   })));
+  const cardCat = view === 'uniques' ? 'Uniques' : view === 'clues' ? 'Clues' : cat;
   const card = await fetchCard('/dry-list', {
-    rsn, cat, badge: cardBadgeFor(rsn, st ? st.accountType : null),
+    rsn, cat: cardCat, badge: cardBadgeFor(rsn, st ? st.accountType : null),
     rows: (await withIcons(top)).map((e) => ({
       id: e.id, name: e.name, page: e.pool || e.page, score: e.score,
       pieces: e.pieces || null, icon: e.icon,
@@ -966,8 +1018,11 @@ async function dryListPayload(rsn, userId, cat = 'all') {
     })),
   });
   if (!card) return CARD_DOWN;
-  const components = [dryCatRow(cat, rsn, new Set(units.map((u) => u.tab)))];
-  const pick = dryPickRow(cat, rsn, filtered);
+  const components = [dryViewRow(view, rsn)];
+  if (view === 'full') {
+    components.push(dryCatRow(cat, rsn, new Set(units.map((u) => u.tab))));
+  }
+  const pick = dryPickRow(view === 'full' ? cat : view, rsn, filtered);
   if (pick) components.push(pick);
   components.push(new ActionRowBuilder().addComponents(new ButtonBuilder()
     .setCustomId(`prof:dry:list:${encName(rsn)}`).setLabel('Profile').setStyle(ButtonStyle.Secondary)));
@@ -991,7 +1046,16 @@ async function handleDryCatButton(interaction) {
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
   if (!rsn || !DRY_LIST_CATS.includes(cat)) return;
   await interaction.deferUpdate().catch(() => {});
-  await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, cat));
+  await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, 'full', cat));
+}
+
+async function handleDryViewButton(interaction) {
+  const parts = String(interaction.customId || '').split(':');
+  const view = parts[1];
+  const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
+  if (!rsn || !DRY_VIEWS.includes(view)) return;
+  await interaction.deferUpdate().catch(() => {});
+  await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, view, 'all'));
 }
 
 async function handleDryPickSelect(interaction) {
@@ -1006,9 +1070,13 @@ async function handleDryPickSelect(interaction) {
   else if (value.startsWith('c:')) payload = await dryCluePayload(value.slice(2), rsn, interaction.user.id);
   if (!payload) return;
   if (payload.files) {
+    // The return row goes back to the list the picker sat
+    // on: a Full clog category, or the view itself.
+    const back = DRY_LIST_CATS.includes(cat) ? dryHubReturnRow(cat, rsn)
+      : DRY_VIEWS.includes(cat) ? dryViewReturnRow(cat, rsn) : null;
     payload = {
       ...payload,
-      components: [...(payload.components || []), dryHubReturnRow(cat, rsn)],
+      components: [...(payload.components || []), ...(back ? [back] : [])],
     };
   }
   await drySwapUpdate(interaction, payload);
@@ -1094,7 +1162,7 @@ async function handleDryCommand(message, args) {
   if (error) { await message.reply(error).catch(() => {}); return; }
   if (payload) { await message.reply(payload).catch(() => {}); return; }
   if (!activity) {
-    await replyPayload(message, rsn, dryListPayload(rsn, message.author.id, 'all'));
+    await replyPayload(message, rsn, dryListPayload(rsn, message.author.id));
     return;
   }
   await replyPayload(message, rsn, dryPayload(activity, rsn, message.author.id));
@@ -1713,13 +1781,18 @@ async function siteCardPayload(rsn) {
 // The player's driest missing scored item across every synced
 // collection log page, in the luck plugin's phrasing ("85%
 // luckier than you"). Cache-only: pages the bot has never seen
-// are skipped, never fetched. Null when nothing scores, or when
-// the driest item sits under the 50% line the boss cards use.
+// are skipped, never fetched. The headline pick is the Uniques
+// view (legit drops only, no clues, no Barrows or Moons); a
+// player with no qualifying legit drop falls back to their
+// full-log pick rather than showing nothing (Alex, Nov 4,
+// 2026). Null when nothing scores, or when the driest item
+// sits under the 50% line the boss cards use.
 function driestItemUnit(rsn, st) {
   if (!st || st.notFound) return null;
   const counters = countersFor(st, rsn);
   const seen = new Set();
-  let worst = null;
+  let worstUniques = null;
+  let worstFull = null;
   for (const pair of Object.values(CLOG_PAGES)) {
     const tab = pair[0];
     const title = pair[1];
@@ -1730,15 +1803,24 @@ function driestItemUnit(rsn, st) {
     if (!page || !page.items.length) continue;
     const rep = dryReport(counters, page.items);
     if (!rep || !rep.missing.length) continue;
-    const top = rep.missing[0];
-    if (!worst || top.score < worst.score) worst = top;
+    for (const m of rep.missing) {
+      if (!worstFull || m.score < worstFull.score) worstFull = m;
+      if (inDryView(m.cls, 'uniques')
+        && (!worstUniques || m.score < worstUniques.score)) worstUniques = m;
+    }
   }
-  if (!worst) return null;
   // A missing item's score is (1 - dryness) / 2 on the 0-100
   // scale, so the dryness share inverts straight back out.
-  const pct = Math.round(100 - 2 * worst.score);
-  if (pct < 50) return null;
-  return { name: worst.name, id: worst.id, score: worst.score, dryness: pct };
+  // The Uniques pick gets first claim; the full-log pick is
+  // the fallback when no legit drop clears the 50% line.
+  for (const worst of [worstUniques, worstFull]) {
+    if (!worst) continue;
+    const pct = Math.round(100 - 2 * worst.score);
+    if (pct >= 50) {
+      return { name: worst.name, id: worst.id, score: worst.score, dryness: pct };
+    }
+  }
+  return null;
 }
 
 function driestItemText(rsn, st) {
@@ -4547,7 +4629,7 @@ const commands = [
       const act = interaction.options.getString('activity');
       await slashReply(interaction, () => (act
         ? dryPayload(act, rsn, interaction.user.id)
-        : dryListPayload(rsn, interaction.user.id, 'all')));
+        : dryListPayload(rsn, interaction.user.id)));
     },
   },
   {
@@ -4812,7 +4894,7 @@ function hubDryPickRow(st, cat, units) {
   const pages = [...byPage.values()].sort((a, b) => a.score - b.score).slice(0, 24);
   if (!pages.length) return null;
   const label = cat === 'Bosses' ? 'Pick a boss to open its page'
-    : cat === 'Clues' ? 'Pick a tier to open its page'
+    : cat === 'Clues' || cat === 'clues' ? 'Pick a tier to open its page'
       : 'Pick a page to open';
   return new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`hub:drypick:${hubEncode(st)}`)
@@ -4820,16 +4902,32 @@ function hubDryPickRow(st, cat, units) {
     .addOptions(pages.map((p) => ({ label: p.page.slice(0, 100), value: p.target }))));
 }
 
-// Return row on a dry page inside the hub: back to the category
-// list the presser came from, and to the full driest list.
+// View switcher for the hub Dry tab: same three views as
+// the standalone dry list card, wearing hub ids.
+function hubDryViewRow(st, view) {
+  const enc = hubEncode({ ...st, sub: 'list' });
+  const btn = (v, label) => new ButtonBuilder()
+    .setCustomId(`hub:dryview:${v}:${enc}`).setLabel(label)
+    .setStyle(v === view ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    .setDisabled(v === view);
+  return new ActionRowBuilder().addComponents(
+    btn('uniques', 'Uniques'), btn('clues', 'Clues'), btn('full', 'Full clog'));
+}
+
+// Return row on a dry page inside the hub: back to the list
+// the presser came from (a view, or a Full clog category).
 function hubDryReturnRow(st) {
-  const cat = DRY_LIST_CATS.includes(st.ui) ? st.ui : 'all';
+  const { view, cat } = dryUiParse(st.ui);
   const row = new ActionRowBuilder();
   const mk = (targetUi, label) => new ButtonBuilder()
     .setCustomId(`hub:drylist:${hubEncode({ ...st, sub: 'list', ui: targetUi })}`)
     .setLabel(label).setStyle(ButtonStyle.Secondary);
-  if (cat !== 'all') row.addComponents(mk(cat, `\u2190 ${cat} driest`));
-  row.addComponents(mk('all', cat !== 'all' ? 'Driest list' : '\u2190 Driest list'));
+  if (view !== 'full') {
+    row.addComponents(mk(view, '\u2190 Driest list'));
+    return row;
+  }
+  if (cat !== 'all') row.addComponents(mk(`full:${cat}`, `\u2190 ${cat} driest`));
+  row.addComponents(mk('full:all', cat !== 'all' ? 'Driest list' : '\u2190 Driest list'));
   return row;
 }
 
@@ -4921,20 +5019,22 @@ async function hubTabCard(st, userId) {
     case 'dry': {
       const sub = st.sub || 'list';
       if (sub === 'list') {
-        const cat = DRY_LIST_CATS.includes(st.ui) ? st.ui : 'all';
-        const p = await dryListPayload(rsn, userId, cat);
+        const { view, cat } = dryUiParse(st.ui);
+        const p = await dryListPayload(rsn, userId, view, cat);
         if (!p.files) return pass(p);
         const stats = await getStats(rsn).catch(() => null);
-        let present = null;
-        let pick = null;
+        const rows = [hubDryViewRow(st, view)];
         if (stats && !stats.notFound) {
           const units = dryListUnitsMemo(rsn, stats);
-          present = new Set(units.map((u) => u.tab));
-          const filtered = cat === 'all' ? units : units.filter((u) => u.tab === cat);
-          pick = hubDryPickRow(st, cat, filtered);
+          const viewUnits = units.filter((u) => inDryView(u.cls, view));
+          const filtered = view === 'full' && cat !== 'all'
+            ? viewUnits.filter((u) => u.tab === cat) : viewUnits;
+          if (view === 'full') {
+            rows.push(hubDryCatRow(st, cat, new Set(units.map((u) => u.tab))));
+          }
+          const pick = hubDryPickRow(st, view === 'full' ? cat : view, filtered);
+          if (pick) rows.push(pick);
         }
-        const rows = [hubDryCatRow(st, cat, present)];
-        if (pick) rows.push(pick);
         return { files: p.files, rows };
       }
       const p = await dryPayload(sub, rsn, userId);
@@ -5180,7 +5280,7 @@ async function handleHubButton(interaction) {
     return;
   }
   // Two-segment kinds carry an argument before the state.
-  const argKinds = new Set(['alt', 'var', 'gain', 'clogcat', 'drycat']);
+  const argKinds = new Set(['alt', 'var', 'gain', 'clogcat', 'drycat', 'dryview']);
   const st = hubDecode((argKinds.has(kind) ? parts.slice(3) : parts.slice(2)).join(':'));
   if (!st.rsn) return;
   switch (kind) {
@@ -5265,7 +5365,12 @@ async function handleHubButton(interaction) {
       return;
     }
     case 'drycat': {
-      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: 'list', ui: parts[2], owner: st.owner, mode: '' });
+      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: 'list', ui: `full:${parts[2]}`, owner: st.owner, mode: '' });
+      return;
+    }
+    case 'dryview': {
+      const v = DRY_VIEWS.includes(parts[2]) ? parts[2] : 'uniques';
+      await hubUpdate(interaction, { tab: 'dry', rsn: st.rsn, sub: 'list', ui: v, owner: st.owner, mode: '' });
       return;
     }
     default: return;
@@ -5481,4 +5586,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };

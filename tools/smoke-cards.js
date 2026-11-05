@@ -9,7 +9,8 @@
 // Coverage: every card payload, the leaderboard boards and
 // variant toggles, scoped card swaps and their return buttons,
 // malformed button states, the account-type gate, autocomplete
-// abuse, and regression checks for the Nov 2, 2026 bugs (compare
+// abuse, the dry views (Uniques / Clues / Full clog), and
+// regression checks for the Nov 2, 2026 bugs (compare
 // clogs totals crash, clog boss card missing its Leaderboard
 // button, compare PvM tab not lighting, profile-luck file).
 // The Account Type forged-press fix is NOT covered here: its
@@ -710,6 +711,85 @@ async function t(name, fn, needFile = true) {
   const ownList = await fakeDryMsg(CHOWDER, []);
   ok('!dry alone opens own list', !!(ownList[0] && ownList[0].files),
     ownList[0] && ownList[0].content);
+
+  // ── O. Dry views (Nov 4, 2026): Uniques / Clues / Full
+  // clog. The luck layer stamps every unit with a class;
+  // the headline views filter on it, the math never changes.
+  {
+    const namesIn = (rep) => (rep ? rep.missing.map((m) => m.name) : []);
+    const dt2C = { the_whisperer: 100, duke_sucellus: 100, the_leviathan: 100, vardorvis: 100 };
+    const dt2Items = [{ id: 28334, quantity: 0 }, { id: 28276, quantity: 0 },
+      { id: 28268, quantity: 0 }, { id: 26241, quantity: 0 }];
+    const dt2U = namesIn(L.dryReport(dt2C, dt2Items, 'uniques'));
+    const dt2F = namesIn(L.dryReport(dt2C, dt2Items, 'full'));
+    ok('dry views: orb out of Uniques, in Full clog',
+      !dt2U.includes("Awakener's orb") && dt2F.includes("Awakener's orb"));
+    ok('dry views: ingot out of Uniques, in Full clog',
+      !dt2U.includes('Chromium ingot') && dt2F.includes('Chromium ingot'));
+    ok('dry views: quartz out of Uniques, in Full clog',
+      !dt2U.includes('Blood quartz') && dt2F.includes('Blood quartz'));
+    ok('dry views: Virtus stays in Uniques', dt2U.includes('Virtus mask'));
+    const gwdC = { commander_zilyana: 300, general_graardor: 300, kril_tsutsaroth: 300, kreearra: 300 };
+    const shardU = namesIn(L.dryReport(gwdC, [{ id: 11818, quantity: 0 }], 'uniques'));
+    const shardF = namesIn(L.dryReport(gwdC, [{ id: 11818, quantity: 0 }], 'full'));
+    ok('dry views: godsword shard out of Uniques, in Full clog',
+      !shardU.includes('Godsword shard 1') && shardF.includes('Godsword shard 1'));
+    const clueC = { clue_scrolls_hard: 100 };
+    const clueItems = [{ id: 12624, quantity: 0 }];
+    ok('dry views: clue drop quarantined to the Clues view',
+      !namesIn(L.dryReport(clueC, clueItems, 'uniques')).length
+        && namesIn(L.dryReport(clueC, clueItems, 'clues')).includes('Ancient page 4')
+        && namesIn(L.dryReport(clueC, clueItems, 'full')).includes('Ancient page 4'));
+    const barrU = namesIn(L.dryReport({ barrows_chests: 500 }, [{ id: 4708, quantity: 0 }], 'uniques'));
+    const barrF = namesIn(L.dryReport({ barrows_chests: 500 }, [{ id: 4708, quantity: 0 }], 'full'));
+    ok('dry views: Barrows hidden from Uniques, in Full clog',
+      !barrU.includes("Ahrim's hood") && barrF.includes("Ahrim's hood"));
+    const moonItems = [29000, 29004, 29007, 29010].map((id) => ({ id, quantity: 0 }));
+    const moonU = namesIn(L.dryReport({ lunar_chests: 300 }, moonItems, 'uniques'));
+    const moonF = namesIn(L.dryReport({ lunar_chests: 300 }, moonItems, 'full'));
+    ok('dry views: Moons hidden from Uniques, in Full clog',
+      !moonU.includes('Eclipse Moon armour') && moonF.includes('Eclipse Moon armour'));
+    const kqU = namesIn(L.dryReport({ kalphite_queen: 300 }, [{ id: 7981, quantity: 0 }], 'uniques'));
+    ok('dry views: KQ head stays legit', kqU.includes('Kq head'));
+    const kbdU = namesIn(L.dryReport({ king_black_dragon: 300 }, [{ id: 7980, quantity: 0 }], 'uniques'));
+    const kbdF = namesIn(L.dryReport({ king_black_dragon: 300 }, [{ id: 7980, quantity: 0 }], 'full'));
+    ok('dry views: KBD heads out of Uniques, in Full clog',
+      !kbdU.includes('Kbd heads') && kbdF.includes('Kbd heads'));
+    ok('dry views: removed units are not scored at all',
+      !L.scoredIds().has(25580) && !L.scoredIds().has(25582) && !L.scoredIds().has(20704)
+        && L.dryReport({ 'plugin:reward_permits': 100 }, [{ id: 25580, quantity: 0 }]) === null
+        && L.dryReport({ wintertodt: 500 },
+          [20704, 20706, 20708, 20710].map((id) => ({ id, quantity: 0 }))) === null);
+    // The list card itself: opens on Uniques with the three
+    // view buttons; Full clog keeps its category buttons.
+    const listU = await S.dryListPayload('IronVale', GAVIN);
+    ok('dry list opens on Uniques with the three view buttons',
+      hasFile(listU)
+        && ['Uniques', 'Clues', 'Full clog'].every((l) => flat(listU).some((c) => c.label === l))
+        && flat(listU).some((c) => c.id.startsWith('dryview:uniques:')),
+      listU && listU.content);
+    const listF = await S.dryListPayload('IronVale', GAVIN, 'full', 'all');
+    ok('dry list Full clog keeps the category buttons',
+      hasFile(listF) && flat(listF).some((c) => c.id.startsWith('drycat:Bosses:'))
+        && flat(listF).some((c) => c.id.startsWith('dryview:full:')),
+      listF && listF.content);
+    const listC = await S.dryListPayload('IronVale', GAVIN, 'clues');
+    ok('dry list Clues view renders', hasFile(listC)
+      && flat(listC).some((c) => c.id.startsWith('dryview:clues:')),
+      listC && listC.content);
+    const ixView = fakeIx('dryview:full:IronVale', [], GAVIN);
+    ixView.deferUpdate = async () => {};
+    ixView.editReply = async (msg) => { ixView.last = msg; };
+    await S.handleDryViewButton(ixView);
+    ok('dry view button swaps the list in place',
+      !!(ixView.last && ixView.last.files)
+        && flat(ixView.last).some((c) => c.id.startsWith('drycat:')));
+    const hubDry2 = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
+    ok('hub Dry tab opens on Uniques with the three view buttons',
+      hasFile(hubDry2)
+        && ['Uniques', 'Clues', 'Full clog'].every((l) => flat(hubDry2).some((c) => c.label === l)),
+      hubDry2 && hubDry2.content);
+  }
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction

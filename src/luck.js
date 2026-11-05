@@ -209,6 +209,32 @@ function scoreStack(entry, groups, counters, q, finish) {
   return finish(luck, dryness);
 }
 
+// Unit classes for the dry views (Alex, Nov 4, 2026): a
+// unit is "legit" when it is the item the hunt is for (a
+// table entry can opt out with "legit": false: spent keys,
+// shared materials, numbered components, slayer-helm heads
+// other than the KQ head). Clue units are their own view.
+// Units fed only by the Barrows chest or Moons chest
+// counters are hidden from the headline view: the pool is
+// wide, and the Moons counter is shared across three
+// bosses a player may not all hunt. Views: 'uniques'
+// (legit, non-clue, non-hidden), 'clues', 'full'.
+const HIDDEN_COUNTERS = new Set(['barrows_chests', 'lunar_chests']);
+function classify(entry, sources) {
+  const cs = (sources || []).map((s) => s.c);
+  return {
+    legit: !entry || entry.legit !== false,
+    clue: cs.length > 0 && cs.every((c) => String(c).startsWith('clue_scrolls_')),
+    hidden: cs.length > 0 && cs.every((c) => HIDDEN_COUNTERS.has(c)),
+  };
+}
+function inDryView(cls, view) {
+  if (!cls) return view === 'full';
+  if (view === 'uniques') return cls.legit && !cls.clue && !cls.hidden;
+  if (view === 'clues') return cls.clue;
+  return true;
+}
+
 const qtyOfItem = (it) => (it.qty != null ? it.qty : (it.quantity || 0));
 
 // Score a set as one unit; returns {score, luck, dryness,
@@ -281,6 +307,7 @@ function pageUnits(counters, pageItems) {
             ? `${sc.effectiveQty}/${s.pieces.length}` : null,
           sources: s.sources || [], isSet: true,
           setMode: s.mode, pieceCount: s.pieces.length,
+          cls: classify(s, s.sources || []),
           ...sc,
         });
       }
@@ -289,7 +316,7 @@ function pageUnits(counters, pageItems) {
     const t = TABLE[String(id)];
     if (!t) continue;
     const sc = scoreEntry(t, counters, qtyOfItem(it));
-    if (sc) units.push({ id, name: t.name, has: qtyOfItem(it) > 0, sources: t.sources || [], ...sc });
+    if (sc) units.push({ id, name: t.name, has: qtyOfItem(it) > 0, sources: t.sources || [], cls: classify(t, t.sources || []), ...sc });
   }
   return units;
 }
@@ -395,15 +422,17 @@ function poolLabelFor(u) {
 
 // !dry breakdown: every scored unit on the page with its
 // percentile, missing driest first, obtained luckiest
-// first, plus the page verdict.
-function dryReport(counters, pageItems) {
+// first, plus the page verdict. The view filters the
+// missing list ('full' is every scored unit); obtained and
+// the verdict always cover the whole page.
+function dryReport(counters, pageItems, view = 'full') {
   if (!counters || !Array.isArray(pageItems)) return null;
   const units = pageUnits(counters, pageItems);
   if (!units.length) return null;
-  const missing = units.filter((u) => !u.has)
+  const missing = units.filter((u) => !u.has && inDryView(u.cls, view))
     .map((u) => ({
       id: u.id, name: u.name, score: u.score, pieces: u.pieces || undefined,
-      pool: poolLabelFor(u) || undefined,
+      pool: poolLabelFor(u) || undefined, cls: u.cls,
       ...unitDropInfo(u, counters),
     }));
   const obtained = units.filter((u) => u.has)
@@ -453,5 +482,5 @@ function pluginCountersFor(rsn, dataDir) {
 
 module.exports = {
   luckForPage, binomCdfLE, dryReport, itemLuckScores, scoredCounters,
-  scoredIds, scoreEntry, pluginCountersFor,
+  scoredIds, scoreEntry, pluginCountersFor, inDryView,
 };
