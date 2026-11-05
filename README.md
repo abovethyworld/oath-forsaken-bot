@@ -157,4 +157,4 @@ Pull requests are welcome. Keep commits focused and messages professional.
 
 ## License
 
-All rights reserved. This bot is built for the Oath Forsaken clan.
+MIT. See [LICENSE](LICENSE).

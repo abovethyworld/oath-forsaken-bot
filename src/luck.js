@@ -301,7 +301,7 @@ function scoreStack(entry, groups, counters, q, finish) {
   return finish(luck, dryness);
 }
 
-// Unit classes for the dry views (Alex, Nov 4, 2026): a
+// Unit classes for the dry views: a
 // unit is "legit" when it is the item the hunt is for (a
 // table entry can opt out with "legit": false: spent keys,
 // shared materials, numbered components, slayer-helm heads

@@ -361,7 +361,7 @@ function getCachedClogPageItems(username, tab, page) {
 // Only the account lookup gates the result: if the account itself is
 // missing, the profile is not found. A missing or failed extra (skills,
 // combat achievements, diaries) just leaves that section off the card
-// instead of hiding a real account for 24 hours (Alex's call, 2026-10-29).
+// instead of hiding a real account for 24 hours.
 // Returns { account, skills, ca, diaries } | { notFound: true } | null.
 async function getProfile(username) {
   const u = encodeURIComponent(String(username).trim());

@@ -232,7 +232,7 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     const idx = standings.findIndex((r) => r.name === me);
     return { standings, rank: idx >= 0 ? idx + 1 : null };
   });
-  // Ranks (Alex, Nov 2, 2026): every variant on the card carries
+  // Ranks: every variant on the card carries
   // its own clan rank, and multi-variant cards add a combined
   // rank and total. Two exceptions: Clue Scrolls, whose first
   // column already is the combined total, and the Fortis
@@ -286,8 +286,8 @@ function kcCardBody(rsn, entry, st, clog, luck, pets) {
     kcValue: typeof myKc === 'number' ? myKc : null,
     rank: rankIdx >= 0 ? rankIdx + 1 : null,
     rankLabel,
-    // The player's own combined KC for the Total tile (Alex,
-    // Nov 2, 2026). Clues stay off it: their All tile already is
+    // The player's own combined KC for the Total tile.
+    // Clues stay off it: their All tile already is
     // the total. Single-variant cards and the Colosseum have none.
     totalValue: combined && !isClues && typeof myKc === 'number' ? myKc : null,
     totalLabel: combined && !isClues
@@ -326,7 +326,7 @@ function skillRank(rsn, skillKey) {
   return idx >= 0 ? idx + 1 : null;
 }
 
-// Leaderboard swap button (Alex, Nov 2, 2026): any card that
+// Leaderboard swap button: any card that
 // shows a clan rank carries one. Pressing it swaps the card
 // itself into the matching board, compare-style, with a Back
 // button that restores the card. The backId encodes how to
@@ -339,7 +339,7 @@ function lbSwapRow(boardArg, backId) {
 }
 
 function lbBackRow(backId) {
-  // The button names the card it returns to (Alex, Nov 2, 2026):
+  // The button names the card it returns to:
   // a bare "Back" does not say where it goes.
   const segs = String(backId || '').split(':');
   let label = 'Back';
@@ -515,7 +515,7 @@ async function bossClogLuck(rsn, key, counters) {
   }
 }
 
-// Pets in compare (Alex, Oct 31, 2026): the All Pets page is the
+// Pets in compare: the All Pets page is the
 // source of truth for which clog items are pets. A boss card
 // attaches the pet(s) on that boss's own page; a skill card
 // attaches the skill's pet(s).
@@ -823,15 +823,15 @@ async function dryCluesAllPayload(rsn, userId) {
   return CARD_DOWN;
 }
 
-// !dry on a name alone: the personal driest list (Alex,
-// Nov 2, 2026). Every missing scored drop across the log,
+// !dry on a name alone: the personal driest list.
+// Every missing scored drop across the log,
 // ranked worst first, with category buttons that filter the
 // list in place and a picker that drills into the page
 // behind a drop (the existing per-boss / per-tier dry card,
 // wearing return buttons). Categories are the collection
 // log's own sections minus Raids, which luck never scores.
 const DRY_LIST_CATS = ['all', 'Bosses', 'Clues', 'Minigames', 'Other'];
-// The three dry views (Alex, Nov 4, 2026): Uniques is the
+// The three dry views: Uniques is the
 // headline list (legit drops only, clues quarantined,
 // Barrows and Moons hidden), Clues is clue dryness alone,
 // Full clog is the whole scored list with its category
@@ -1784,8 +1784,8 @@ async function siteCardPayload(rsn) {
 // are skipped, never fetched. The headline pick is the Uniques
 // view (legit drops only, no clues, no Barrows or Moons); a
 // player with no qualifying legit drop falls back to their
-// full-log pick rather than showing nothing (Alex, Nov 4,
-// 2026). Null when nothing scores, or when the driest item
+// full-log pick rather than showing nothing. Null when
+// nothing scores, or when the driest item
 // sits under the 50% line the boss cards use.
 function driestItemUnit(rsn, st) {
   if (!st || st.notFound) return null;
@@ -1828,7 +1828,7 @@ function driestItemText(rsn, st) {
   return u ? `${u.name} (${u.dryness}% luckier than you)` : null;
 }
 
-// Cold start (Alex, Nov 2, 2026): the first time ANY card
+// Cold start: the first time ANY card
 // command touches a never-checked name, run one full sync -
 // WOM track, RuneProfile profile bundle, and the whole
 // collection log into the page cache - so that name's cards
@@ -2015,8 +2015,7 @@ async function handleProfileCommand(message, args) {
 // ---- Leaderboards ------------------------------------------------------
 // One card, five boards (Overall / PvM / Skills / Clogs / Gains), wearing
 // the compare card's menu: tab buttons plus a picker per tab, view
-// controls open to everyone. Design: files/leaderboard-design-draft-
-// 2026-11-02.md in the clan goal (drafted with Alex, Nov 1-2 2026).
+// controls open to everyone.
 // Ranked set = the website population (see rankedNames). Numbers come
 // straight from the caches (WOM / RuneProfile); a member appears on a
 // board only when they have a number for it (no invented zeros), and KC
@@ -2055,7 +2054,7 @@ function lbDecode(s) {
   return st;
 }
 
-// Variant boards (Alex, Nov 2, 2026): a multi-variant boss ranks
+// Variant boards: a multi-variant boss ranks
 // three ways, the total or one variant alone, through toggle
 // buttons named for that boss. Labels are the buttons; titles name
 // the board. Keyed by the entry's first metric, arrays aligned
@@ -2079,14 +2078,22 @@ function lbVariantInfo(entry) {
   return info && info.labels.length === entry.cols.length ? info : null;
 }
 
-// The ranked set mirrors the site exporter's allowed set (export_site_
-// data.py is the source of truth): the WOM group file, the exporter's
-// EXTRA_MEMBERS, its EXTRA_FRIENDS (verified friends who have not linked
-// an RSN here yet), and the friends file. It deliberately does NOT read
-// ladder-data.json: that file only holds players the exporter's own
-// cache has complete records for, which runs smaller than the roster.
-const LB_EXTRA_MEMBERS = ['IronVale'];
-const LB_EXTRA_FRIENDS = ['ksen', 'merryshake', 'brez', 'm o u z'];
+// The ranked set mirrors the website's allowed set: the WOM group
+// file, the extra names in data/lb-extras.json (members and verified
+// friends who are not in the group file), and the friends file. The
+// extras live in the data folder, not in code, so the repo itself
+// carries no account names. It deliberately does NOT read
+// ladder-data.json: that file only holds players the cache has
+// complete records for, which runs smaller than the roster.
+function lbExtras(dataDir) {
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(dataDir, 'lb-extras.json'), 'utf8'));
+    return {
+      members: Array.isArray(j.members) ? j.members : [],
+      friends: Array.isArray(j.friends) ? j.friends : [],
+    };
+  } catch { return { members: [], friends: [] }; }
+}
 async function rankedNames() {
   const names = [];
   const seen = new Set();
@@ -2099,8 +2106,9 @@ async function rankedNames() {
   try {
     for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'wom-group.json'), 'utf8'))) push(e.rsn);
   } catch { /* file not published yet */ }
-  for (const n of LB_EXTRA_MEMBERS) push(n);
-  for (const n of LB_EXTRA_FRIENDS) push(n);
+  const extras = lbExtras(dataDir);
+  for (const n of extras.members) push(n);
+  for (const n of extras.friends) push(n);
   try {
     for (const e of JSON.parse(fs.readFileSync(path.join(dataDir, 'friends.json'), 'utf8'))) push(e.rsn);
   } catch { /* file not published yet */ }
@@ -2342,8 +2350,8 @@ function lbVariantRow(st) {
 }
 
 function lbComponents(st, pages, scoped = false) {
-  // A board entered from a card is scoped to that card's boss
-  // (Alex, Nov 2, 2026): its variant toggle and nothing else. The
+  // A board entered from a card is scoped to that card's boss:
+  // its variant toggle and nothing else. The
   // caller's return row is appended on top of these.
   if (scoped) {
     if (st.v !== 'pvm') return [];
@@ -2792,8 +2800,8 @@ async function skillsPayload(rsn, userId) {
   return CARD_DOWN;
 }
 
-// !skills <skill> [name]: the solo single-skill card (Alex,
-// Nov 2, 2026). Same sections the compare inspect shows, one
+// !skills <skill> [name]: the solo single-skill card.
+// Same sections the compare inspect shows, one
 // player: level, XP and clan rank tiles, the skill's pet, and
 // its collection log pages as tile strips, scored where the
 // game gives a counter.
@@ -3046,7 +3054,7 @@ const SKILL_CLOG_PAGES = {
 };
 const SKILL_SECTION_METRIC = { Wintertodt: 'wintertodt', Tempoross: 'tempoross', Zalcano: 'zalcano' };
 
-// Draft 3 skill sections (Alex's pick, Oct 31, 2026): paired
+// Draft 3 skill sections: paired
 // per page, only the items the two players differ on, plus how
 // many they share. Scored skilling-boss pages keep a compact
 // luck-words line (the full luck % treatment lives on boss
@@ -3686,8 +3694,8 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
         bScore: bScores[it.id] != null ? bScores[it.id] : null,
       };
     }));
-    // Pets living on this page attach to the page card (Alex,
-    // Oct 31, 2026): covers the activity pets with no boss or
+    // Pets living on this page attach to the page card:
+    // covers the activity pets with no boss or
     // skill card of their own (Bloodhound, Pet Penance Queen,
     // Lil' Creator, Chompy chick) and boss pets alike.
     let pagePets = null;
@@ -3709,7 +3717,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
         }
       }
     }
-    // Game-style grids (Alex, Nov 1, 2026): the whole page
+    // Game-style grids: the whole page
     // for each player, obtained in colour and missing dark,
     // the way the in-game log shows it. Built from the full
     // page fetches above; when those fail the card service
@@ -3788,7 +3796,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     .reduce((s, p) => ({ got: s.got + (p.obtained || 0), total: s.total + (p.total || 0) }), { got: 0, total: 0 });
   const ta = totalOf(pa);
   const tb = totalOf(pb);
-  // Headline uses the official log totals (Alex, Oct 31, 2026):
+  // Headline uses the official log totals:
   // page sums double-count pages that repeat items (All Pets,
   // Slayer), so they overstate the real total.
   const [sumA, sumB] = await Promise.all([
@@ -3840,7 +3848,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
 }
 
 // Compare menus group bosses by type, alphabetical inside each type
-// Category order is Alex's (Nov 1, 2026): Raids first, then
+// Category order (Nov 1, 2026): Raids first, then
 // Bosses, Skilling bosses, Slayer bosses. The catalog is the
 // canonical metric-deduped boss list, keeping only bosses the
 // clan has KC on.
@@ -3855,8 +3863,8 @@ const CMP_SLAYER_KEYS = new Set(['sire', 'hydra', 'cerberus', 'kraken', 'thermy'
 const CMP_SKILLING_KEYS = new Set(['wintertodt', 'gotr', 'tempoross', 'zalcano']);
 const CMP_PAGE_SIZE = 22;
 
-// The Raids category lists four combined entries (Alex, Oct 31,
-// 2026): variants fold into one entry each, and The Fractured
+// The Raids category lists four combined entries:
+// variants fold into one entry each, and The Fractured
 // Archive is listed even at zero clan KC. Picking a multi-variant
 // entry opens a combined card (per-variant kills + differences).
 const CMP_RAID_COMBINED = [
@@ -3868,8 +3876,8 @@ const CMP_RAID_COMBINED = [
 const CMP_RAID_MEMBER_KEYS = new Set(['toa', 'toa_expert', 'cox', 'cox_cm',
   'tob', 'tob_hard', 'fractured_archive', 'tfa']);
 
-// Non-raid bosses folded into one picker entry the same way
-// (Alex, Nov 1, 2026): the Gauntlet pair and the wilderness
+// Non-raid bosses folded into one picker entry the same way:
+// the Gauntlet pair and the wilderness
 // pairs. One entry opens a combined card over both columns
 // instead of listing the halves separately (or, for ToA's
 // alias keys, leaking a second entry into Solo).
@@ -3966,8 +3974,8 @@ async function clogPagesOf(name) {
   return wrap && wrap.pages ? wrap.pages : null;
 }
 
-// The compare clog picker mirrors the in-game collection log
-// (Alex, Nov 1, 2026): pick a tab first, then a page inside
+// The compare clog picker mirrors the in-game collection log:
+// pick a tab first, then a page inside
 // it, A to Z like the game. Bosses and Raids are NOT listed:
 // those pages live under the Boss view, whose cards carry
 // their kills and log strips. Only pages either player has
@@ -3997,8 +4005,8 @@ async function clogPickerData(a, b) {
   const byTab = new Map(CLOG_TABS.map((t) => [t.id, []]));
   for (const [title, info] of got) {
     if (info.got <= 0) continue;
-    // Boss and raid pages live under the Boss view (Alex,
-    // Nov 1, 2026): the Boss cards already carry their kills
+    // Boss and raid pages live under the Boss view: the
+    // Boss cards already carry their kills
     // and log strips, so the Clogs picker is non-boss pages
     // only: Clues, Minigames, Other.
     if (info.tab === 'Bosses' || info.tab === 'Raids') continue;
@@ -4009,7 +4017,7 @@ async function clogPickerData(a, b) {
   for (const list of byTab.values()) {
     list.sort((x, y) => x.localeCompare(y));
   }
-  // The game's Clues list is not A to Z (Alex, Nov 1, 2026):
+  // The game's Clues list is not A to Z:
   // tiers run Beginner to Master, then the (Rare) pages, then
   // the shared pages. Match that order in the menu.
   const clueOrder = [
@@ -4280,8 +4288,8 @@ async function editCompareMessage(interaction, payload) {
   await interaction.editReply(edit).catch(() => {});
 }
 
-// View controls on a compare card are open to everyone (Alex,
-// Nov 1, 2026): the card is a shared surface in the channel. Only
+// View controls on a compare card are open to everyone:
+// the card is a shared surface in the channel. Only
 // the controls that change who is being compared (Change players,
 // alt-account buttons) stay with the member who ran the compare.
 // Cards posted before owner ids existed carry no owner and stay open.
@@ -4648,7 +4656,7 @@ const commands = [
   },
 ];
 
-// ---- Profile hub (Alex, Nov 2, 2026) ---------------------------
+// ---- Profile hub ---------------------------
 // One message that walks every card: tab rows (Overview, Skills,
 // PvM, Clogs / Dry, Gains, PBs), a divider, and a branch row
 // (Leaderboard, Compare, Change player). Every tab reuses the

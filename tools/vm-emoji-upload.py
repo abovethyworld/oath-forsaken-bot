@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bulk emoji uploader — run this ON THE VM (clean IP, no Cloudflare blocks).
+Bulk emoji uploader. Run this on the server host.
 
 Usage:
   1. Put PNG images in ./emoji-upload/ named like: myemoji.png

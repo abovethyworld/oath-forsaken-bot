@@ -145,7 +145,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // Only clan members (Iron Sworn or Unbound) get seniority roles.
       // Guests, Friends of the Clan, and joiners who have not applied yet
       // hold neither role: strip any seniority rank they hold, then skip.
-      // The permission-audit canary (slowshell7 alt) must stay @everyone-only.
+      // The permission-audit canary account must stay @everyone-only.
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
       const memberRoleIds = [IRON_ROLE_ID, MAIN_ROLE_ID].filter(Boolean);
@@ -197,8 +197,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // First-ever assignment: no story, but staff still need the in-game CC
       // rank set, so it gets a checklist entry below. Initiate excluded: a
       // new member carries the default icon in the clan chat anyway, so
-      // there is nothing for staff to set until the first real rank-up
-      // (Alex's call, 2026-10-29).
+      // there is nothing for staff to set until the first real rank-up.
       else if (newRankName !== 'Initiate') firstRanks.push({ member: m, newRankName });
     }
 
