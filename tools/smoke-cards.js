@@ -20,8 +20,60 @@ const fs = require('fs');
 const path = require('path');
 const S = require(path.join(__dirname, '..', 'src', 'showoff.js'));
 const DATA = path.join(__dirname, '..', 'data');
-const GAVIN = '111111111111111111';
-const CHOWDER = '210259442317524993';
+// Fixtures are derived from the bot's own data files at runtime:
+// the smoke runs against live caches, and the repo carries no real
+// account names or user IDs. OWNER is a linked user with at least
+// two accounts whose types are stated; PRIMARY is the account most
+// sections render; ALT is another of the owner's accounts; OTHER is
+// a second linked user; PARTNER is that user's account (compare
+// partner and name-lookup target); SPACED is an account whose name
+// contains a space.
+const T = require(path.join(__dirname, '..', 'src', 'teams.js'));
+function readDataJson(name) {
+  try { return JSON.parse(fs.readFileSync(path.join(DATA, name), 'utf8')); } catch { return null; }
+}
+const linksFile = readDataJson('rsn-links.json') || {};
+const gainsFile = readDataJson('wom-gains.json') || {};
+function linkedRsns(uid) {
+  try { const e = T.getRsnEntry(uid); return (e && e.rsns) || []; } catch { return []; }
+}
+function pickFixtures() {
+  const uids = Object.keys(linksFile);
+  let owner = null;
+  for (const uid of uids) {
+    const rsns = linkedRsns(uid);
+    if (rsns.length < 2) continue;
+    const stated = rsns.filter((r) => T.getStatedBadge(uid, r));
+    if (stated.length < 2) continue;
+    const primary = stated.find((r) => {
+      const g = gainsFile[String(r).toLowerCase()];
+      return g && g.week && g.year && !S.isCold(r);
+    });
+    if (!primary) continue;
+    owner = { uid, primary, alt: stated.find((r) => r !== primary) };
+    break;
+  }
+  let other = null;
+  for (const uid of uids) {
+    if (owner && uid === owner.uid) continue;
+    const rsns = linkedRsns(uid);
+    if (!rsns.length) continue;
+    const first = rsns[0];
+    if (T.getStatedBadge(uid, first) && !S.isCold(first)) { other = { uid, primary: first }; break; }
+  }
+  if (!owner || !other) return null;
+  const spaced = [owner.alt, other.primary, owner.primary].find((r) => r && r.includes(' ')) || owner.primary;
+  return { OWNER_ID: owner.uid, PRIMARY: owner.primary, ALT: owner.alt,
+    OTHER_ID: other.uid, PARTNER: other.primary, SPACED: spaced };
+}
+const FX = pickFixtures();
+if (!FX) { console.error('SMOKE FIXTURES: could not derive linked test accounts from the data files'); process.exit(1); }
+const OWNER = FX.OWNER_ID;
+const OTHER_USER = FX.OTHER_ID;
+const PRIMARY = FX.PRIMARY;
+const ALT = FX.ALT;
+const PARTNER = FX.PARTNER;
+const SPACED = FX.SPACED;
 let pass = 0, fail = 0;
 const fails = [];
 function ok(name, cond, extra) {
@@ -37,9 +89,29 @@ function compsOf(payload) {
   });
 }
 function flat(p) { return compsOf(p).flat(); }
+function pickOptionCount(payload, prefix) {
+  for (const row of (payload && payload.components) || []) {
+    const j = row.toJSON ? row.toJSON() : row;
+    for (const c of j.components || []) {
+      if ((c.custom_id || '').startsWith(prefix)) return (c.options || []).length;
+    }
+  }
+  return 0;
+}
+// Ground truth for the dry category buttons: a category holds
+// units for this account when its Full clog page renders a
+// drill-in picker with at least one page on it.
+async function dryCatsWithUnits(rsn) {
+  const cats = [];
+  for (const c of ['Bosses', 'Clues', 'Minigames', 'Other']) {
+    const p = await S.dryListPayload(rsn, null, 'full', c);
+    if (p && p.files && pickOptionCount(p, 'drypick:') > 0) cats.push(c);
+  }
+  return cats;
+}
 function fakeIx(customId, messageComponents, userId) {
   const ix = {
-    customId, user: { id: userId || GAVIN },
+    customId, user: { id: userId || OWNER },
     message: { components: messageComponents || [] },
     last: null, replied: null,
     update: async (msg) => { ix.last = msg; },
@@ -61,32 +133,32 @@ async function t(name, fn, needFile = true) {
 
 (async () => {
   // ── A. Every card payload renders ────────────────────
-  await t('profile card', () => S.profilePayload('IronVale', GAVIN));
-  await t('profile card (Go Far)', () => S.profilePayload('Go Far', GAVIN));
-  await t('skills card', () => S.skillsPayload('IronVale', GAVIN));
-  await t('clog total card', () => S.clogPayload('total', 'IronVale', GAVIN));
-  await t('clog page card (Zulrah)', () => S.clogPayload('zulrah', 'IronVale', GAVIN));
-  await t('clog clues summary card', () => S.clogPayload('clues', 'IronVale', GAVIN));
-  await t('clog scrolls summary card', () => S.clogPayload('scrolls', 'IronVale', GAVIN));
-  await t('dry card (Zulrah)', () => S.dryPayload('zulrah', 'IronVale', GAVIN));
-  await t('gains card', () => S.gainsPayload('IronVale', 'week', GAVIN), false);
-  await t('pb reply', () => S.pbPayload('', 'IronVale', GAVIN), false);
-  await t('compare overall', () => S.compareOverallPayload('IronVale', 'IronStewPot', GAVIN, GAVIN));
-  await t('compare skills', () => S.compareSkillsPayload('IronVale', 'IronStewPot', GAVIN, GAVIN, {}));
-  await t('compare skill inspect (Fishing)', () => S.compareSkillsPayload('IronVale', 'IronStewPot', GAVIN, GAVIN, { skill: 'fishing' }));
+  await t('profile card', () => S.profilePayload(PRIMARY, OWNER));
+  await t('profile card (alt account)', () => S.profilePayload(ALT, OWNER));
+  await t('skills card', () => S.skillsPayload(PRIMARY, OWNER));
+  await t('clog total card', () => S.clogPayload('total', PRIMARY, OWNER));
+  await t('clog page card (Zulrah)', () => S.clogPayload('zulrah', PRIMARY, OWNER));
+  await t('clog clues summary card', () => S.clogPayload('clues', PRIMARY, OWNER));
+  await t('clog scrolls summary card', () => S.clogPayload('scrolls', PRIMARY, OWNER));
+  await t('dry card (Zulrah)', () => S.dryPayload('zulrah', PRIMARY, OWNER));
+  await t('gains card', () => S.gainsPayload(PRIMARY, 'week', OWNER), false);
+  await t('pb reply', () => S.pbPayload('', PRIMARY, OWNER), false);
+  await t('compare overall', () => S.compareOverallPayload(PRIMARY, PARTNER, OWNER, OWNER));
+  await t('compare skills', () => S.compareSkillsPayload(PRIMARY, PARTNER, OWNER, OWNER, {}));
+  await t('compare skill inspect (Fishing)', () => S.compareSkillsPayload(PRIMARY, PARTNER, OWNER, OWNER, { skill: 'fishing' }));
   // Regression (Nov 2): the clogs totals branch crashed on an
   // out-of-scope variable after badges were added to compare.
-  await t('compare clogs totals', () => S.compareClogsPayload('IronVale', 'IronStewPot', GAVIN, GAVIN, {}));
-  await t('compare clogs page (Zulrah)', () => S.compareClogsPayload('IronVale', 'IronStewPot', GAVIN, GAVIN, { page: 'Zulrah' }));
-  await t('leaderboard card', () => S.leaderboardPayload(GAVIN, 'overall'));
-  await t('kc card (m o u z, spaces)', () => S.kcPayload('zulrah', 'm o u z', GAVIN));
+  await t('compare clogs totals', () => S.compareClogsPayload(PRIMARY, PARTNER, OWNER, OWNER, {}));
+  await t('compare clogs page (Zulrah)', () => S.compareClogsPayload(PRIMARY, PARTNER, OWNER, OWNER, { page: 'Zulrah' }));
+  await t('leaderboard card', () => S.leaderboardPayload(OWNER, 'overall'));
+  await t('kc card (name with spaces)', () => S.kcPayload('zulrah', SPACED, OWNER));
 
   // ── B. Leaderboard boards + variant toggles ──────────
   for (const arg of ['overall', 'boss:zulrah', 'skill:fishing', 'clogtotal', 'gains']) {
-    const p = await S.leaderboardPayload(GAVIN, arg);
+    const p = await S.leaderboardPayload(OWNER, arg);
     ok(`board renders: ${arg}`, hasFile(p));
   }
-  const bad = await S.leaderboardPayload(GAVIN, 'boss:doesnotexist');
+  const bad = await S.leaderboardPayload(OWNER, 'boss:doesnotexist');
   ok('board renders: bogus boss falls back, no crash', hasFile(bad) || typeof bad.content === 'string');
   const expect = {
     toa: ['Total', 'Normal', 'Expert'], cox: ['Total', 'Normal', 'CM'],
@@ -97,13 +169,13 @@ async function t(name, fn, needFile = true) {
     zulrah: null, colosseum: null,
   };
   for (const [key, labels] of Object.entries(expect)) {
-    const p = await S.leaderboardPayload(GAVIN, `boss:${key}`);
+    const p = await S.leaderboardPayload(OWNER, `boss:${key}`);
     const varBtns = flat(p).filter((c) => c.id.startsWith('lbvar:'));
     if (labels === null) { ok(`no toggle: ${key}`, varBtns.length === 0); continue; }
     ok(`toggle labels: ${key}`, JSON.stringify(varBtns.map((b) => b.label)) === JSON.stringify(labels),
       JSON.stringify(varBtns.map((b) => b.label)));
   }
-  const toaFull = await S.leaderboardPayload(GAVIN, 'boss:toa');
+  const toaFull = await S.leaderboardPayload(OWNER, 'boss:toa');
   const toaVarBtn = flat(toaFull).find((c) => c.id.startsWith('lbvar:1:'));
   const ixT = fakeIx(toaVarBtn.id, toaFull.components);
   await S.handleLeaderboardButton(ixT);
@@ -131,9 +203,9 @@ async function t(name, fn, needFile = true) {
   ok('bogus lbback survives silently', !bbThrew && !bb.last);
 
   // ── C. Scoped swaps + the clog/kc button parity ──────
-  const kc = await S.kcPayload('gauntlet', 'IronVale', GAVIN);
+  const kc = await S.kcPayload('gauntlet', PRIMARY, OWNER);
   const swapBtn = flat(kc)[0];
-  const ixS = fakeIx(swapBtn.id, kc.components, CHOWDER);
+  const ixS = fakeIx(swapBtn.id, kc.components, OTHER_USER);
   await S.handleLbSwapButton(ixS);
   const scopedIds = flat(ixS.last).map((c) => c.id);
   ok('scoped board has no tabs/picker',
@@ -141,7 +213,7 @@ async function t(name, fn, needFile = true) {
   ok('scoped board return label', flat(ixS.last).some((c) => c.label === '← KC card'));
   // Regression (Nov 2): the same combined card posted via /clog
   // must carry the same Leaderboard button /kc posts.
-  const clogBoss = await S.clogPayload('zulrah', 'IronVale', GAVIN);
+  const clogBoss = await S.clogPayload('zulrah', PRIMARY, OWNER);
   ok('clog boss card carries Leaderboard button',
     flat(clogBoss).some((c) => c.id.startsWith('lbswap:boss:zulrah')));
 
@@ -149,7 +221,7 @@ async function t(name, fn, needFile = true) {
   for (const key of ['toa', 'cox', 'tob', 'gauntlet', 'dks', 'nightmare', 'callisto',
     'venenatis', 'vetion', 'bh', 'clues', 'colosseum', 'zulrah']) {
     let p = null, threw = false;
-    try { p = await S.kcPayload(key, 'IronVale', GAVIN); } catch { threw = true; }
+    try { p = await S.kcPayload(key, PRIMARY, OWNER); } catch { threw = true; }
     ok(`kc renders: ${key}`, !threw && (hasFile(p) || typeof p.content === 'string'));
   }
 
@@ -171,11 +243,11 @@ async function t(name, fn, needFile = true) {
     const g2 = await S.kcPayload('zulrah', unstated.rsn.toLowerCase(), unstated.uid);
     ok('gate fires case-insensitively',
       typeof g2.content === 'string' && g2.content.includes('Set the account type'));
-    const g3 = await S.kcPayload('zulrah', 'IronVale', unstated.uid);
+    const g3 = await S.kcPayload('zulrah', PRIMARY, unstated.uid);
     ok('no gate on someone else\'s account',
       !(typeof g3.content === 'string' && g3.content.includes('Set the account type')));
   }
-  const own = await S.kcPayload('zulrah', 'ptstud', GAVIN);
+  const own = await S.kcPayload('zulrah', PRIMARY.toLowerCase(), OWNER);
   ok('stated owner is not gated', hasFile(own));
 
   // ── F. Autocomplete abuse ────────────────────────────
@@ -199,12 +271,12 @@ async function t(name, fn, needFile = true) {
     'smithing', 'mining', 'herblore', 'agility', 'thieving', 'slayer', 'farming',
     'runecraft', 'hunter', 'construction', 'sailing'];
   for (const sk of skills) {
-    const ix = fakeIx(`lbback:skill:${sk}:IronVale`, []);
+    const ix = fakeIx(`lbback:skill:${sk}:${PRIMARY}`, []);
     let threw = false;
     try { await S.handleLbBackButton(ix); } catch { threw = true; }
     ok(`solo skill renders: ${sk}`, !threw && !!ix.last && hasFile(ix.last));
   }
-  const ixF = fakeIx('lbback:skill:fishing:IronVale', []);
+  const ixF = fakeIx('lbback:skill:fishing:' + PRIMARY, []);
   await S.handleLbBackButton(ixF);
   const fishSwap = flat(ixF.last).find((c) => c.id.startsWith('lbswap:'));
   ok('solo fishing card has swap', !!fishSwap);
@@ -216,7 +288,7 @@ async function t(name, fn, needFile = true) {
   }
 
   // ── H. Compare boss: swap, tab light, cross-user gate ──
-  const cmp = await S.compareBossPayload('zulrah', 'IronVale', 'IronStewPot', GAVIN, GAVIN, {});
+  const cmp = await S.compareBossPayload('zulrah', PRIMARY, PARTNER, OWNER, OWNER, {});
   ok('compare boss renders', hasFile(cmp));
   // Regression (Nov 2): the PvM tab must light (Danger, style 4)
   // on a boss card, like the other views light theirs.
@@ -228,7 +300,7 @@ async function t(name, fn, needFile = true) {
   if (cmpSwap) {
     const enc = cmpSwap.id.split(':').pop();
     const dec = Buffer.from(enc, 'base64url').toString('utf8').split('\n');
-    ok('compare swap id carries the pair', dec[0] === 'IronVale' && dec[1] === 'IronStewPot');
+    ok('compare swap id carries the pair', dec[0] === PRIMARY && dec[1] === PARTNER);
     const ixB = fakeIx(cmpSwap.id, cmp.components);
     await S.handleLbSwapButton(ixB);
     ok('compare scoped return label', flat(ixB.last).some((c) => c.label === '← Compare card'),
@@ -237,7 +309,7 @@ async function t(name, fn, needFile = true) {
   const changeBtn = flat(cmp).find((c) => c.id.startsWith('cmpswap'));
   ok('compare Change players button present', !!changeBtn);
   if (changeBtn) {
-    const ixC = fakeIx(changeBtn.id, cmp.components, CHOWDER);
+    const ixC = fakeIx(changeBtn.id, cmp.components, OTHER_USER);
     let threw = false;
     try { await S.handleCompareSwapButton(ixC); } catch { threw = true; }
     const note = (ixC.replied && ixC.replied.content) || (ixC.last && ixC.last.content) || '';
@@ -247,24 +319,24 @@ async function t(name, fn, needFile = true) {
 
   // ── I. Gains: WOM periods (Nov 2, 2026) ──────────────
   for (const per of ['day', 'week', 'month', 'year']) {
-    const gp = await S.gainsPayload('IronVale', per, GAVIN);
+    const gp = await S.gainsPayload(PRIMARY, per, OWNER);
     ok(`gains card renders: ${per}`, hasFile(gp), gp && gp.content ? gp.content.slice(0, 80) : '');
   }
-  const gw = await S.gainsPayload('IronVale', 'week', GAVIN);
+  const gw = await S.gainsPayload(PRIMARY, 'week', OWNER);
   const gBtns = flat(gw).filter((c) => c.id.startsWith('gains:'));
   ok('gains card carries 4 period buttons', gBtns.length === 4,
     JSON.stringify(gBtns.map((b) => b.id)));
   let flipped = null;
-  await S.handleGainsButton({ customId: 'gains:year:IronVale', user: { id: GAVIN },
+  await S.handleGainsButton({ customId: 'gains:year:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { flipped = p; }, reply: async (p) => { flipped = p; } });
   ok('gains period flip swaps the card', !!(flipped && flipped.files));
   let wgOk = false;
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(DATA, 'wom-gains.json'), 'utf8'));
-    wgOk = !!(raw.ptstud && raw.ptstud.week && raw.ptstud.year);
+    wgOk = !!(raw[PRIMARY.toLowerCase()] && raw[PRIMARY.toLowerCase()].week && raw[PRIMARY.toLowerCase()].year);
   } catch {}
-  ok('wom-gains.json holds IronVale week + year', wgOk);
-  const gb = await S.leaderboardPayload(GAVIN, 'gains');
+  ok('wom-gains.json holds the fixture week + year', wgOk);
+  const gb = await S.leaderboardPayload(OWNER, 'gains');
   const pyBtn = flat(gb).find((c) => c.id.startsWith('lbg:py:'));
   ok('gains board has a Year period button', !!pyBtn);
   if (pyBtn) {
@@ -276,18 +348,18 @@ async function t(name, fn, needFile = true) {
   }
 
   // ── K. Bridges, clue dry, per-command cooldown ──────
-  const kcZ = await S.kcPayload('zulrah', 'IronVale', GAVIN);
+  const kcZ = await S.kcPayload('zulrah', PRIMARY, OWNER);
   ok('kc card has the Dry bridge', flat(kcZ).some((c) => c.id.startsWith('bridge:dry:zulrah:')));
-  const kcT = await S.kcPayload('toa', 'IronVale', GAVIN);
+  const kcT = await S.kcPayload('toa', PRIMARY, OWNER);
   ok('kc card has no Dry bridge for unscored ToA', !flat(kcT).some((c) => c.id.startsWith('bridge:')));
-  const dryZ = await S.dryPayload('zulrah', 'IronVale', GAVIN);
+  const dryZ = await S.dryPayload('zulrah', PRIMARY, OWNER);
   ok('dry card has the KC bridge', flat(dryZ).some((c) => c.id.startsWith('bridge:kc:zulrah:')));
   let bridged = null;
-  await S.handleBridgeButton({ customId: 'bridge:dry:zulrah:IronVale', user: { id: GAVIN },
+  await S.handleBridgeButton({ customId: 'bridge:dry:zulrah:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { bridged = p; }, reply: async (p) => { bridged = p; } });
   ok('bridge press swaps KC into dry', !!(bridged && bridged.files));
   let toClues = null;
-  await S.handleBridgeButton({ customId: 'bridge:clues:-:IronVale', user: { id: GAVIN },
+  await S.handleBridgeButton({ customId: 'bridge:clues:-:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { toClues = p; }, reply: async (p) => { toClues = p; } });
   // The summary carries its own Profile button now (hub wave);
   // the landing must show that, never the stale bridge row.
@@ -295,28 +367,28 @@ async function t(name, fn, needFile = true) {
     !!(toClues && toClues.files)
       && flat(toClues).some((c) => c.id.startsWith('prof:clogs:clues:'))
       && !flat(toClues).some((c) => c.id.startsWith('bridge:')));
-  const dryHard = await S.dryPayload('clue:hard', 'IronVale', GAVIN);
+  const dryHard = await S.dryPayload('clue:hard', PRIMARY, OWNER);
   ok('dry renders for hard clues', hasFile(dryHard),
     dryHard && dryHard.content ? dryHard.content.slice(0, 80) : '');
   ok('clue dry card has the Clues bridge',
     !!(dryHard && dryHard.components) && flat(dryHard).some((c) => c.id.startsWith('bridge:clues:')));
-  const dryAll = await S.dryPayload('clue:all', 'IronVale', GAVIN);
+  const dryAll = await S.dryPayload('clue:all', PRIMARY, OWNER);
   ok('dry renders for all clue tiers', hasFile(dryAll),
     dryAll && dryAll.content ? dryAll.content.slice(0, 80) : '');
   ok('all-tiers dry card has the Clues bridge',
     !!(dryAll && dryAll.components) && flat(dryAll).some((c) => c.id.startsWith('bridge:clues:')));
   let toSummary = null;
-  await S.handleBridgeButton({ customId: 'bridge:clues:hard:IronVale', user: { id: GAVIN },
+  await S.handleBridgeButton({ customId: 'bridge:clues:hard:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { toSummary = p; }, reply: async (p) => { toSummary = p; } });
   ok('summary landing from a dry card carries the way back',
     !!(toSummary && toSummary.files)
       && JSON.stringify(toSummary.components || []).includes('bridge:dryc:hard'));
   let backToDry = null;
-  await S.handleBridgeButton({ customId: 'bridge:dryc:hard:IronVale', user: { id: GAVIN },
+  await S.handleBridgeButton({ customId: 'bridge:dryc:hard:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { backToDry = p; }, reply: async (p) => { backToDry = p; } });
   ok('way-back press returns the tier dry card', !!(backToDry && backToDry.files));
   let oldLanding = null;
-  await S.handleBridgeButton({ customId: 'bridge:clues:-:IronVale', user: { id: GAVIN },
+  await S.handleBridgeButton({ customId: 'bridge:clues:-:' + PRIMARY, user: { id: OWNER },
     update: async (p) => { oldLanding = p; }, reply: async (p) => { oldLanding = p; } });
   ok('pre-origin Clues buttons still land clean',
     !!(oldLanding && oldLanding.files)
@@ -347,22 +419,24 @@ async function t(name, fn, needFile = true) {
   ok('profile-luck-units.json exists with structured units', unitsOk, unitsWhy);
 
   // ── K. Cold start: warm names never seed, unknown names are cold ──
-  ok('tracked member is warm (no cold sync)', S.isCold('IronVale') === false);
+  ok('tracked member is warm (no cold sync)', S.isCold(PRIMARY) === false);
   ok('never-checked name is cold', S.isCold('zz no such rsn 42') === true);
-  const warmSeed = await S.ensureSynced('IronVale', 1000);
+  const warmSeed = await S.ensureSynced(PRIMARY, 1000);
   ok('ensureSynced no-ops for a warm name', warmSeed === false);
 
   // ── L. Dry list + driest board ──
   const dlStarted = Date.now();
-  const dl = await S.dryListPayload('IronVale', null, 'full', 'all');
+  const dl = await S.dryListPayload(PRIMARY, null, 'full', 'all');
   timings.push({ name: 'dry list (section L)', ms: Date.now() - dlStarted });
-  ok('dry list renders for IronVale', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
+  ok('dry list renders for the fixture account', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
   ok('dry list carries category buttons', !!dl && (dl.components || []).length >= 1);
-  ok('dry list hides IronVale\'s empty categories',
-    !!dl && flat(dl).filter((c) => c.id.startsWith('drycat:')).length === 3
-      && !flat(dl).some((c) => c.id.startsWith('drycat:Minigames'))
-      && !flat(dl).some((c) => c.id.startsWith('drycat:Other')));
-  const dlb = await S.dryListPayload('IronVale', null, 'full', 'Bosses');
+  const expectedCats = await dryCatsWithUnits(PRIMARY);
+  const shownCats = flat(dl).filter((c) => c.id.startsWith('drycat:') && !c.id.startsWith('drycat:all:'))
+    .map((c) => c.id.split(':')[1]);
+  ok('dry list hides the fixture account\'s empty categories',
+    JSON.stringify([...shownCats].sort()) === JSON.stringify([...expectedCats].sort()),
+    `shown=${shownCats} expected=${expectedCats}`);
+  const dlb = await S.dryListPayload(PRIMARY, null, 'full', 'Bosses');
   ok('dry list Bosses category renders', !!(dlb && dlb.files));
   const drb = await S.leaderboardPayload(null, 'driest');
   ok('driest board renders', !!(drb && drb.files), JSON.stringify(drb && drb.content || ''));
@@ -388,7 +462,7 @@ async function t(name, fn, needFile = true) {
     }
     return [];
   }
-  const hub = await t('hub overview renders', () => S.hubPayload('IronVale', GAVIN, {}));
+  const hub = await t('hub overview renders', () => S.hubPayload(PRIMARY, OWNER, {}));
   ok('hub overview has tab + branch rows',
     !!hub && flat(hub).some((c) => c.id.startsWith('hub:tab:skills:'))
       && flat(hub).some((c) => c.id.startsWith('hub:lb:'))
@@ -397,11 +471,11 @@ async function t(name, fn, needFile = true) {
   ok('hub overview within the 5-row cap', !!hub && (hub.components || []).length <= 5,
     hub ? `${hub.components.length} rows` : 'none');
   for (const tab of ['skills', 'pvm', 'clogs', 'dry', 'gains']) {
-    const p = await t(`hub tab renders: ${tab}`, () => S.hubPayload('IronVale', GAVIN, { tab }));
+    const p = await t(`hub tab renders: ${tab}`, () => S.hubPayload(PRIMARY, OWNER, { tab }));
     ok(`hub tab within the 5-row cap: ${tab}`, !!p && (p.components || []).length <= 5,
       p ? `${(p.components || []).length} rows` : 'none');
   }
-  const hubPb = await S.hubPayload('IronVale', GAVIN, { tab: 'pbs' });
+  const hubPb = await S.hubPayload(PRIMARY, OWNER, { tab: 'pbs' });
   ok('hub PBs tab is the plugin notice',
     !!hubPb && (hasFile(hubPb) || String(hubPb.content || '').includes('clan plugin is live')),
     hubPb && hubPb.content ? hubPb.content.slice(0, 80) : 'no payload');
@@ -410,14 +484,14 @@ async function t(name, fn, needFile = true) {
     JSON.stringify(flat(hubPb || {}).map((c) => c.id)));
   // Tab press swaps the card in place.
   const skillsTabBtn = flat(hub).find((c) => c.id.startsWith('hub:tab:skills:'));
-  const ixTab = hubIx(skillsTabBtn.id, hub.components, GAVIN);
+  const ixTab = hubIx(skillsTabBtn.id, hub.components, OWNER);
   await S.handleHubButton(ixTab);
   ok('hub tab press opens Skills with its picker',
     !!ixTab.last && hasFile(ixTab.last)
       && flat(ixTab.last).some((c) => c.id.startsWith('hub:skillpick:')));
   // Solo skill in place, with the named return above the tabs.
   const ixSkill = hubIx(flat(ixTab.last).find((c) => c.id.startsWith('hub:skillpick:')).id,
-    ixTab.last.components, GAVIN);
+    ixTab.last.components, OWNER);
   ixSkill.values = ['fishing'];
   await S.handleHubSelect(ixSkill);
   ok('hub skill pick opens the solo card in place',
@@ -426,10 +500,10 @@ async function t(name, fn, needFile = true) {
   ok('hub solo skill has no Leaderboard button',
     !!ixSkill.last && !flat(ixSkill.last).some((c) => c.id.startsWith('lbswap:')));
   // PvM picker: category + boss selects, then the controls return.
-  const hubPvm = await S.hubPayload('IronVale', GAVIN, { tab: 'pvm' });
+  const hubPvm = await S.hubPayload(PRIMARY, OWNER, { tab: 'pvm' });
   const pickBtn = flat(hubPvm).find((c) => c.id.startsWith('hub:pickboss:'));
   ok('hub PvM tab has Pick a boss', !!pickBtn);
-  const ixPick = hubIx(pickBtn.id, hubPvm.components, GAVIN);
+  const ixPick = hubIx(pickBtn.id, hubPvm.components, OWNER);
   await S.handleHubButton(ixPick);
   ok('hub boss picker shows category + boss selects',
     !!ixPick.last && flat(ixPick.last).some((c) => c.id.startsWith('hub:bosscat:'))
@@ -439,7 +513,7 @@ async function t(name, fn, needFile = true) {
   ok('hub boss picker lists bosses', bossOpts.length > 0);
   if (bossOpts.length) {
     const ixBoss = hubIx(flat(ixPick.last).find((c) => c.id.startsWith('hub:bosspick:')).id,
-      ixPick.last.components, GAVIN);
+      ixPick.last.components, OWNER);
     ixBoss.values = [bossOpts[0]];
     await S.handleHubSelect(ixBoss);
     ok('hub boss pick returns to the controls row',
@@ -447,7 +521,7 @@ async function t(name, fn, needFile = true) {
         && flat(ixBoss.last).some((c) => c.id.startsWith('hub:pickboss:')));
   }
   // ToA variant toggles ride the PvM controls row.
-  const hubToa = await S.hubPayload('IronVale', GAVIN, { tab: 'pvm', sub: 'toa' });
+  const hubToa = await S.hubPayload(PRIMARY, OWNER, { tab: 'pvm', sub: 'toa' });
   const varBtns = flat(hubToa).filter((c) => c.id.startsWith('hub:var:'));
   ok('hub ToA controls carry variant toggles',
     JSON.stringify(varBtns.map((b) => b.label)) === JSON.stringify(['Total', 'Normal', 'Expert']),
@@ -456,7 +530,7 @@ async function t(name, fn, needFile = true) {
   // a later press must decode it back to the same key.
   const expertBtn = varBtns.find((c) => c.id.startsWith('hub:var:1:'));
   if (expertBtn) {
-    const ixVar = hubIx(expertBtn.id, hubToa.components, GAVIN);
+    const ixVar = hubIx(expertBtn.id, hubToa.components, OWNER);
     await S.handleHubButton(ixVar);
     ok('hub variant press renders the variant card',
       !!ixVar.last && hasFile(ixVar.last)
@@ -466,10 +540,10 @@ async function t(name, fn, needFile = true) {
       !!tabBtn2 && tabBtn2.id.includes('toa_expert'), tabBtn2 ? tabBtn2.id : 'missing');
   }
   // Clogs picker: category buttons + page select, page view returns.
-  const hubClogs = await S.hubPayload('IronVale', GAVIN, { tab: 'clogs' });
+  const hubClogs = await S.hubPayload(PRIMARY, OWNER, { tab: 'clogs' });
   const clogPickBtn = flat(hubClogs).find((c) => c.id.startsWith('hub:clogpick:'));
   ok('hub Clogs tab has Pick a page', !!clogPickBtn);
-  const ixCP = hubIx(clogPickBtn.id, hubClogs.components, GAVIN);
+  const ixCP = hubIx(clogPickBtn.id, hubClogs.components, OWNER);
   await S.handleHubButton(ixCP);
   ok('hub clog picker shows categories + pages',
     !!ixCP.last && flat(ixCP.last).filter((c) => c.id.startsWith('hub:clogcat:')).length === 5
@@ -478,7 +552,7 @@ async function t(name, fn, needFile = true) {
     .map((o) => o.value).filter((v) => v && !v.startsWith('pg:'));
   if (pageOpts.length) {
     const ixPage = hubIx(flat(ixCP.last).find((c) => c.id.startsWith('hub:clogpage:')).id,
-      ixCP.last.components, GAVIN);
+      ixCP.last.components, OWNER);
     ixPage.values = [pageOpts[0]];
     await S.handleHubSelect(ixPage);
     ok('hub clog page carries the Clogs return, no Leaderboard button',
@@ -489,51 +563,52 @@ async function t(name, fn, needFile = true) {
   // Dry tab: opens on the Uniques view; the Full clog view
   // carries the category buttons, empties hidden. Drill into
   // a page from the Uniques list, return to the list.
-  const hubDry = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
+  const hubDry = await S.hubPayload(PRIMARY, OWNER, { tab: 'dry' });
   ok('hub Dry tab opens on the Uniques view',
     !!hubDry && flat(hubDry).some((c) => c.id.startsWith('hub:dryview:uniques:')));
   const dryFullBtn = flat(hubDry).find((c) => c.id.startsWith('hub:dryview:full:'));
   if (dryFullBtn) {
-    const ixFull = hubIx(dryFullBtn.id, hubDry.components, GAVIN);
+    const ixFull = hubIx(dryFullBtn.id, hubDry.components, OWNER);
     await S.handleHubButton(ixFull);
-    // IronVale has scored drops only in Bosses and Clues, so the empty
-    // Minigames and Other buttons hide for him (set Nov 2, 2026).
-    ok('hub Dry tab shows only his non-empty categories',
-      !!ixFull.last && flat(ixFull.last).filter((c) => c.id.startsWith('hub:drycat:')).length === 3
-        && !flat(ixFull.last).some((c) => c.id.startsWith('hub:drycat:Minigames'))
-        && !flat(ixFull.last).some((c) => c.id.startsWith('hub:drycat:Other')));
+    // Categories with nothing scored hide their button (set
+    // Nov 2, 2026); expectedCats was probed in section L.
+    const shownHubCats = flat(ixFull.last || {}).filter((c) => c.id.startsWith('hub:drycat:') && !c.id.startsWith('hub:drycat:all:'))
+      .map((c) => c.id.split(':')[2]);
+    ok('hub Dry tab shows only non-empty categories',
+      !!ixFull.last && JSON.stringify([...shownHubCats].sort()) === JSON.stringify([...expectedCats].sort()),
+      `shown=${shownHubCats} expected=${expectedCats}`);
   } else {
-    ok('hub Dry tab shows only his non-empty categories', false, 'no Full clog view button');
+    ok('hub Dry tab shows only non-empty categories', false, 'no Full clog view button');
   }
   const dryOpts = selOptions(hubDry, 'hub:drypick:').map((o) => o.value).filter(Boolean);
   ok('hub Dry tab has a drill-in picker', dryOpts.length > 0);
   if (dryOpts.length) {
     const ixDrill = hubIx(flat(hubDry).find((c) => c.id.startsWith('hub:drypick:')).id,
-      hubDry.components, GAVIN);
+      hubDry.components, OWNER);
     ixDrill.values = [dryOpts[0]];
     await S.handleHubSelect(ixDrill);
     ok('hub dry drill-in carries return buttons',
       !!ixDrill.last && hasFile(ixDrill.last)
         && flat(ixDrill.last).some((c) => c.id.startsWith('hub:drylist:')));
     const backBtn = flat(ixDrill.last).find((c) => c.id.startsWith('hub:drylist:'));
-    const ixBack = hubIx(backBtn.id, ixDrill.last.components, GAVIN);
+    const ixBack = hubIx(backBtn.id, ixDrill.last.components, OWNER);
     await S.handleHubButton(ixBack);
     ok('hub dry return restores the list',
       !!ixBack.last && hasFile(ixBack.last)
         && flat(ixBack.last).some((c) => c.id.startsWith('hub:dryview:')));
   }
   // Gains flips inside the hub.
-  const hubGains = await S.hubPayload('IronVale', GAVIN, { tab: 'gains' });
+  const hubGains = await S.hubPayload(PRIMARY, OWNER, { tab: 'gains' });
   const gainBtn = flat(hubGains).find((c) => c.id.startsWith('hub:gain:year:'));
   ok('hub Gains tab has period buttons', !!gainBtn);
   if (gainBtn) {
-    const ixGain = hubIx(gainBtn.id, hubGains.components, GAVIN);
+    const ixGain = hubIx(gainBtn.id, hubGains.components, OWNER);
     await S.handleHubButton(ixGain);
     ok('hub gains flip swaps in place', !!ixGain.last && hasFile(ixGain.last));
   }
   // Switcher: owner opens it, picks an alt; non-owner gets the note.
   const chgBtn = flat(hub).find((c) => c.id.startsWith('hub:chg:'));
-  const ixChg = hubIx(chgBtn.id, hub.components, GAVIN);
+  const ixChg = hubIx(chgBtn.id, hub.components, OWNER);
   await S.handleHubButton(ixChg);
   ok('switcher opens with Type a name + clan picker',
     !!ixChg.last && flat(ixChg.last).some((c) => c.id.startsWith('hub:name:'))
@@ -541,13 +616,13 @@ async function t(name, fn, needFile = true) {
   const altBtn = flat(ixChg.last || {}).find((c) => c.id.startsWith('hub:alt:'));
   ok('switcher lists the opener\'s other accounts', !!altBtn);
   if (altBtn) {
-    const ixAlt = hubIx(altBtn.id, ixChg.last.components, GAVIN);
+    const ixAlt = hubIx(altBtn.id, ixChg.last.components, OWNER);
     await S.handleHubButton(ixAlt);
     ok('switcher pick reloads the hub and closes',
       !!ixAlt.last && hasFile(ixAlt.last)
         && !flat(ixAlt.last).some((c) => c.id.startsWith('hub:clanpick:')));
   }
-  const ixChgX = hubIx(chgBtn.id, hub.components, CHOWDER);
+  const ixChgX = hubIx(chgBtn.id, hub.components, OTHER_USER);
   await S.handleHubButton(ixChgX);
   ok('non-owner Change player gets the make-my-own note',
     !!ixChgX.replied && String(ixChgX.replied.content || '').includes("can't change the players")
@@ -555,29 +630,29 @@ async function t(name, fn, needFile = true) {
   // Leaderboard branch: matching board + named return, and the
   // return row survives board flips.
   const lbBtn = flat(hubClogs).find((c) => c.id.startsWith('hub:lb:'));
-  const ixLb = hubIx(lbBtn.id, hubClogs.components, GAVIN);
+  const ixLb = hubIx(lbBtn.id, hubClogs.components, OWNER);
   await S.handleHubButton(ixLb);
   ok('hub Leaderboard branch opens a board with the hub return',
     !!ixLb.last && hasFile(ixLb.last)
       && flat(ixLb.last).some((c) => c.id.startsWith('hubback:') && c.label === '← Clogs card'));
   const lbTabBtn = flat(ixLb.last).find((c) => c.id.startsWith('lbtab:skills:'));
-  const ixLbFlip = hubIx(lbTabBtn.id, ixLb.last.components, GAVIN);
+  const ixLbFlip = hubIx(lbTabBtn.id, ixLb.last.components, OWNER);
   await S.handleLeaderboardButton(ixLbFlip);
   ok('hub return row survives board flips',
     !!ixLbFlip.last && flat(ixLbFlip.last).some((c) => c.id.startsWith('hubback:')));
   // Open profile: picker on a standalone board, pick opens the hub.
-  const board = await S.leaderboardPayload(GAVIN, 'overall');
+  const board = await S.leaderboardPayload(OWNER, 'overall');
   const profBtn = flat(board).find((c) => c.id.startsWith('lbprof:'));
   ok('standalone board carries Open profile', !!profBtn);
   if (profBtn) {
-    const ixOP = hubIx(profBtn.id, board.components, GAVIN);
+    const ixOP = hubIx(profBtn.id, board.components, OWNER);
     await S.handleLbProfileButton(ixOP);
     ok('Open profile reveals the player picker',
       !!ixOP.last && flat(ixOP.last).some((c) => c.id.startsWith('lbprofpick:')));
     const names = selOptions(ixOP.last, 'lbprofpick:').map((o) => o.value).filter(Boolean);
     if (names.length) {
       const ixPickP = hubIx(flat(ixOP.last).find((c) => c.id.startsWith('lbprofpick:')).id,
-        ixOP.last.components, GAVIN);
+        ixOP.last.components, OWNER);
       ixPickP.values = [names[0]];
       await S.handleLbProfileSelect(ixPickP);
       ok('Open profile pick opens that player\'s hub',
@@ -587,9 +662,9 @@ async function t(name, fn, needFile = true) {
   }
   // Compare branch: opens at once for another member, and the
   // hub return survives compare view flips.
-  const hubC = await S.hubPayload('IronVale', CHOWDER, {});
+  const hubC = await S.hubPayload(PRIMARY, OTHER_USER, {});
   const cmpBtn = flat(hubC).find((c) => c.id.startsWith('hub:cmp:'));
-  const ixCmp = hubIx(cmpBtn.id, hubC.components, CHOWDER);
+  const ixCmp = hubIx(cmpBtn.id, hubC.components, OTHER_USER);
   await S.handleHubButton(ixCmp);
   ok('hub Compare branch opens the matchup with the hub return',
     !!ixCmp.last && hasFile(ixCmp.last)
@@ -597,36 +672,36 @@ async function t(name, fn, needFile = true) {
   if (ixCmp.last) {
     const viewBtn = flat(ixCmp.last).find((c) => c.id.startsWith('cmp:skills:'));
     if (viewBtn) {
-      const ixView = hubIx(viewBtn.id, ixCmp.last.components, CHOWDER);
+      const ixView = hubIx(viewBtn.id, ixCmp.last.components, OTHER_USER);
       await S.handleCompareButton(ixView);
       ok('hub return survives compare view flips',
         !!ixView.last && flat(ixView.last).some((c) => c.id.startsWith('hubback:')));
     }
   }
   // Profile buttons on the standalone cards.
-  const kcP = await S.kcPayload('zulrah', 'IronVale', GAVIN);
+  const kcP = await S.kcPayload('zulrah', PRIMARY, OWNER);
   ok('kc card carries a Profile button',
     flat(kcP).some((c) => c.id.startsWith('prof:pvm:zulrah:')));
-  const skP = await S.skillsPayload('IronVale', GAVIN);
+  const skP = await S.skillsPayload(PRIMARY, OWNER);
   ok('skills card carries a Profile button',
     flat(skP).some((c) => c.id.startsWith('prof:skills:')));
-  const dlP = await S.dryListPayload('IronVale', GAVIN, 'all');
+  const dlP = await S.dryListPayload(PRIMARY, OWNER, 'all');
   ok('dry list carries a Profile button',
     flat(dlP).some((c) => c.id.startsWith('prof:dry:list:')));
-  const ctP = await S.clogPayload('total', 'IronVale', GAVIN);
+  const ctP = await S.clogPayload('total', PRIMARY, OWNER);
   ok('clog total carries a Profile button',
     flat(ctP).some((c) => c.id.startsWith('prof:clogs:total:')));
   const profBtnKc = flat(kcP).find((c) => c.id.startsWith('prof:'));
-  const ixProf = hubIx(profBtnKc.id, kcP.components, GAVIN);
+  const ixProf = hubIx(profBtnKc.id, kcP.components, OWNER);
   await S.handleProfileButton(ixProf);
   ok('Profile button opens the hub on the boss',
     !!ixProf.last && hasFile(ixProf.last)
       && flat(ixProf.last).some((c) => c.id.startsWith('hub:pickboss:')));
   // Compare autocomplete: linked + clan names first, capped at 25.
   const acIx = {
-    commandName: 'compare', user: { id: GAVIN }, choices: null,
+    commandName: 'compare', user: { id: OWNER }, choices: null,
     options: {
-      getFocused: () => ({ name: 'player_a', value: 'pt' }),
+      getFocused: () => ({ name: 'player_a', value: PRIMARY.slice(0, 2).toLowerCase() }),
       getString: () => null,
     },
     respond: async (c) => { acIx.choices = c; },
@@ -634,10 +709,10 @@ async function t(name, fn, needFile = true) {
   await S.handleAutocomplete(acIx);
   ok('compare autocomplete returns linked/clan matches',
     Array.isArray(acIx.choices) && acIx.choices.length > 0 && acIx.choices.length <= 25
-      && acIx.choices.some((c) => c.value === 'IronVale'),
+      && acIx.choices.some((c) => c.value === PRIMARY),
     JSON.stringify(acIx.choices || []).slice(0, 120));
   const acIx2 = {
-    commandName: 'compare', user: { id: GAVIN }, choices: null,
+    commandName: 'compare', user: { id: OWNER }, choices: null,
     options: {
       getFocused: () => ({ name: 'player_b', value: 'qqqqzz' }),
       getString: () => null,
@@ -649,8 +724,8 @@ async function t(name, fn, needFile = true) {
   ok('compare autocomplete survives an unmatched fragment',
     !acThrew && Array.isArray(acIx2.choices));
   // Malformed hub states survive.
-  for (const id of ['hub:tab:skills:💥💥', 'hub:lb:garbage', 'hub:chg:x|y', 'prof:pvm::IronVale', 'hubback:💥']) {
-    const ix = hubIx(id, [], GAVIN);
+  for (const id of ['hub:tab:skills:💥💥', 'hub:lb:garbage', 'hub:chg:x|y', 'prof:pvm::' + PRIMARY, 'hubback:💥']) {
+    const ix = hubIx(id, [], OWNER);
     let threw = false;
     try {
       if (id.startsWith('prof:')) await S.handleProfileButton(ix);
@@ -708,18 +783,17 @@ async function t(name, fn, needFile = true) {
     await S.handleDryCommand(msg, args);
     return replies;
   }
-  const nameList = await fakeDryMsg('drytest-a', ['ksen']);
+  const nameList = await fakeDryMsg('drytest-a', [PARTNER]);
   ok('!dry <name> opens the driest list', !!(nameList[0] && nameList[0].files),
     nameList[0] && nameList[0].content);
-  const bossCard = await fakeDryMsg('drytest-b', ['zulrah', 'ksen']);
+  const bossCard = await fakeDryMsg('drytest-b', ['zulrah', PARTNER]);
   ok('!dry <boss> <name> opens the boss card', !!(bossCard[0] && bossCard[0].files),
     bossCard[0] && bossCard[0].content);
-  // Chowder's linked account, not Alex's: earlier sections
-  // already spent Alex's per-command dry cooldown in this
-  // same process, and a bare !dry is judged by its payload,
-  // not by whose list it opens. (Fresh-process proof of the
-  // Alex bare case was verified separately.)
-  const ownList = await fakeDryMsg(CHOWDER, []);
+  // The second user's linked account, not the owner's:
+  // earlier sections already spent the owner's per-command
+  // dry cooldown in this same process, and a bare !dry is
+  // judged by its payload, not by whose list it opens.
+  const ownList = await fakeDryMsg(OTHER_USER, []);
   ok('!dry alone opens own list', !!(ownList[0] && ownList[0].files),
     ownList[0] && ownList[0].content);
 
@@ -798,29 +872,29 @@ async function t(name, fn, needFile = true) {
       L.dryReport({ giant_mole: 523 }, [{ id: 33382, quantity: 0 }]) === null);
     // The list card itself: opens on Uniques with the three
     // view buttons; Full clog keeps its category buttons.
-    const listU = await S.dryListPayload('IronVale', GAVIN);
+    const listU = await S.dryListPayload(PRIMARY, OWNER);
     ok('dry list opens on Uniques with the three view buttons',
       hasFile(listU)
         && ['Uniques', 'Clues', 'Full clog'].every((l) => flat(listU).some((c) => c.label === l))
         && flat(listU).some((c) => c.id.startsWith('dryview:uniques:')),
       listU && listU.content);
-    const listF = await S.dryListPayload('IronVale', GAVIN, 'full', 'all');
+    const listF = await S.dryListPayload(PRIMARY, OWNER, 'full', 'all');
     ok('dry list Full clog keeps the category buttons',
       hasFile(listF) && flat(listF).some((c) => c.id.startsWith('drycat:Bosses:'))
         && flat(listF).some((c) => c.id.startsWith('dryview:full:')),
       listF && listF.content);
-    const listC = await S.dryListPayload('IronVale', GAVIN, 'clues');
+    const listC = await S.dryListPayload(PRIMARY, OWNER, 'clues');
     ok('dry list Clues view renders', hasFile(listC)
       && flat(listC).some((c) => c.id.startsWith('dryview:clues:')),
       listC && listC.content);
-    const ixView = fakeIx('dryview:full:IronVale', [], GAVIN);
+    const ixView = fakeIx('dryview:full:' + PRIMARY, [], OWNER);
     ixView.deferUpdate = async () => {};
     ixView.editReply = async (msg) => { ixView.last = msg; };
     await S.handleDryViewButton(ixView);
     ok('dry view button swaps the list in place',
       !!(ixView.last && ixView.last.files)
         && flat(ixView.last).some((c) => c.id.startsWith('drycat:')));
-    const hubDry2 = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
+    const hubDry2 = await S.hubPayload(PRIMARY, OWNER, { tab: 'dry' });
     ok('hub Dry tab opens on Uniques with the three view buttons',
       hasFile(hubDry2)
         && ['Uniques', 'Clues', 'Full clog'].every((l) => flat(hubDry2).some((c) => c.label === l)),
