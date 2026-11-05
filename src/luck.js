@@ -26,12 +26,39 @@
 const fs = require('fs');
 const path = require('path');
 const LUCK_DATA = require('./luck-data.json') || {};
-const TABLE = LUCK_DATA.items || {};
+
+// Contribution-scaled bosses (Nov 4, 2026): Yama and the
+// Hueycoatl scale their unique rates by each player's
+// damage share, so the published table (a solo table)
+// overstates the dryness of anyone who teams them. They
+// are scored at the team strength the clan actually runs:
+// Yama as a duo (rates x 0.8, Jagex's published figure for
+// an even split), the Hueycoatl as a 3-man (rates x 1/3,
+// the even-share rate). Pets roll flat per player at both
+// bosses and keep their listed rates. The factors live
+// here, not in the table, so re-extracting luck-data.json
+// keeps them.
+const RATE_SCALE = { yama: 0.8, the_hueycoatl: 1 / 3 };
+const RATE_SCALE_PETS = new Set([30888, 30152]); // Yami, Huberte
+function scaledSources(sources, keepListed) {
+  return (sources || []).map((s) => {
+    const f = keepListed ? 1 : (RATE_SCALE[s.c] || 1);
+    return f === 1 ? s : { ...s, rate: s.rate * f };
+  });
+}
+const TABLE = {};
+for (const [id, t] of Object.entries(LUCK_DATA.items || {})) {
+  TABLE[id] = {
+    ...t,
+    sources: scaledSources(t.sources, RATE_SCALE_PETS.has(Number(id))),
+  };
+}
 
 // Sets: dupe-protected groups score as one unit. mode
 // "pieces" counts distinct pieces owned; mode "total"
 // counts the summed quantity across the group.
-const SETS = Object.values(LUCK_DATA.sets || {});
+const SETS = Object.values(LUCK_DATA.sets || {})
+  .map((s) => ({ ...s, sources: scaledSources(s.sources, false) }));
 const SET_BY_PIECE = {};
 for (const s of SETS) {
   for (const id of s.pieces) SET_BY_PIECE[id] = s;
