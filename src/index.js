@@ -40,6 +40,7 @@ const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTea
 const { reconcileVerifiedLinks, surfaceHeldPosts } = require('./plugin-connect');
 const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
+const { mergeSiteLinkRequests } = require('./link-requests');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 
@@ -106,6 +107,10 @@ client.once(Events.ClientReady, async (c) => {
       // reconciles against it, and the seniority sync reads both.
       await syncWomGroup();
 
+      // Merge any RSN link requests the website dropped while the
+      // bot was down (the minute loop below takes it from here).
+      mergeSiteLinkRequests();
+
       // Seniority sync (uses cached members)
       await syncSeniority(client);
 
@@ -144,6 +149,7 @@ client.once(Events.ClientReady, async (c) => {
   }, 30 * 1000);
 
   // Recurring loops (use cached data where possible)
+  setInterval(() => { try { mergeSiteLinkRequests(); } catch (e) { console.error('Link request merge failed:', e.message); } }, 60 * 1000);
   setInterval(() => syncReminders(client), 5 * 60 * 1000);
   setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
   setInterval(() => syncFriends(client), 24 * 3600 * 1000);
