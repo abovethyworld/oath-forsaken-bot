@@ -766,6 +766,16 @@ async function t(name, fn, needFile = true) {
     const kbdF = namesIn(L.dryReport({ king_black_dragon: 300 }, [{ id: 7980, quantity: 0 }], 'full'));
     ok('dry views: KBD heads out of Uniques, in Full clog',
       !kbdU.includes('Kbd heads') && kbdF.includes('Kbd heads'));
+    // Teleports (Nov 4, 2026): drops whose job is getting
+    // around score in Full clog but never headline.
+    const zulU = namesIn(L.dryReport({ zulrah: 512 }, [{ id: 12938, quantity: 0 }], 'uniques'));
+    const zulF = namesIn(L.dryReport({ zulrah: 512 }, [{ id: 12938, quantity: 0 }], 'full'));
+    ok('dry views: Zul-andra teleport out of Uniques, in Full clog',
+      !zulU.includes('Zul-andra teleport') && zulF.includes('Zul-andra teleport'));
+    const cerbU = namesIn(L.dryReport({ cerberus: 512 }, [{ id: 13249, quantity: 0 }], 'uniques'));
+    const cerbF = namesIn(L.dryReport({ cerberus: 512 }, [{ id: 13249, quantity: 0 }], 'full'));
+    ok('dry views: Key master teleport out of Uniques, in Full clog',
+      !cerbU.includes('Key master teleport') && cerbF.includes('Key master teleport'));
     ok('dry views: removed units are not scored at all',
       !L.scoredIds().has(25580) && !L.scoredIds().has(25582) && !L.scoredIds().has(20704)
         && L.dryReport({ 'plugin:reward_permits': 100 }, [{ id: 25580, quantity: 0 }]) === null
@@ -858,6 +868,63 @@ async function t(name, fn, needFile = true) {
     ok('scaled rates: Huberte pet keeps its listed rate',
       !!hub && Math.abs(hub.rate - rawRate(30152)) < 1e-12,
       hub && String(hub.rate));
+  }
+
+  // ── Q. Luck tuning file (Nov 4, 2026): the rate
+  // factors, pet exemptions, and unscored list read from
+  // data/luck-tuning.json at load. A present file applies
+  // (rateScale merges over the defaults); a malformed or
+  // absent file falls back to the built-in defaults and
+  // never throws. The live file is restored byte-for-byte
+  // afterwards.
+  {
+    const RAW = require(path.join(__dirname, '..', 'src', 'luck-data.json'));
+    const rawRate = (id) => RAW.items[String(id)].sources[0].rate;
+    const luckPath = path.join(__dirname, '..', 'src', 'luck.js');
+    const tunePath = path.join(DATA, 'luck-tuning.json');
+    const row = (rep, name) => rep && rep.missing.find((m) => m.name === name);
+    const hornOf = (mod) => row(mod.dryReport(
+      { yama: 438 }, [{ id: 30759, quantity: 0 }], 'full'), 'Soulflame horn');
+    const wandOf = (mod) => row(mod.dryReport(
+      { the_hueycoatl: 62 }, [{ id: 30070, quantity: 0 }], 'full'), 'Dragon hunter wand');
+    const freshLuck = () => {
+      delete require.cache[require.resolve(luckPath)];
+      return require(luckPath);
+    };
+    let saved = null;
+    try { saved = fs.readFileSync(tunePath, 'utf8'); } catch { saved = null; }
+    try {
+      fs.writeFileSync(tunePath, JSON.stringify({ rateScale: { yama: 0.5 } }));
+      const applied = freshLuck();
+      const aHorn = hornOf(applied);
+      const aWand = wandOf(applied);
+      ok('tuning file: a present file applies its rate factor',
+        !!aHorn && Math.abs(aHorn.rate - rawRate(30759) * 0.5) < 1e-12,
+        aHorn && String(aHorn.rate));
+      ok('tuning file: rateScale merges over the defaults',
+        !!aWand && Math.abs(aWand.rate - rawRate(30070) / 3) < 1e-12
+          && !applied.scoredIds().has(33382),
+        aWand && String(aWand.rate));
+      fs.writeFileSync(tunePath, 'not json{{{');
+      let malformed = null; let threw = false;
+      try { malformed = freshLuck(); } catch { threw = true; }
+      const mHorn = malformed && hornOf(malformed);
+      ok('tuning file: a malformed file falls back to defaults, never throws',
+        !threw && !!mHorn && Math.abs(mHorn.rate - 1 / 375) < 1e-9
+          && !malformed.scoredIds().has(33382),
+        threw ? 'threw' : (mHorn && String(mHorn.rate)));
+      fs.rmSync(tunePath, { force: true });
+      const absent = freshLuck();
+      const nHorn = hornOf(absent);
+      ok('tuning file: an absent file falls back to defaults',
+        !!nHorn && Math.abs(nHorn.rate - 1 / 375) < 1e-9
+          && !absent.scoredIds().has(33382),
+        nHorn && String(nHorn.rate));
+    } finally {
+      if (saved === null) fs.rmSync(tunePath, { force: true });
+      else fs.writeFileSync(tunePath, saved);
+      freshLuck();
+    }
   }
 
   // Timing guard (Nov 2, 2026): a payload builder that burns

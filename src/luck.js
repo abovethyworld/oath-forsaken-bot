@@ -27,6 +27,63 @@ const fs = require('fs');
 const path = require('path');
 const LUCK_DATA = require('./luck-data.json') || {};
 
+// Luck tuning knobs (Nov 4, 2026): the team-rate
+// factors, the pet exemptions, and the unscored list
+// live in data/luck-tuning.json (source of truth:
+// deploy/luck-tuning.json in the repo) so a number
+// tweak is a file edit and a restart, not an image
+// rebuild. The file is read once at load. A missing,
+// unreadable, or malformed file (or field) falls back
+// to the built-in defaults below, which are the shipped
+// values, with a logged warning: bad tuning can never
+// take the bot down or change the math silently.
+const TUNING_FILE = path.join(__dirname, '..', 'data', 'luck-tuning.json');
+const DEFAULT_TUNING = {
+  rateScale: { yama: 0.8, the_hueycoatl: 1 / 3 },
+  rateScalePets: [30888, 30152],
+  unscoredItems: [33382],
+};
+function loadTuning() {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(fs.readFileSync(TUNING_FILE, 'utf8'));
+  } catch (e) {
+    console.error(`[luck] luck-tuning.json unreadable (${e.message}); using built-in tuning defaults`);
+    return DEFAULT_TUNING;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    console.error('[luck] luck-tuning.json is not an object; using built-in tuning defaults');
+    return DEFAULT_TUNING;
+  }
+  const bad = (field) => console.error(
+    `[luck] luck-tuning.json field "${field}" is malformed; using its built-in default`);
+  const out = {
+    rateScale: { ...DEFAULT_TUNING.rateScale },
+    rateScalePets: DEFAULT_TUNING.rateScalePets,
+    unscoredItems: DEFAULT_TUNING.unscoredItems,
+  };
+  if (parsed.rateScale !== undefined) {
+    if (parsed.rateScale && typeof parsed.rateScale === 'object'
+      && !Array.isArray(parsed.rateScale)) {
+      for (const [c, f] of Object.entries(parsed.rateScale)) {
+        if (typeof f === 'number' && Number.isFinite(f) && f > 0 && f <= 1) {
+          out.rateScale[c] = f;
+        } else bad(`rateScale.${c}`);
+      }
+    } else bad('rateScale');
+  }
+  for (const field of ['rateScalePets', 'unscoredItems']) {
+    if (parsed[field] !== undefined) {
+      if (Array.isArray(parsed[field])
+        && parsed[field].every((v) => Number.isInteger(v))) {
+        out[field] = parsed[field];
+      } else bad(field);
+    }
+  }
+  return out;
+}
+const TUNING = loadTuning();
+
 // Contribution-scaled bosses (Nov 4, 2026): Yama and the
 // Hueycoatl scale their unique rates by each player's
 // damage share, so the published table (a solo table)
@@ -36,17 +93,17 @@ const LUCK_DATA = require('./luck-data.json') || {};
 // an even split), the Hueycoatl as a 3-man (rates x 1/3,
 // the even-share rate). Pets roll flat per player at both
 // bosses and keep their listed rates. The factors live
-// here, not in the table, so re-extracting luck-data.json
-// keeps them.
-const RATE_SCALE = { yama: 0.8, the_hueycoatl: 1 / 3 };
-const RATE_SCALE_PETS = new Set([30888, 30152]); // Yami, Huberte
+// in the tuning file, not in the table, so re-extracting
+// luck-data.json keeps them.
+const RATE_SCALE = TUNING.rateScale;
+const RATE_SCALE_PETS = new Set(TUNING.rateScalePets); // Yami, Huberte
 // Items dropped from scoring entirely, applied at load so
 // re-extracting the table cannot bring them back. 33382
 // (Immaculate mole skin) was added to the Giant Mole with
 // the gem sack content, long after lifetime mole KC
 // existed: scoring it charges kills that never had a
 // chance to drop it, and its dryness is fake.
-const UNSCORED_ITEMS = new Set([33382]);
+const UNSCORED_ITEMS = new Set(TUNING.unscoredItems);
 function scaledSources(sources, keepListed) {
   return (sources || []).map((s) => {
     const f = keepListed ? 1 : (RATE_SCALE[s.c] || 1);
