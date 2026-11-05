@@ -771,6 +771,21 @@ async function t(name, fn, needFile = true) {
         && L.dryReport({ 'plugin:reward_permits': 100 }, [{ id: 25580, quantity: 0 }]) === null
         && L.dryReport({ wintertodt: 500 },
           [20704, 20706, 20708, 20710].map((id) => ({ id, quantity: 0 }))) === null);
+    // Immaculate mole skin (33382): a late-added drop whose
+    // KC base predates it. It is dropped at table load, so
+    // it scores in no view even when a refreshed table
+    // carries the row; its Giant Mole neighbours still do.
+    const moleItems = [{ id: 33382, quantity: 0 }, { id: 12646, quantity: 0 }];
+    const moleViews = ['uniques', 'clues', 'full'].map((v) =>
+      namesIn(L.dryReport({ giant_mole: 523 }, moleItems, v)));
+    ok('dry views: immaculate mole skin is not scored in any view',
+      !L.scoredIds().has(33382)
+        && moleViews.every((ns) => !ns.includes('Immaculate mole skin')),
+      moleViews.map((ns) => ns.join(',')).join(' | '));
+    ok('dry views: baby mole still scores beside it',
+      moleViews[0].includes('Baby mole') && moleViews[2].includes('Baby mole'));
+    ok('dry views: a page of only the mole skin scores nothing',
+      L.dryReport({ giant_mole: 523 }, [{ id: 33382, quantity: 0 }]) === null);
     // The list card itself: opens on Uniques with the three
     // view buttons; Full clog keeps its category buttons.
     const listU = await S.dryListPayload('IronVale', GAVIN);

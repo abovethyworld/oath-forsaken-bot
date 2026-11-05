@@ -40,6 +40,13 @@ const LUCK_DATA = require('./luck-data.json') || {};
 // keeps them.
 const RATE_SCALE = { yama: 0.8, the_hueycoatl: 1 / 3 };
 const RATE_SCALE_PETS = new Set([30888, 30152]); // Yami, Huberte
+// Items dropped from scoring entirely, applied at load so
+// re-extracting the table cannot bring them back. 33382
+// (Immaculate mole skin) was added to the Giant Mole with
+// the gem sack content, long after lifetime mole KC
+// existed: scoring it charges kills that never had a
+// chance to drop it, and its dryness is fake.
+const UNSCORED_ITEMS = new Set([33382]);
 function scaledSources(sources, keepListed) {
   return (sources || []).map((s) => {
     const f = keepListed ? 1 : (RATE_SCALE[s.c] || 1);
@@ -48,6 +55,7 @@ function scaledSources(sources, keepListed) {
 }
 const TABLE = {};
 for (const [id, t] of Object.entries(LUCK_DATA.items || {})) {
+  if (UNSCORED_ITEMS.has(Number(id))) continue;
   TABLE[id] = {
     ...t,
     sources: scaledSources(t.sources, RATE_SCALE_PETS.has(Number(id))),
