@@ -1,6 +1,6 @@
 #!/bin/bash
 # OathBreakers bot — VPS setup script.
-# Run as root on a fresh Ubuntu 22.04/24.04 machine (e.g. cloud free tier).
+# Run as root on a fresh Ubuntu 22.04/24.04 machine.
 set -e
 
 APP_DIR=/opt/oathbreakers-bot
@@ -17,7 +17,7 @@ chown "$SUDO_USER:$SUDO_USER" "$APP_DIR" 2>/dev/null || true
 
 echo ""
 echo "=== Next steps ==="
-echo "1. Log in to GHCR so Docker can pull the private image. Use a GitHub PAT"
+echo "1. If the image is private, log in to GHCR so Docker can pull it. Use a GitHub PAT"
 echo "   (classic) with only the read:packages scope:"
 echo "     echo <PAT> | docker login ghcr.io -u <github-username> --password-stdin"
 echo "2. Create $APP_DIR/.env (plain KEY=value lines, no quotes):"

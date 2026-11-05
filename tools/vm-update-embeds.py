@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run on the cloud VM to update Discord embeds from a clean IP.
+"""Run on the server host to update Discord embeds.
 
 Usage: python3 vm-update-embeds.py
 Reads DISCORD_TOKEN from /opt/oathbreakers-bot/.env
