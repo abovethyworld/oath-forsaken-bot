@@ -733,7 +733,7 @@ test('runeprofile parses clog payloads defensively', () => {
   const acct = { collectionLog: { obtained: 1000, total: 1717 } };
   assert.deepStrictEqual(parseClogTotal(acct), { obtained: 1000, total: 1717 });
   assert.strictEqual(parseClogTotal({}), null, 'no clog -> null');
-  assert.strictEqual(clogCacheKey('IronVale', 'Minigames', 'Guardians of the Rift'), clogCacheKey('ptstud', 'Minigames', 'Guardians of the Rift'), 'keys case-fold the username');
+  assert.strictEqual(clogCacheKey('TestUser', 'Minigames', 'Guardians of the Rift'), clogCacheKey('testuser', 'Minigames', 'Guardians of the Rift'), 'keys case-fold the username');
 });
 
 test('progressBar and prettyMetric format show-off output', () => {
@@ -744,7 +744,7 @@ test('progressBar and prettyMetric format show-off output', () => {
 
 test('team board body: skill mode carries one column plus the clog column', () => {
   const rows = [
-    { name: 'IronVale', stats: [99], specs: [], kc: [1240], badge: 'main', clog: { obtained: 15, total: 17 } },
+    { name: 'TestUser', stats: [99], specs: [], kc: [1240], badge: 'main', clog: { obtained: 15, total: 17 } },
     { name: 'other', stats: [87], specs: [], kc: [412], badge: null, clog: null },
   ];
   const body = buildTeamBoardBody({ activity: 'wintertodt' }, rows, { kcColumns: [{ metric: 'wintertodt', icon: 'wintertodt' }], skill: 'firemaking', clogColumn: true });
@@ -752,7 +752,7 @@ test('team board body: skill mode carries one column plus the clog column', () =
   assert.strictEqual(body.clogColumn, true, 'clog column on');
   assert.deepStrictEqual(body.rows[0].clog, { obtained: 15, total: 17 }, 'clog counts carried');
   assert.strictEqual(typeof body.kcColumns[0].icon, 'string', 'boss icon ships as base64');
-  const wag = buildTeamBoardBody({ activity: 'wag' }, [{ name: 'IronVale', stats: [91], specs: [], kc: [], badge: null }], { kcColumns: [], skill: 'agility', clogColumn: false });
+  const wag = buildTeamBoardBody({ activity: 'wag' }, [{ name: 'TestUser', stats: [91], specs: [], kc: [], badge: null }], { kcColumns: [], skill: 'agility', clogColumn: false });
   assert.strictEqual(wag.kcColumns.length, 0, 'WAG body has no KC column');
   assert.strictEqual(wag.clogColumn, false, 'WAG body has no clog column');
 });
@@ -827,7 +827,7 @@ test('bossIconKey maps directly (all icons exist now)', () => {
 
 test('team board body accepts a kc per row', () => {
   const body = buildTeamBoardBody({ activity: 'nex' },
-    [{ name: 'IronVale', stats: [124, 99, 99, 99, 99, 98, 99, 85], specs: [], kc: 1240 }],
+    [{ name: 'TestUser', stats: [124, 99, 99, 99, 99, 98, 99, 85], specs: [], kc: 1240 }],
     { kcColumns: [{ metric: 'nex', icon: 'nex' }] });
   assert.deepStrictEqual(body.rows[0].kc, [1240], 'scalar kc becomes a one-column array');
   const empty = buildTeamBoardBody({ activity: 'nex' },
@@ -959,7 +959,7 @@ test('settings panel shows current defaults and five buttons', () => {
 
 test('team board body compact mode drops spec rows', () => {
   const rows = [
-    { name: 'IronVale', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker'], kc: 10, badge: 'ironman' },
+    { name: 'TestUser', stats: [126, 99, 99, 99, 99, 99, 99, 99], specs: ['bgs', 'voidwaker'], kc: 10, badge: 'ironman' },
   ];
   const full = buildTeamBoardBody({ activity: 'nex' }, rows, {});
   assert.deepStrictEqual(full.rows[0].specs, ['bgs', 'voidwaker'], 'full body keeps the spec ids');
@@ -1250,14 +1250,14 @@ test('KC card renders with WOM boss icon', () => {
 
 test('takeActivity folds two-word activities, !kc title clamps', () => {
   const { takeActivity } = require('../src/showoff');
-  const args = ['TOA', 'expert', 'IronVale'];
+  const args = ['TOA', 'expert', 'TestUser'];
   assert.strictEqual(takeActivity(args, { toa_expert: 1 }), 'toa_expert');
-  assert.deepStrictEqual(args, ['IronVale'], 'consumes both words');
+  assert.deepStrictEqual(args, ['TestUser'], 'consumes both words');
   const { fitTitle } = require('../src/party-board');
   const long = 'A very long name here: Tombs of Amascut Normal';
   const out = fitTitle(long, 700);
   assert.ok(out.endsWith('...') && out.length < long.length, 'long title trims');
-  assert.strictEqual(fitTitle('IronVale: Yama', 700), 'IronVale: Yama', 'short title untouched');
+  assert.strictEqual(fitTitle('TestUser: Yama', 700), 'TestUser: Yama', 'short title untouched');
 });
 
 test('wom parseStats leaves missing minigame skills null (not 1)', () => {

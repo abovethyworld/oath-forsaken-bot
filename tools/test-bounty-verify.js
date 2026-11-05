@@ -10,8 +10,8 @@ const { itemIdsForName, slugFor, findDropSince, findFeedHit } = _internals;
 const fangIds = itemIdsForName('Magic fang');
 assert(fangIds.length >= 1, 'Magic fang should resolve to an item id');
 assert.deepStrictEqual(itemIdsForName(''), []);
-assert.strictEqual(slugFor('IronVale'), 'ptstud');
-assert.strictEqual(slugFor('Go Far'), 'go-run');
+assert.strictEqual(slugFor('TestUser'), 'testuser');
+assert.strictEqual(slugFor('Test Alt'), 'test-alt');
 
 const POSTED = Date.parse('2026-11-01T00:00:00Z');
 // Drops: only drops strictly after the post date count.
