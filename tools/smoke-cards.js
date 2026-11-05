@@ -354,7 +354,7 @@ async function t(name, fn, needFile = true) {
 
   // ── L. Dry list + driest board ──
   const dlStarted = Date.now();
-  const dl = await S.dryListPayload('IronVale', null, 'all');
+  const dl = await S.dryListPayload('IronVale', null, 'full', 'all');
   timings.push({ name: 'dry list (section L)', ms: Date.now() - dlStarted });
   ok('dry list renders for IronVale', !!(dl && dl.files), JSON.stringify(dl && dl.content || ''));
   ok('dry list carries category buttons', !!dl && (dl.components || []).length >= 1);
@@ -362,7 +362,7 @@ async function t(name, fn, needFile = true) {
     !!dl && flat(dl).filter((c) => c.id.startsWith('drycat:')).length === 3
       && !flat(dl).some((c) => c.id.startsWith('drycat:Minigames'))
       && !flat(dl).some((c) => c.id.startsWith('drycat:Other')));
-  const dlb = await S.dryListPayload('IronVale', null, 'Bosses');
+  const dlb = await S.dryListPayload('IronVale', null, 'full', 'Bosses');
   ok('dry list Bosses category renders', !!(dlb && dlb.files));
   const drb = await S.leaderboardPayload(null, 'driest');
   ok('driest board renders', !!(drb && drb.files), JSON.stringify(drb && drb.content || ''));
@@ -486,14 +486,25 @@ async function t(name, fn, needFile = true) {
         && flat(ixPage.last).some((c) => c.id.startsWith('hub:clogtotal:') && c.label === '← Clogs card')
         && !flat(ixPage.last).some((c) => c.id.startsWith('lbswap:')));
   }
-  // Dry tab: drill into a page, return to the list.
+  // Dry tab: opens on the Uniques view; the Full clog view
+  // carries the category buttons, empties hidden. Drill into
+  // a page from the Uniques list, return to the list.
   const hubDry = await S.hubPayload('IronVale', GAVIN, { tab: 'dry' });
-  // IronVale has scored drops only in Bosses and Clues, so the empty
-  // Minigames and Other buttons hide for him (set Nov 2, 2026).
-  ok('hub Dry tab shows only his non-empty categories',
-    !!hubDry && flat(hubDry).filter((c) => c.id.startsWith('hub:drycat:')).length === 3
-      && !flat(hubDry).some((c) => c.id.startsWith('hub:drycat:Minigames'))
-      && !flat(hubDry).some((c) => c.id.startsWith('hub:drycat:Other')));
+  ok('hub Dry tab opens on the Uniques view',
+    !!hubDry && flat(hubDry).some((c) => c.id.startsWith('hub:dryview:uniques:')));
+  const dryFullBtn = flat(hubDry).find((c) => c.id.startsWith('hub:dryview:full:'));
+  if (dryFullBtn) {
+    const ixFull = hubIx(dryFullBtn.id, hubDry.components, GAVIN);
+    await S.handleHubButton(ixFull);
+    // IronVale has scored drops only in Bosses and Clues, so the empty
+    // Minigames and Other buttons hide for him (set Nov 2, 2026).
+    ok('hub Dry tab shows only his non-empty categories',
+      !!ixFull.last && flat(ixFull.last).filter((c) => c.id.startsWith('hub:drycat:')).length === 3
+        && !flat(ixFull.last).some((c) => c.id.startsWith('hub:drycat:Minigames'))
+        && !flat(ixFull.last).some((c) => c.id.startsWith('hub:drycat:Other')));
+  } else {
+    ok('hub Dry tab shows only his non-empty categories', false, 'no Full clog view button');
+  }
   const dryOpts = selOptions(hubDry, 'hub:drypick:').map((o) => o.value).filter(Boolean);
   ok('hub Dry tab has a drill-in picker', dryOpts.length > 0);
   if (dryOpts.length) {
@@ -509,7 +520,7 @@ async function t(name, fn, needFile = true) {
     await S.handleHubButton(ixBack);
     ok('hub dry return restores the list',
       !!ixBack.last && hasFile(ixBack.last)
-        && flat(ixBack.last).some((c) => c.id.startsWith('hub:drycat:')));
+        && flat(ixBack.last).some((c) => c.id.startsWith('hub:dryview:')));
   }
   // Gains flips inside the hub.
   const hubGains = await S.hubPayload('IronVale', GAVIN, { tab: 'gains' });
