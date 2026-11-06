@@ -245,7 +245,7 @@ async function postPanelCommand(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const posted = await refreshStaffLinkPanel(interaction.guild);
   await interaction.editReply(
-    posted ? 'Panel is up in the Link an RSN thread.' : 'The panel thread was not found. Check config.staffLink.threadId.',
+    posted ? 'Panel is up in the Link an RSN thread.' : 'The panel thread was not found. The panel was not posted.',
   );
 }
 
