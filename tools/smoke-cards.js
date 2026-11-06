@@ -1289,8 +1289,8 @@ async function t(name, fn, needFile = true) {
   // driven through runRefresh with recording update stubs and a
   // scratch state file: no network, no live data writes. Fake
   // ids and names throughout, per the repo rule. The handler's
-  // Discord shell is not simulated; the decision flow it calls
-  // is what carries the rules.
+  // response sequence is covered separately below, through a
+  // recording fake interaction and the handler's deps seam.
   {
     const R = require(path.join(__dirname, '..', 'src', 'refresh.js'));
     const os = require('os');
@@ -1362,6 +1362,106 @@ async function t(name, fn, needFile = true) {
     ok('refresh: the first pull completes and charges once',
       firstDone.outcome === 'ok' && R.loadState(f4).users[UID].used === 1 && !R.loadState(f4).users[UID2],
       JSON.stringify(firstDone));
+
+    // The handler's response sequence (Nov 6, 2026 fix): the
+    // tapper must see a reply at once. A fake interaction
+    // records every call in order; the pull is a recording
+    // stub through the handler's deps seam; state stays in
+    // the scratch dir, so no live count is spent. The rebuild
+    // runs the real kc payload for the fixture name, the same
+    // build the card checks below use.
+    const encPrimary = PRIMARY.replace(/ /g, '_');
+    const kcTap = `refresh:kc:zulrah:${encPrimary}`;
+    const mkInteraction = (customId, userId, log) => ({
+      customId,
+      user: { id: userId },
+      reply: async (o) => { log.push(['reply', o.content]); },
+      editReply: async (o) => { log.push(['editReply', o.content]); },
+      followUp: async (o) => { log.push(['followUp', o.content]); },
+      message: { edit: async (o) => { log.push(['message.edit', o]); } },
+    });
+
+    // A working tap: ACK reply first, pull after it, the card
+    // edited on its own message, the result line last.
+    const f5 = path.join(dir, 'state-handler.json');
+    const log5 = [];
+    await S.handleRefreshButton(mkInteraction(kcTap, OWNER, log5),
+      { updateFn: async (name) => { log5.push(['pull', name]); return true; }, now: NOW, file: f5 });
+    const kinds5 = log5.map((e) => e[0]);
+    ok('refresh: the ACK reply is the first response',
+      log5.length > 0 && log5[0][0] === 'reply' && log5[0][1] === 'Refreshing that name now.',
+      JSON.stringify(kinds5));
+    ok('refresh: the ACK is issued before the pull starts',
+      kinds5.indexOf('pull') > kinds5.indexOf('reply') && kinds5.indexOf('reply') === 0,
+      JSON.stringify(kinds5));
+    ok('refresh: the handler pull runs exactly once, on the card name',
+      log5.filter((e) => e[0] === 'pull').length === 1
+        && log5.find((e) => e[0] === 'pull')[1] === PRIMARY, JSON.stringify(kinds5));
+    const cardEdit = log5.find((e) => e[0] === 'message.edit');
+    ok('refresh: the card is edited on its own message with the new image',
+      !!cardEdit && !!cardEdit[1].files && cardEdit[1].files.length > 0, JSON.stringify(kinds5));
+    ok('refresh: the result line edits the reply, after the card edit',
+      log5[log5.length - 1][0] === 'editReply'
+        && log5[log5.length - 1][1] === 'Refreshed. You have 19 refreshes left today.'
+        && kinds5.indexOf('editReply') > kinds5.indexOf('message.edit'),
+      JSON.stringify(log5.map((e) => (typeof e[1] === 'string' ? e[1] : e[0]))));
+    ok('refresh: the handler spend landed in the scratch state',
+      R.loadState(f5).users[OWNER].used === 1, JSON.stringify(R.loadState(f5)));
+
+    // A locked name: answered by the first reply, no pull.
+    const f6 = path.join(dir, 'state-locked-tap.json');
+    fs.writeFileSync(f6, JSON.stringify({ users: {}, locks: { [PRIMARY.toLowerCase()]: NOW + R.LOCK_MS } }));
+    const log6 = [];
+    let pulls6 = 0;
+    await S.handleRefreshButton(mkInteraction(kcTap, UID2, log6),
+      { updateFn: async () => { pulls6 += 1; return true; }, now: NOW, file: f6 });
+    ok('refresh: a locked tap is answered at once, with no pull',
+      log6.length === 1 && log6[0][0] === 'reply'
+        && log6[0][1] === 'That name was just refreshed. It is locked for about 5 more minutes.'
+        && pulls6 === 0, JSON.stringify(log6));
+
+    // An empty tapper: answered by the first reply, no pull.
+    const f7 = path.join(dir, 'state-empty-tap.json');
+    fs.writeFileSync(f7, JSON.stringify({ users: { [UID2]: { day: R.dayKey(NOW), used: R.DAILY_LIMIT } }, locks: {} }));
+    const log7 = [];
+    let pulls7 = 0;
+    await S.handleRefreshButton(mkInteraction(kcTap, UID2, log7),
+      { updateFn: async () => { pulls7 += 1; return true; }, now: NOW, file: f7 });
+    ok('refresh: an empty tapper is answered at once, with no pull',
+      log7.length === 1 && log7[0][0] === 'reply'
+        && log7[0][1] === 'You are out of refreshes for today. Cards keep working off the saved numbers.'
+        && pulls7 === 0, JSON.stringify(log7));
+
+    // A name mid-pull: answered by the first reply, no pull.
+    const f8 = path.join(dir, 'state-busy-tap.json');
+    let release8;
+    const gate8 = new Promise((res) => { release8 = res; });
+    const firstPull = R.runRefresh({ userId: UID, rsn: PRIMARY, updateFn: async () => { await gate8; return true; }, now: NOW, file: f8 });
+    const log8 = [];
+    let pulls8 = 0;
+    await S.handleRefreshButton(mkInteraction(kcTap, UID2, log8),
+      { updateFn: async () => { pulls8 += 1; return true; }, now: NOW, file: f8 });
+    ok('refresh: a busy tap is answered at once, with no second pull',
+      log8.length === 1 && log8[0][0] === 'reply'
+        && log8[0][1] === 'That name is being refreshed right now. Give it a few seconds.'
+        && pulls8 === 0, JSON.stringify(log8));
+    release8();
+    await firstPull;
+
+    // A failed pull: the ACK is edited into the failure line,
+    // the card is never edited, and nothing is charged.
+    const f9 = path.join(dir, 'state-failed-tap.json');
+    const log9 = [];
+    await S.handleRefreshButton(mkInteraction(kcTap, UID2, log9),
+      { updateFn: async () => { log9.push(['pull', 'x']); return false; }, now: NOW, file: f9 });
+    ok('refresh: a failed pull edits the ACK into the failure line',
+      log9.length === 3 && log9[0][0] === 'reply' && log9[0][1] === 'Refreshing that name now.'
+        && log9[2][0] === 'editReply'
+        && log9[2][1] === 'The update did not go through. Nothing was spent, try again in a bit.',
+      JSON.stringify(log9.map((e) => (typeof e[1] === 'string' ? e[1] : e[0]))));
+    ok('refresh: a failed tap charges nothing and locks nothing',
+      !R.loadState(f9).users[UID2] && !R.loadState(f9).locks[PRIMARY.toLowerCase()],
+      JSON.stringify(R.loadState(f9)));
     fs.rmSync(dir, { recursive: true, force: true });
 
     // The age line's wording, from fixed stamps.
