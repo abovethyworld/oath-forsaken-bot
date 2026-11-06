@@ -2,7 +2,8 @@
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getStats, getCachedStats, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
+const { getStats, getCachedStats, statsFetchedAt, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
+const { runRefresh, refreshRemaining } = require('./refresh');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -412,6 +413,61 @@ async function handleBridgeButton(interaction) {
   }
 }
 
+// Card Refresh: force one player's Wise Old Man update now,
+// charged to the tapper under the rules in refresh.js, then
+// rebuild the same card in place with the new numbers. The
+// interaction is deferred before anything is built: the pull
+// takes seconds and the acknowledgement window is three. A
+// refused or failed pull changes nothing on the card and is
+// answered privately instead.
+async function handleRefreshButton(interaction) {
+  const uid = interaction.user.id;
+  const customId = String(interaction.customId || '');
+  const parts = customId.split(':');
+  const kind = parts[1];
+  let rsn = '';
+  let rebuild = null;
+  let isHub = false;
+  if (kind === 'kc' || kind === 'dry') {
+    const key = parts[2];
+    rsn = String(parts.slice(3).join(':') || '').replace(/_/g, ' ');
+    if (rsn) {
+      rebuild = kind === 'kc'
+        ? () => kcPayload(key, rsn, uid)
+        : () => dryPayload(key, rsn, uid);
+    }
+  } else if (kind === 'hub') {
+    const st = hubDecode(customId.slice('refresh:hub:'.length));
+    rsn = st.rsn;
+    isHub = true;
+    if (rsn) rebuild = () => hubRender(st, uid);
+  }
+  if (!rsn || !rebuild) return;
+  await interaction.deferUpdate().catch(() => {});
+  const note = (content) => interaction.followUp({ content, ephemeral: true }).catch(() => {});
+  const res = await runRefresh({ userId: uid, rsn, updateFn: updatePlayer });
+  if (res.outcome === 'busy') return note('That name is being refreshed right now. Give it a few seconds.');
+  if (res.outcome === 'locked') return note(`That name was just refreshed. It is locked for about ${res.minutes} more minute${res.minutes === 1 ? '' : 's'}.`);
+  if (res.outcome === 'empty') return note('You are out of refreshes for today. Cards keep working off the saved numbers.');
+  if (res.outcome !== 'ok') return note('The update did not go through. Nothing was spent, try again in a bit.');
+  const payload = await rebuild().catch(() => null);
+  if (payload && payload.files) {
+    if (isHub) {
+      await interaction.editReply(hubMsg(payload)).catch(() => {});
+    } else {
+      await interaction.editReply({
+        content: payload.content || '',
+        files: payload.files,
+        attachments: [],
+        components: payload.components || [],
+      }).catch(() => {});
+    }
+  } else if (payload && payload.content) {
+    await note(payload.content);
+  }
+  return note(`Refreshed. You have ${res.remaining} refresh${res.remaining === 1 ? '' : 'es'} left today.`);
+}
+
 async function handleLbSwapButton(interaction) {
   const parts = interaction.customId.split(':');
   let boardArg;
@@ -620,6 +676,46 @@ function withProfileButton(payload, tab, sub, rsn) {
   return { ...payload, components: comps };
 }
 
+// Age of the Wise Old Man snapshot behind a card, as the small
+// line over the card image: a member can see how old the
+// numbers are before spending a refresh on them.
+function updatedAgoText(fetchedAt, now = Date.now()) {
+  if (typeof fetchedAt !== 'number' || !fetchedAt) return null;
+  const mins = Math.floor((now - fetchedAt) / 60000);
+  if (mins < 1) return 'Updated just now';
+  if (mins < 60) return `Updated ${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Updated ${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `Updated ${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function updatedLineFor(rsn) {
+  return updatedAgoText(statsFetchedAt(rsn));
+}
+
+// Refresh button on the number cards, joining the button rows
+// the way the Profile button does. The label carries the
+// remaining count of the member whose action rendered the
+// card; a tap always charges the tapper (refresh.js rules).
+function withRefreshButton(payload, refreshId, userId) {
+  if (!payload || !payload.files) return payload;
+  const btn = new ButtonBuilder()
+    .setCustomId(refreshId)
+    .setLabel(`Refresh · ${refreshRemaining(userId)} left`)
+    .setStyle(ButtonStyle.Secondary);
+  const comps = [...(payload.components || [])];
+  const compType = (c) => (c && typeof c.type === 'number' ? c.type
+    : (c && c.data && typeof c.data.type === 'number' ? c.data.type : null));
+  const btnRow = comps.findIndex((r) => (r.components || []).some((c) => compType(c) === 2));
+  if (btnRow >= 0 && comps[btnRow].components.length < 5) {
+    comps[btnRow] = ActionRowBuilder.from(comps[btnRow]).addComponents(btn);
+  } else {
+    comps.push(new ActionRowBuilder().addComponents(btn));
+  }
+  return { ...payload, components: comps };
+}
+
 async function kcPayload(activity, rsn, userId) {
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
@@ -650,10 +746,14 @@ async function kcPayload(activity, rsn, userId) {
     const rows = [];
     if (body.rank) rows.push(lbSwapRow(`boss:${activity}`, `kc:${activity}:${rsn.replace(/ /g, '_')}`));
     if (dryScoredKeys().some((k) => kcEntry(k).name === entry.name)) rows.push(bridgeRow('dry', activity, rsn));
-    return withProfileButton({
+    const base = {
       files: [new AttachmentBuilder(card, { name: 'kc.png' })],
       components: rows,
-    }, 'pvm', activity, rsn);
+    };
+    const line = updatedLineFor(rsn);
+    if (line) base.content = line;
+    return withRefreshButton(withProfileButton(base, 'pvm', activity, rsn),
+      `refresh:kc:${activity}:${encName(rsn)}`, userId);
   }
   return CARD_DOWN;
 }
@@ -751,10 +851,14 @@ async function dryPayload(activity, rsn, userId) {
     obtained: await withIcons(report.obtained),
   });
   if (card) {
-    return withProfileButton({
+    const base = {
       files: [new AttachmentBuilder(card, { name: 'dry.png' })],
       components: [bridgeRow('kc', activity, rsn)],
-    }, 'dry', activity, rsn);
+    };
+    const line = updatedLineFor(rsn);
+    if (line) base.content = line;
+    return withRefreshButton(withProfileButton(base, 'dry', activity, rsn),
+      `refresh:dry:${activity}:${encName(rsn)}`, userId);
   }
   return CARD_DOWN;
 }
@@ -4705,12 +4809,13 @@ function hubTabRows(st) {
   ];
 }
 
-function hubBranchRow(st) {
+function hubBranchRow(st, userId) {
   const enc = hubEncode(st);
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`hub:lb:${enc}`).setLabel('Leaderboard').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`hub:cmp:${enc}`).setLabel('Compare').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`hub:chg:${enc}`).setLabel('Change player').setStyle(ButtonStyle.Secondary));
+    new ButtonBuilder().setCustomId(`hub:chg:${enc}`).setLabel('Change player').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`refresh:hub:${enc}`).setLabel(`Refresh · ${refreshRemaining(userId || st.owner)} left`).setStyle(ButtonStyle.Secondary));
 }
 
 // The return-button label names the card it returns to (Nov 2
@@ -5145,11 +5250,15 @@ async function hubRender(st, userId) {
   } else if (st.mode === 'cmp') {
     rows = [...hubTabRows(st), ...hubComparePickerRows(st, userId)];
   } else {
-    rows = [...(card.rows || []), ...hubTabRows(st), hubBranchRow(st)];
+    rows = [...(card.rows || []), ...hubTabRows(st), hubBranchRow(st, userId)];
   }
   const out = { components: rows.slice(0, 5) };
   if (card.files) out.files = card.files;
   if (card.content) out.content = card.content;
+  else {
+    const line = updatedLineFor(st.rsn);
+    if (line) out.content = line;
+  }
   return out;
 }
 
@@ -5594,4 +5703,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleRefreshButton, updatedAgoText, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
