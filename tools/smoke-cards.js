@@ -1001,6 +1001,102 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // Application pre-link flow (Nov 5, 2026): the RSN check at
+  // submit, the confirm screen, the in-flow account type ask, the
+  // approval pre-link, and the under-30 join flag. Pure and payload
+  // checks only: the live decision matrix (verified-other skip,
+  // unchecked retry) writes link data, so it runs in an isolated
+  // data sandbox pre-deploy, not against the live caches here.
+  {
+    const R = require(path.join(__dirname, '..', 'src', 'recruit.js'));
+    const U = require(path.join(__dirname, '..', 'src', 'utils.js'));
+    const recruitSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'recruit.js'), 'utf8');
+    const indexSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
+
+    // Age ask is gone: no select step, no config question, no routing.
+    ok('prelink: age select step removed', !recruitSrc.includes('showAgeSelect') && !recruitSrc.includes('apply:age:'));
+    ok('prelink: index no longer routes apply:age:', !indexSrc.includes('apply:age:') && !indexSrc.includes('handleAgeSelect'));
+    const typeQs = Object.values(cfg.recruit.types).map((t) => (t.questions || []).map((q) => q.id));
+    ok('prelink: config has no age question', typeQs.every((ids) => !ids.includes('age')), JSON.stringify(typeQs));
+    ok('prelink: modal fields are rsn, nickname, heard', typeQs.every((ids) => JSON.stringify(ids) === JSON.stringify(['rsn', 'nickname', 'heard'])), JSON.stringify(typeQs));
+
+    // Staff card: house red always, Link state field present.
+    ok('prelink: orange age flip removed', !recruitSrc.includes('0xffa500'));
+    ok('prelink: card colour is always house red', recruitSrc.includes('setColor(ZAMORAK_RED)'));
+    ok('prelink: link state field on the card', recruitSrc.includes("name: 'Link state'") && recruitSrc.includes('linkStateFieldText'));
+
+    // RSN parser: commas and slashes, dedupe, cap of 5.
+    ok('prelink: parser splits commas and slashes', JSON.stringify(R.parseRsnList('A One, B Two / a one')) === JSON.stringify(['A One', 'B Two']));
+    ok('prelink: parser caps at 5 names', R.parseRsnList('a,b,c,d,e,f').length === 5);
+
+    // The WOM check with a stubbed lookup: found, missing, partial, error.
+    const stub = async (name) => {
+      const k = name.toLowerCase();
+      if (k === 'found name') return { combat: 80, displayName: 'Found Name', username: 'found name' };
+      if (k === 'err name') return null;
+      return { notFound: true };
+    };
+    const cAll = await R.checkApplicationRsns(['found name'], stub);
+    ok('prelink: found name carries WOM spelling', cAll.found.length === 1 && cAll.found[0].canonical === 'Found Name');
+    const cNone = await R.checkApplicationRsns(['ghost name'], stub);
+    ok('prelink: missing name drops as notFound', cNone.found.length === 0 && cNone.dropped[0].reason === 'notFound');
+    const nf = R.notFoundPayload('ghost name', 'iron', cNone.dropped);
+    ok('prelink: not-found stop names the fix path', nf.content.includes('not on Wise Old Man') && nf.content.includes('has not been sent yet'));
+    ok('prelink: not-found stop carries the restart button',
+      JSON.stringify(nf.components.map((r) => r.toJSON())) .includes('apply:restart:iron'));
+    const cPart = await R.checkApplicationRsns(['found name', 'ghost name'], stub);
+    ok('prelink: partial drop state', R.linkStateOf(cPart) === 'partial' && R.linkStateFieldText('partial', 1) === 'Partial: 1 name(s) dropped at check');
+    const cErr = await R.checkApplicationRsns(['err name'], stub);
+    ok('prelink: WOM error goes forward unchecked', cErr.found.length === 1 && cErr.found[0].verified === false && R.linkStateOf(cErr) === 'unchecked');
+
+    // Confirm screen: the double ask carries its buttons.
+    const cp = R.confirmPayload({ found: cAll.found, dropped: [], linkState: 'verified' });
+    const cpJson = JSON.stringify(cp.components.map((r) => r.toJSON()));
+    ok('prelink: confirm and fix buttons routed', cpJson.includes('apply:confirm') && cpJson.includes('apply:fix'));
+    ok('prelink: confirm screen shows the name', cp.content.includes('**Found Name**'));
+
+    // Account type ask: iron asks flavour, guest asks kind first,
+    // main never asks. Badge pick ids are the teams BADGES ids.
+    ok('prelink: badge ids cover the iron family and main',
+      JSON.stringify(T.BADGES.map((b) => b.id)) === JSON.stringify(['ironman', 'hc', 'ult', 'gim', 'ugim', 'hcgim', 'main']),
+      JSON.stringify(T.BADGES.map((b) => b.id)));
+    const flJson = JSON.stringify(R.askPayload({ type: 'iron' }, { kind: 'flavour', name: 'Found Name' }).components.map((r) => r.toJSON()));
+    ok('prelink: flavour ask offers every iron badge plus AUTO',
+      ['ironman', 'hc', 'ult', 'gim', 'ugim', 'hcgim', 'auto'].every((id) => flJson.includes(`apply:flavour:${id}`)));
+    ok('prelink: guest asks kind first', R.nextAsk({ type: 'guest', found: [{ canonical: 'X' }], askIndex: 0, askStage: null }).kind === 'kind');
+    ok('prelink: main never asks', R.nextAsk({ type: 'main', found: [{ canonical: 'X' }], askIndex: 0, askStage: null }).kind === 'done');
+
+    // Pre-link decision order in source: the verified-owner check
+    // runs before any link write, and failures post to the thread.
+    const preStart = recruitSrc.indexOf('async function runApprovalPrelink');
+    const preEnd = recruitSrc.indexOf('function approvalDmText');
+    const preSrc = recruitSrc.slice(preStart, preEnd);
+    ok('prelink: verified owner checked before linking', preSrc.indexOf('verifiedOwnerOf(rsn)') > -1 && preSrc.indexOf('verifiedOwnerOf(rsn)') < preSrc.indexOf('addRsn(userId, rsn)'));
+    ok('prelink: failures are logged with the tag', preSrc.includes('[recruit-prelink]'));
+    ok('prelink: staff notice goes to the application thread', recruitSrc.includes('Approval still went through.'));
+    ok('prelink: first listed name set active after linking', preSrc.includes('setActiveRsn(userId, pre.names[0].name)'));
+
+    // Approval DM variants.
+    ok('prelink: DM says linked when all link', R.approvalDmText({ attempted: true, linked: ['Found Name'], failed: [] }).includes('Your names are already linked and their types are set: Found Name.'));
+    ok('prelink: DM is honest on failure', R.approvalDmText({ attempted: true, linked: [], failed: [{ rsn: 'Found Name', reason: 'x' }] }).includes('Your link needs a hand for: Found Name.'));
+    ok('prelink: legacy DM unchanged without a record', R.approvalDmText({ attempted: false, linked: [], failed: [] }) === '⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.');
+
+    // Welcome posts: linked members are not told to link.
+    ok('prelink: initiate welcome swaps the link bullet', U.buildInitiateWelcome('111', ['Found Name']).includes('Your names are already linked: Found Name')
+      && U.buildInitiateWelcome('111').includes('Hit **Link RSN**'));
+    ok('prelink: guest welcome only adds the line when linked', U.buildGuestWelcome('111', ['Found Name']).includes('Your names are already linked: Found Name')
+      && !U.buildGuestWelcome('111').includes('already linked'));
+
+    // Join flag age math: 29 days flags, 30 does not.
+    const nowMs = Date.UTC(2026, 10, 5);
+    const mkUser = (days) => ({ id: '42', tag: 'newbie', createdAt: new Date(nowMs - days * 86400000) });
+    ok('prelink: join flag fires at 29 days', !!R.youngAccountFlag(mkUser(29), nowMs));
+    ok('prelink: join flag silent at 30 days', R.youngAccountFlag(mkUser(30), nowMs) === null);
+    ok('prelink: join flag text', R.youngAccountFlag(mkUser(3), nowMs).text === 'New account flagged: <@42> (newbie). Discord account is 3 days old, under the 30 day mark. Flagged at join.');
+    ok('prelink: join flag wired in the join handler', indexSrc.includes('youngAccountFlag(member.user)'));
+  }
+
   // Launch countdown (Nov 5, 2026): the day-count math picks the
   // banner for each New York date. Fixed instants, no clock reading.
   {

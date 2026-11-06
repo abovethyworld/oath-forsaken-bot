@@ -46,12 +46,17 @@ function getPingRole(guild) {
 // ─── Initiate welcome message ───────────────────────────────────────
 // Single source of truth. Was triple-duplicated in seniority.js,
 // recruit.js, and tickets.js.
-function buildInitiateWelcome(userId) {
+function buildInitiateWelcome(userId, linkedNames) {
   const introduceId = config.channels?.introduceYourself;
   const rolesId = config.channels?.roles;
   const botGuideId = config.channels?.botGuide;
   const staffId = config.tickets?.staffRoleIds?.[0];
   const initiateId = config.seniorityRanks?.find((r) => r.minMonths === 0)?.roleId;
+  // Pre-linked applicants (application flow, Nov 5, 2026) already have
+  // their names on file: telling them to hit Link RSN would be wrong.
+  const linkBullet = linkedNames && linkedNames.length
+    ? `• Your names are already linked: ${linkedNames.join(', ')}`
+    : `• Hit **Link RSN** in <#${botGuideId}> so the clan bot knows your name`;
 
   return (
     `⛧ <@&${initiateId}> ⛧\n` +
@@ -60,18 +65,23 @@ function buildInitiateWelcome(userId) {
     `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
     `• Drop an intro in <#${introduceId}> so we can get to meet you\n` +
     `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
-    `• Hit **Link RSN** in <#${botGuideId}> so the clan bot knows your name\n` +
+    `${linkBullet}\n` +
     `• Ping <@&${staffId}> when you're ready for a clan chat invite`
   );
 }
 
 // ─── Guest welcome message ────────────────────────────────────────
 // Single source of truth for the guest welcome posted in #general.
-function buildGuestWelcome(userId) {
+function buildGuestWelcome(userId, linkedNames) {
   const guestId = config.recruit?.guestRoleId;
   const introduceId = config.channels?.introduceYourself;
   const rolesId = config.channels?.roles;
   const contactId = config.recruit?.contactStaffChannelId;
+  // The guest post carries no link bullet today; pre-linked guests
+  // (application flow, Nov 5, 2026) get one line saying so.
+  const linkedLine = linkedNames && linkedNames.length
+    ? `• Your names are already linked: ${linkedNames.join(', ')}\n`
+    : '';
 
   return (
     `Welcome, <@&${guestId}>\n` +
@@ -80,6 +90,7 @@ function buildGuestWelcome(userId) {
     `The door's open. Come see what the forsaken built.\n\n` +
     `• Drop an intro in <#${introduceId}>\n` +
     `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
+    `${linkedLine}` +
     `• Join the clan chat as a guest any time: type **OathForsaken** in the guest tab\n` +
     `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
   );

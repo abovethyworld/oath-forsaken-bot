@@ -523,12 +523,6 @@
             "label": "How did you hear about/find us?",
             "style": "paragraph",
             "required": true
-          },
-          {
-            "id": "age",
-            "label": "Is your Discord account at least 1 month old?",
-            "style": "short",
-            "required": true
           }
         ]
       },
@@ -555,12 +549,6 @@
             "label": "How did you hear about/find us?",
             "style": "paragraph",
             "required": true
-          },
-          {
-            "id": "age",
-            "label": "Is your Discord account at least 1 month old?",
-            "style": "short",
-            "required": true
           }
         ]
       },
@@ -586,12 +574,6 @@
             "id": "heard",
             "label": "How did you hear about/find us?",
             "style": "paragraph",
-            "required": true
-          },
-          {
-            "id": "age",
-            "label": "Is your Discord account at least 1 month old?",
-            "style": "short",
             "required": true
           }
         ]

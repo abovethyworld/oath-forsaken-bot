@@ -199,7 +199,12 @@ function parseStats(playerJson) {
     };
   }
   const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
-  return { combat: combatLevel(levels), ...levels, kc, accountType, skills: allSkills };
+  // Canonical spelling of the name as Wise Old Man holds it. The
+  // application pre-link check (recruit.js) confirms names back to
+  // the applicant exactly as written here.
+  const username = typeof playerJson.username === 'string' ? playerJson.username : null;
+  const displayName = typeof playerJson.displayName === 'string' ? playerJson.displayName : null;
+  return { combat: combatLevel(levels), ...levels, kc, accountType, skills: allSkills, username, displayName };
 }
 
 async function fetchPlayerDetails(username) {

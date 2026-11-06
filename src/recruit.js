@@ -1,11 +1,14 @@
 // Recruitment applications — three types: ironman, main, guest.
 // On member join: opens a private application channel with three buttons.
-// All applicants answer the Discord age question, then fill a modal.
-// Submit -> the bot opens a forum post in the applications forum titled
-// "<Type> App from <username>" with the answers, so staff can discuss in the
-// thread. Approve / Deny buttons live on the post's starter message.
-// Approve assigns the right member role (Iron Sworn/Unbound/Guest) + Initiate
-// seniority, renames the post to "... - Approved", and locks it.
+// Applicants fill a modal (RSN, nickname, how they heard). On submit the
+// bot checks every RSN on Wise Old Man, shows the found names back for a
+// confirm tap (the double ask), asks the account type in the same flow,
+// and only then opens a forum post in the applications forum titled
+// "<Type> App from <username>" with the answers, so staff can discuss in
+// the thread. Approve / Deny buttons live on the post's starter message.
+// Approve assigns the right member role (Iron Sworn/Unbound/Guest) +
+// Initiate seniority, pre-links the confirmed RSNs and their stated
+// types, renames the post to "... - Approved", and locks it.
 const {
   ActionRowBuilder,
   ButtonBuilder,
@@ -14,13 +17,14 @@ const {
   EmbedBuilder,
   ModalBuilder,
   PermissionFlagsBits,
-  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
 const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole, ZAMORAK_RED } = require('./utils');
+const { getStats } = require('./wom');
+const { addRsn, setActiveRsn, verifiedOwnerOf, setStatedBadge, syncModeRoles, BADGES } = require('./teams');
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -33,6 +37,107 @@ const submitLocks = new Set();
 
 function accountAgeDays(user) {
   return Math.floor((Date.now() - user.createdAt.getTime()) / DAY_MS);
+}
+
+// ─── Application pre-link (Nov 5, 2026) ─────────────────────────────
+// Pending flow state: userId -> staged application between the RSN
+// check and the final submit. In-memory only: if the bot restarts
+// mid-flow the applicant simply reapplies. Confirm is the point of no
+// return: it persists the staged names and badge picks into the
+// stored application answers, the record approval reads.
+const pendingApps = new Map();
+const PENDING_TTL_MS = 15 * 60 * 1000;
+
+function setPending(userId, state) {
+  pendingApps.set(userId, { ...state, expiresAt: Date.now() + PENDING_TTL_MS });
+}
+
+function getPending(userId) {
+  const p = pendingApps.get(userId);
+  if (!p) return null;
+  if (Date.now() > p.expiresAt) {
+    pendingApps.delete(userId);
+    return null;
+  }
+  return p;
+}
+
+// Same shape rule as the Link RSN flow in teams.js.
+const RSN_SHAPE = /^[A-Za-z0-9 ]{1,12}$/;
+
+// Parse the username(s) answer the way the approval nickname code
+// does (commas and slashes), deduped case-insensitively, capped at 5.
+function parseRsnList(raw) {
+  const seen = new Set();
+  const out = [];
+  for (const piece of String(raw || '').split(/[,/]/)) {
+    const name = piece.trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= 5) break;
+  }
+  return out;
+}
+
+// Check every name on Wise Old Man. Returns found names (with the
+// canonical spelling WOM holds), dropped names with a reason, and
+// whether any lookup failed outright. A failed lookup never blocks
+// the application: the name goes forward unverified and approval
+// retries the check. statsFn is injectable for the smoke sim.
+async function checkApplicationRsns(names, statsFn = getStats) {
+  const found = [];
+  const dropped = [];
+  let lookupFailed = false;
+  for (const typed of names) {
+    if (!RSN_SHAPE.test(typed)) {
+      dropped.push({ typed, reason: 'invalid' });
+      continue;
+    }
+    let stats = null;
+    try {
+      stats = await statsFn(typed);
+    } catch {
+      stats = null;
+    }
+    if (stats && stats.notFound) {
+      dropped.push({ typed, reason: 'notFound' });
+      continue;
+    }
+    if (!stats) {
+      lookupFailed = true;
+      found.push({ typed, canonical: typed, verified: false });
+      continue;
+    }
+    found.push({ typed, canonical: stats.displayName || stats.username || typed, verified: true });
+  }
+  return { found, dropped, lookupFailed };
+}
+
+function linkStateOf(check) {
+  if (check.lookupFailed) return 'unchecked';
+  if (check.dropped.length) return 'partial';
+  return 'verified';
+}
+
+function linkStateFieldText(linkState, droppedCount) {
+  if (linkState === 'unchecked') return 'Unchecked: Wise Old Man unreachable at submit';
+  if (linkState === 'partial') return `Partial: ${droppedCount} name(s) dropped at check`;
+  return 'Links on approval';
+}
+
+// The staff ping for a young account at join (index.js GuildMemberAdd
+// posts it to the staff log). Returns null when the account is at or
+// past the 30 day mark. Pure and exported for the smoke checks.
+function youngAccountFlag(user, nowMs = Date.now()) {
+  const ageDays = Math.floor((nowMs - user.createdAt.getTime()) / DAY_MS);
+  if (ageDays >= 30) return null;
+  return {
+    ageDays,
+    text: `New account flagged: <@${user.id}> (${user.tag}). Discord account is ${ageDays} days old, under the 30 day mark. Flagged at join.`,
+  };
 }
 
 function appTypes() {
@@ -108,34 +213,15 @@ async function applyCommand(interaction) {
   await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 }
 
-// All applicants answer the Discord age question via Yes/No dropdown first.
-async function showAgeSelect(interaction, type) {
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(`apply:age:${type}`)
-    .setPlaceholder('Is your Discord account at least 1 month old?')
-    .addOptions([
-      { label: 'Yes', value: 'yes', emoji: '✅' },
-      { label: 'No', value: 'no', emoji: '✖️' },
-    ]);
-  const row = new ActionRowBuilder().addComponents(menu);
-  await interaction.reply({
-    content: 'One quick question first.',
-    components: [row],
-    ephemeral: true,
-  });
-}
-
-async function showApplicationModal(interaction, type, totalBracket, ageAnswer) {
+async function showApplicationModal(interaction, type, totalBracket) {
   const types = appTypes();
   const t = types[type];
   if (!t) return;
-  // customId: apply:modal:<type>:<bracket|none>:<age|none>  (keep under 100 chars)
+  // customId: apply:modal:<type>:<bracket|none>  (keep under 100 chars)
   const modal = new ModalBuilder()
-    .setCustomId(`apply:modal:${type}:${totalBracket || 'none'}:${ageAnswer || 'none'}`)
+    .setCustomId(`apply:modal:${type}:${totalBracket || 'none'}`)
     .setTitle(`${t.label} Application`);
   for (const q of t.questions || []) {
-    // Skip the age question — answered via dropdown
-    if (q.id === 'age') continue;
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -176,36 +262,238 @@ async function handleModalSubmit(interaction) {
     return;
   }
 
-  const [, , type, bracket, ageVal] = parts;
+  const [, , type, bracket] = parts;
   const types = appTypes();
   const t = types[type];
   if (!t) return;
 
   const answers = {};
   for (const q of t.questions || []) {
-    if (q.id === 'age') continue; // answered via dropdown
     answers[q.id] = interaction.fields.getTextInputValue(q.id);
-  }
-  // Add the age dropdown answer
-  if (ageVal && ageVal !== 'none') {
-    answers['age'] = ageVal === 'yes' ? 'Yes' : 'No';
   }
 
   await interaction.deferReply({ ephemeral: true });
 
   const rc = config.recruit;
-  const ageDays = accountAgeDays(interaction.user);
-  const ageOk = ageDays >= (rc.minAccountAgeDays || 30);
   const forum = interaction.guild.channels.cache.get(rc.applicationsChannelId);
   if (!forum || forum.type !== ChannelType.GuildForum) {
-    await interaction.editReply('Applications forum is not set up — tell staff.');
+    await interaction.editReply('Applications forum is not set up. Tell staff.');
     return;
   }
 
+  // Pre-link check: every name is looked up on Wise Old Man before the
+  // application goes anywhere. A typo is fixed here, by the applicant,
+  // and never reaches staff.
+  const names = parseRsnList(answers.rsn);
+  const check = await checkApplicationRsns(names);
+  if (!check.found.length) {
+    pendingApps.delete(interaction.user.id);
+    await interaction.editReply(notFoundPayload(answers.rsn, type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    return;
+  }
+
+  setPending(interaction.user.id, {
+    userId: interaction.user.id,
+    guildId: interaction.guildId,
+    type,
+    bracket: bracket || 'none',
+    answers,
+    found: check.found,
+    dropped: check.dropped,
+    linkState: linkStateOf(check),
+    askIndex: 0,
+    askStage: null,
+  });
+  await interaction.editReply(confirmPayload(getPending(interaction.user.id))).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+  } finally {
+    submitLocks.delete(submitKey);
+  }
+}
+
+// Every checked name failed: the application stops here. The restart
+// button reopens the modal so the applicant can fix the spelling.
+function notFoundPayload(rawTyped, type, dropped) {
+  const allInvalid = dropped.length > 0 && dropped.every((d) => d.reason === 'invalid');
+  const content = allInvalid
+    ? 'That name has characters RuneScape does not allow. Try again.\nYour application has not been sent yet.'
+    : `That name is not on Wise Old Man. Check the spelling and try again.\nYou typed: ${String(rawTyped || '').trim()}\nYour application has not been sent yet.`;
+  return {
+    content,
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`apply:restart:${type}`).setLabel('Fix name').setStyle(ButtonStyle.Danger)
+      ),
+    ],
+  };
+}
+
+// The double ask: the found names, spelled the way Wise Old Man
+// spells them, with Confirm and Fix. Nothing is stored or sent
+// until Confirm.
+function confirmPayload(p) {
+  const lines = ['Found on Wise Old Man:'];
+  for (const f of p.found) lines.push(`**${f.canonical}**`);
+  lines.push('Every name shown exactly the way Wise Old Man spells it.');
+  lines.push('If your application is approved, these names get linked to you.');
+  if (p.dropped.length) {
+    lines.push(`Not going forward: ${p.dropped.map((d) => d.typed).join(', ')}. Fix the spelling and apply again to add ${p.dropped.length === 1 ? 'it' : 'them'}.`);
+  }
+  if (p.linkState === 'unchecked') {
+    lines.push('Wise Old Man could not be checked just now. The names above are as you typed them, and the application goes to staff marked unchecked.');
+  }
+  return {
+    content: lines.join('\n'),
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('apply:confirm').setLabel('Confirm').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('apply:fix').setLabel('Fix').setStyle(ButtonStyle.Secondary)
+      ),
+    ],
+  };
+}
+
+async function handleConfirm(interaction) {
+  const p = getPending(interaction.user.id);
+  if (!p) {
+    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Persist the staged record now: approval reads the names and badge
+  // picks from the stored answers, not from this in-memory state.
+  const record = {
+    ...p.answers,
+    rsn: p.found.map((f) => f.canonical).join(', '),
+    prelink: {
+      names: p.found.map((f) => ({ name: f.canonical, badge: null })),
+      linkState: p.linkState,
+      dropped: p.dropped.map((d) => d.typed),
+    },
+  };
+  p.record = record;
+  store.setApplicationAnswers(interaction.guildId, interaction.user.id, record);
+  await advanceTypeAsk(interaction, p);
+}
+
+async function handleFix(interaction) {
+  const p = getPending(interaction.user.id);
+  pendingApps.delete(interaction.user.id);
+  await interaction.update({
+    content: 'Nothing was sent. Fix the names and submit again.',
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`apply:restart:${p ? p.type : 'iron'}`).setLabel('Start again').setStyle(ButtonStyle.Danger)
+      ),
+    ],
+  }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+}
+
+// What the flow still has to ask about the name at askIndex, if
+// anything. Main applications never ask: the type is already known.
+// Guests ask main-or-iron per name first; an iron answer leads to
+// the flavour ask for the same name.
+function nextAsk(p) {
+  if (p.type === 'main' || p.askIndex >= p.found.length) return { kind: 'done' };
+  const name = p.found[p.askIndex].canonical;
+  if (p.type === 'guest' && p.askStage !== 'flavour') return { kind: 'kind', name };
+  return { kind: 'flavour', name };
+}
+
+function flavourRow() {
+  const row1 = new ActionRowBuilder();
+  const row2 = new ActionRowBuilder();
+  BADGES.filter((b) => b.id !== 'main').forEach((b, i) => {
+    const btn = new ButtonBuilder().setCustomId(`apply:flavour:${b.id}`).setLabel(b.label).setStyle(ButtonStyle.Secondary);
+    (i < 4 ? row1 : row2).addComponents(btn);
+  });
+  row2.addComponents(
+    new ButtonBuilder().setCustomId('apply:flavour:auto').setLabel('AUTO (Wise Old Man decides)').setStyle(ButtonStyle.Secondary)
+  );
+  return [row1, row2];
+}
+
+function askPayload(p, ask) {
+  if (ask.kind === 'kind') {
+    return {
+      content: `One more ask, inside the flow.\n\nIs **${ask.name}** a main or an iron?`,
+      components: [
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('apply:kind:main').setLabel('Main').setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId('apply:kind:iron').setLabel('Iron').setStyle(ButtonStyle.Secondary)
+        ),
+      ],
+    };
+  }
+  return {
+    content: `One more ask, inside the flow.\n\nWhat kind of iron is **${ask.name}**?`,
+    components: flavourRow(),
+  };
+}
+
+async function advanceTypeAsk(interaction, p) {
+  // Main applications record main for every name with no ask at all.
+  if (p.type === 'main') {
+    for (const n of p.record.prelink.names) n.badge = 'main';
+    store.setApplicationAnswers(p.guildId, p.userId, p.record);
+  }
+  const ask = nextAsk(p);
+  if (ask.kind === 'done') {
+    pendingApps.delete(p.userId);
+    return finalizeApplication(interaction, p);
+  }
+  await interaction.update(askPayload(p, ask)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+}
+
+async function handleKindPick(interaction, pick) {
+  const p = getPending(interaction.user.id);
+  if (!p || !p.record) {
+    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (pick === 'main') {
+    p.record.prelink.names[p.askIndex].badge = 'main';
+    store.setApplicationAnswers(p.guildId, p.userId, p.record);
+    p.askIndex++;
+    p.askStage = null;
+  } else {
+    p.askStage = 'flavour';
+  }
+  await advanceTypeAsk(interaction, p);
+}
+
+async function handleFlavourPick(interaction, pick) {
+  const p = getPending(interaction.user.id);
+  if (!p || !p.record) {
+    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const badge = pick === 'auto' ? null : pick;
+  if (badge !== null && !BADGES.some((b) => b.id === badge)) return;
+  p.record.prelink.names[p.askIndex].badge = badge;
+  store.setApplicationAnswers(p.guildId, p.userId, p.record);
+  p.askIndex++;
+  p.askStage = null;
+  await advanceTypeAsk(interaction, p);
+}
+
+// Final step of the flow: the forum thread staff review, carrying the
+// same card as before plus the Link state field. The sidebar is house
+// red on every card now (the orange under-30 flip is gone).
+async function finalizeApplication(interaction, p) {
+  const t = appTypes()[p.type] || {};
+  const guild = interaction.guild;
+  const rc = config.recruit;
+  const forum = guild.channels.cache.get(rc.applicationsChannelId);
+  if (!forum || forum.type !== ChannelType.GuildForum) {
+    await interaction.update({ content: 'Applications forum is not set up. Tell staff.', components: [] }).catch(() => {});
+    return;
+  }
+
+  const ageDays = accountAgeDays(interaction.user);
+  const ageOk = ageDays >= (rc.minAccountAgeDays || 30);
   const lines = [`**Application type:** ${t.label}`];
   for (const q of t.questions || []) {
     // Truncate answers to prevent embed overflow (description limit 4096)
-    const answer = String(answers[q.id] || '').slice(0, 500);
+    const answer = String(p.answers[q.id] || '').slice(0, 500);
     lines.push(`**${q.label}:** ${answer}`);
   }
   const embed = new EmbedBuilder()
@@ -219,15 +507,19 @@ async function handleModalSubmit(interaction) {
       {
         name: 'Account age',
         value: ageOk ? `✅ ${ageDays} days (meets ${rc.minAccountAgeDays}-day minimum)` : `⚠️ **${ageDays} days** — under the ${rc.minAccountAgeDays}-day minimum`,
+      },
+      {
+        name: 'Link state',
+        value: linkStateFieldText(p.linkState, p.dropped.length),
       }
     )
-    .setColor(ageOk ? ZAMORAK_RED : 0xffa500)
+    .setColor(ZAMORAK_RED)
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Accept').setStyle(ButtonStyle.Danger).setEmoji('✅'),
-    new ButtonBuilder().setCustomId(`apply:denyreason:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny with Reason').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
-    new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${type}:${bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('✖️')
+    new ButtonBuilder().setCustomId(`apply:approve:${interaction.user.id}:${p.type}:${p.bracket || 'none'}`).setLabel('Accept').setStyle(ButtonStyle.Danger).setEmoji('✅'),
+    new ButtonBuilder().setCustomId(`apply:denyreason:${interaction.user.id}:${p.type}:${p.bracket || 'none'}`).setLabel('Deny with Reason').setStyle(ButtonStyle.Secondary).setEmoji('📝'),
+    new ButtonBuilder().setCustomId(`apply:deny:${interaction.user.id}:${p.type}:${p.bracket || 'none'}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('✖️')
   );
 
   // Anti-spoof: user ID is unspoofable, username alone can impersonate staff
@@ -247,17 +539,11 @@ async function handleModalSubmit(interaction) {
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
       allowedMentions: { users: [interaction.user.id] },
     }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
-    await interaction.editReply('Application submitted! Staff will review it soon.');
+    await interaction.update({ content: 'Application submitted! Staff will review it soon.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    // Mark this application as submitted so it isn't reused
+    store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
   } else {
-    await interaction.editReply('Could not open your application thread — tell staff.');
-  }
-
-  // Save answers so approval can auto-set the nickname ("Nickname [RSN]")
-  store.setApplicationAnswers(interaction.guildId, interaction.user.id, answers);
-  // Mark this channel as submitted so it isn't reused
-  store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
-  } finally {
-    submitLocks.delete(submitKey);
+    await interaction.update({ content: 'Could not open your application thread. Tell staff.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 }
 
@@ -355,6 +641,66 @@ async function handleDenyReasonSubmit(interaction) {
   }
 }
 
+// Approval pre-link: link the application's confirmed names and set
+// their stated types. A name verified to another member is skipped,
+// never stolen. An application stored as unchecked (Wise Old Man was
+// unreachable at submit) gets a fresh lookup per name here. Failures
+// are collected, logged, and reported to staff in the thread; they
+// never fail the approval itself.
+async function runApprovalPrelink(client, target, appAnswers) {
+  const result = { attempted: false, linked: [], failed: [] };
+  const pre = appAnswers && appAnswers.prelink;
+  if (!pre || !Array.isArray(pre.names) || !pre.names.length) return result;
+  result.attempted = true;
+  const userId = target.id;
+  const fail = (rsn, reason) => {
+    console.error(`[recruit-prelink] link failed for ${userId}: ${rsn} (${reason})`);
+    result.failed.push({ rsn, reason });
+  };
+  for (const item of pre.names) {
+    const rsn = item.name;
+    try {
+      if (pre.linkState === 'unchecked') {
+        const stats = await getStats(rsn).catch(() => null);
+        if (!stats || stats.notFound) {
+          fail(rsn, stats && stats.notFound ? 'not found on Wise Old Man' : 'Could not reach Wise Old Man');
+          continue;
+        }
+      }
+      const owner = verifiedOwnerOf(rsn);
+      if (owner && owner !== userId) {
+        fail(rsn, 'verified to another member');
+        continue;
+      }
+      addRsn(userId, rsn);
+      if (item.badge) setStatedBadge(userId, rsn, item.badge);
+      result.linked.push(rsn);
+    } catch (e) {
+      console.error(`[recruit-prelink] link write failed for ${userId}: ${rsn} (${e.message})`);
+      result.failed.push({ rsn, reason: 'link write failed' });
+    }
+  }
+  if (result.linked.length) {
+    // The primary name is the first one the applicant listed.
+    setActiveRsn(userId, pre.names[0].name);
+    if (pre.names.some((n) => n.badge)) {
+      await syncModeRoles(client, userId).catch((e) => console.error('[recruit-prelink] mode role sync failed:', e.message));
+    }
+  }
+  return result;
+}
+
+function approvalDmText(prelink) {
+  const head = '⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.';
+  const tail = 'One thing left: run /connect if you use the clan plugin. One code covers every account you play.';
+  if (!prelink.attempted) return head;
+  if (!prelink.failed.length) {
+    return `${head}\n\nYour names are already linked and their types are set: ${prelink.linked.join(', ')}.\n${tail}`;
+  }
+  const linkedLine = prelink.linked.length ? `Linked and set: ${prelink.linked.join(', ')}.\n` : '';
+  return `${head}\n\n${linkedLine}Your link needs a hand for: ${prelink.failed.map((f) => f.rsn).join(', ')}. Staff have been told and will sort it with you.\n${tail}`;
+}
+
 async function handleDecision(interaction) {
   // customId: apply:approve:<userId>:<type>:<bracket> or apply:deny:<userId>:<type>:<bracket>
   const [, decision, userId, type, bracket] = interaction.customId.split(':');
@@ -429,19 +775,29 @@ async function handleDecision(interaction) {
         await target.setNickname(newNick, 'Auto-nickname on approval').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       }
     }
+    // Pre-link the confirmed names before the welcome DM, so the DM
+    // can say plainly what is done and what still needs a hand.
+    const prelink = await runApprovalPrelink(interaction.client, target, appAnswers);
+    if (prelink.failed.length && thread && thread.isThread()) {
+      for (const f of prelink.failed) {
+        await thread.send(`Link failed for <@${userId}>. Name given: ${f.rsn}. Reason: ${f.reason}. Approval still went through.`).catch((e) => console.error('[recruit-prelink] staff notice failed:', e.message));
+      }
+    }
+
     // Welcome DM on approval
-    await target.send(`⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.`).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    await target.send(approvalDmText(prelink)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
 
     // Public welcome in #general - plain text (finalized 2026-10-13)
     // Guest gets the guest welcome; iron/main get the Initiate announcement.
     // This also handles guest-to-member promotions (they get the Initiate post).
+    const linkedNames = prelink.attempted && !prelink.failed.length ? prelink.linked : null;
     const generalChan = guild.channels.cache.get(config.recruit?.generalChannelId || config.channels?.general);
     if (generalChan) {
       let welcomeMsg;
       if (type === 'guest') {
-        welcomeMsg = buildGuestWelcome(target.id);
+        welcomeMsg = buildGuestWelcome(target.id, linkedNames);
       } else {
-        welcomeMsg = buildInitiateWelcome(target.id);
+        welcomeMsg = buildInitiateWelcome(target.id, linkedNames);
       }
       await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     }
@@ -530,20 +886,15 @@ async function handleApplyButton(interaction) {
       return;
     }
     const type = parts[2];
-    return showAgeSelect(interaction, type);
+    return showApplicationModal(interaction, type, null);
   }
+  if (action === 'restart') return showApplicationModal(interaction, parts[2], null);
+  if (action === 'confirm') return handleConfirm(interaction);
+  if (action === 'fix') return handleFix(interaction);
+  if (action === 'kind') return handleKindPick(interaction, parts[2]);
+  if (action === 'flavour') return handleFlavourPick(interaction, parts[2]);
   if (action === 'approve' || action === 'deny') return handleDecision(interaction);
   if (action === 'denyreason') return handleDenyReasonPrompt(interaction);
-}
-
-async function handleAgeSelect(interaction) {
-  // customId: apply:age:<type>
-  const parts = interaction.customId.split(':');
-  if (parts[0] !== 'apply' || parts[1] !== 'age') return;
-  const type = parts[2];
-  const ageAnswer = interaction.values[0]; // 'yes' or 'no'
-  // All types go straight to modal (total-level bracket removed 2026-10-13)
-  return showApplicationModal(interaction, type, null, ageAnswer);
 }
 
 const { SlashCommandBuilder, PermissionFlagsBits: PFB } = require('discord.js');
@@ -638,4 +989,22 @@ async function applyStatsCommand(interaction) {
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
-module.exports = { handleApplyButton, handleModalSubmit, handleAgeSelect, commands };
+module.exports = {
+  handleApplyButton,
+  handleModalSubmit,
+  commands,
+  // Exported for the smoke checks and the local flow sim.
+  parseRsnList,
+  checkApplicationRsns,
+  linkStateOf,
+  linkStateFieldText,
+  confirmPayload,
+  notFoundPayload,
+  nextAsk,
+  askPayload,
+  runApprovalPrelink,
+  approvalDmText,
+  youngAccountFlag,
+  accountAgeDays,
+  pendingApps,
+};
