@@ -82,7 +82,7 @@ async function createPoll(interaction) {
   };
   const staffChat = STAFF_CHAT_ID ? interaction.guild.channels.cache.get(STAFF_CHAT_ID) : null;
   if (!staffChat) {
-    await interaction.editReply({ content: 'Staff review channel is not set up. Tell staff to check the bot config.' });
+    await interaction.editReply({ content: 'Staff review channel is not set up. Tell staff.' });
     return;
   }
   store.savePoll(poll);
@@ -126,7 +126,7 @@ async function handleGate(interaction, pollId, action) {
     }
     const channel = interaction.guild.channels.cache.get(poll.channelId);
     if (!channel) {
-      await interaction.reply({ content: 'That channel is gone. The poll has nowhere to post.', ephemeral: true });
+      await interaction.reply({ content: 'That channel is gone, so the poll cannot post.', ephemeral: true });
       return;
     }
     // Claim the draft synchronously before the send, so two staff clicking
@@ -186,7 +186,7 @@ async function handlePollButton(interaction) {
   const idx = parseInt(idxStr, 10);
   // Validate index is within bounds (prevents crafted customIds)
   if (isNaN(idx) || idx < 0 || idx >= poll.options.length) {
-    await interaction.reply({ content: 'Invalid poll option.', ephemeral: true });
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true });
     return;
   }
   if (poll.votes[interaction.user.id] === idx) {

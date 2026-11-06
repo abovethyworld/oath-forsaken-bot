@@ -61,7 +61,7 @@ function noteUse(userId, family, now = Date.now()) {
 }
 
 function cooldownText(wait) {
-  return `Cooldown: too many lookups at once. Try again in ${wait}s.`;
+  return `Too many lookups at once. Try again in ${wait}s.`;
 }
 
 
@@ -2382,7 +2382,7 @@ function lbComponents(st, pages, scoped = false) {
         rows.push(new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
             .setCustomId(`lbpick:${enc}`)
-            .setPlaceholder('Pick a category...')
+            .setPlaceholder('Pick a category')
             .addOptions(cats.map((c) => ({ label: c.label, value: `cat:${c.id}` })))));
       }
     } else {
@@ -2399,7 +2399,7 @@ function lbComponents(st, pages, scoped = false) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`lbpick:${enc}`)
-          .setPlaceholder(`Pick a boss (${catLabel})...`)
+          .setPlaceholder(`Pick a boss (${catLabel})`)
           .addOptions(options)));
     }
   } else if (st.v === 'skills') {
@@ -2409,7 +2409,7 @@ function lbComponents(st, pages, scoped = false) {
     rows.push(new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`lbpick:${enc}`)
-        .setPlaceholder('Pick a skill...')
+        .setPlaceholder('Pick a skill')
         .addOptions(options.slice(0, 25))));
   } else if (st.v === 'clogs') {
     if (!st.ctab) {
@@ -2417,7 +2417,7 @@ function lbComponents(st, pages, scoped = false) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`lbpick:${enc}`)
-          .setPlaceholder('Pick a section, or the whole log...')
+          .setPlaceholder('Pick a section, or the whole log')
           .addOptions([
             { label: 'Total (whole log)', value: 'total' },
             ...tabs.map((t) => ({ label: t, value: `tab:${t}` })),
@@ -2438,7 +2438,7 @@ function lbComponents(st, pages, scoped = false) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`lbpick:${enc}`)
-          .setPlaceholder(`Pick a page (${st.ctab})...`)
+          .setPlaceholder(`Pick a page (${st.ctab})`)
           .addOptions(options.slice(0, 25))));
     }
   } else if (st.v === 'gains') {
@@ -4069,7 +4069,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
     rows.push(new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`cmpskill:${enc}`)
-        .setPlaceholder('Pick a skill...')
+        .setPlaceholder('Pick a skill')
         .addOptions(options.slice(0, 25))));
   } else if (view === 'boss' || view === 'bossbase') {
     const catalog = bossCatalog();
@@ -4080,7 +4080,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
         rows.push(new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
             .setCustomId(`cmpboss:menu:${enc}`)
-            .setPlaceholder('Pick a category...')
+            .setPlaceholder('Pick a category')
             .addOptions(cats.map((c) => ({ label: c.label, value: `cat:${c.id}` })))));
       }
     } else {
@@ -4098,7 +4098,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`cmpboss:list:${cat}:${page}:${enc}`)
-          .setPlaceholder(`Pick a boss (${catLabel})...`)
+          .setPlaceholder(`Pick a boss (${catLabel})`)
           .addOptions(options)));
     }
   } else if (view === 'clogs') {
@@ -4112,7 +4112,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
           rows.push(new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
               .setCustomId(`cmpclog:menu:${enc}`)
-              .setPlaceholder('Pick a tab...')
+              .setPlaceholder('Pick a tab')
               .addOptions(tabs.map((t) => ({
                 label: t.label,
                 value: `tab:${t.id}`,
@@ -4141,7 +4141,7 @@ async function compareComponents(view, a, b, bossKey, ownerId, ui = {}) {
         rows.push(new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
             .setCustomId(`cmpclog:list:${tab.id}:${page}:${enc}`)
-            .setPlaceholder(`Pick a page (${tab.label})...`)
+            .setPlaceholder(`Pick a page (${tab.label})`)
             .addOptions(options)));
       }
     }
@@ -4213,8 +4213,8 @@ async function handleCompareSwapButton(interaction) {
     .setCustomId(`cmpmodal:${view}:${bossKey}:${enc}`)
     .setTitle('Change players')
     .addComponents(
-      input('player_a', 'Player A', pair.a),
-      input('player_b', 'Player B', pair.b));
+      input('player_a', 'First player', pair.a),
+      input('player_b', 'Second player', pair.b));
   await interaction.showModal(modal).catch(() => {});
 }
 
@@ -4229,7 +4229,7 @@ async function handleCompareSwapModal(interaction) {
   const na = interaction.fields.getTextInputValue('player_a').trim();
   const nb = interaction.fields.getTextInputValue('player_b').trim();
   if (!RSN_RE.test(na) || !RSN_RE.test(nb) || normName(na) === normName(nb)) {
-    await interaction.reply({ content: 'Those names do not work. Use two different RuneScape names.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'Pick two different RuneScape names.', ephemeral: true }).catch(() => {});
     return;
   }
   await interaction.deferUpdate().catch(() => {});
@@ -4272,7 +4272,7 @@ async function handleCompareAltButton(interaction) {
 
 async function editCompareMessage(interaction, payload) {
   if (!payload || (!payload.files && !payload.content)) {
-    await interaction.followUp({ content: 'That view is not available right now.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'That view is not available right now. Run the command again.', ephemeral: true }).catch(() => {});
     return;
   }
   const edit = { ...payload, attachments: [] };
@@ -4302,7 +4302,7 @@ async function compareOwnerGate(interaction, pair, offer) {
           .setLabel('Make my own')
           .setStyle(ButtonStyle.Danger));
       await interaction.reply({
-        content: "You can't change the players on this one. Would you like to make your own card?",
+        content: "You can't change the players on someone else's card. Use the button below to make your own.",
         components: [row],
         ephemeral: true,
       }).catch(() => {});
@@ -4746,7 +4746,7 @@ function hubMineRow(st) {
 async function hubOwnerGate(interaction, st) {
   if (st.owner && interaction.user.id !== st.owner) {
     await interaction.reply({
-      content: "You can't change the players on this one. Would you like to make your own card?",
+      content: "You can't change the players on someone else's card. Use the button below to make your own.",
       components: [hubMineRow(st)],
       ephemeral: true,
     }).catch(() => {});
@@ -4818,7 +4818,7 @@ function hubBossPickerRows(st) {
   const cats = CMP_CATEGORIES.filter((c) => catalog.byCat[c.id] && catalog.byCat[c.id].length);
   const catRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`hub:bosscat:${enc}`)
-    .setPlaceholder('Pick a category...')
+    .setPlaceholder('Pick a category')
     .addOptions(cats.map((c) => ({ label: c.label, value: c.id, default: c.id === cat }))));
   const list = catalog.byCat[cat] || [];
   const pg = Math.max(0, Math.min(parseInt(parts[2], 10) || 0, Math.ceil(list.length / CMP_PAGE_SIZE) - 1 || 0));
@@ -4833,7 +4833,7 @@ function hubBossPickerRows(st) {
   const catLabel = (CMP_CATEGORIES.find((c) => c.id === cat) || {}).label || 'Bosses';
   const bossRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`hub:bosspick:${enc}`)
-    .setPlaceholder(`Pick a boss (${catLabel})...`)
+    .setPlaceholder(`Pick a boss (${catLabel})`)
     .addOptions(options.length ? options : [{ label: catLabel, value: 'none' }]));
   return [catRow, bossRow];
 }
@@ -4868,7 +4868,7 @@ function hubClogPickerRows(st) {
   }
   const selRow = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`hub:clogpage:${enc}`)
-    .setPlaceholder(`Pick a page (${cat})...`)
+    .setPlaceholder(`Pick a page (${cat})`)
     .addOptions(options.slice(0, 25)));
   return [catRow, selRow];
 }
@@ -4985,7 +4985,7 @@ async function hubTabCard(st, userId) {
       if (!p.files) return pass(p);
       const sel = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
         .setCustomId(`hub:skillpick:${hubEncode(st)}`)
-        .setPlaceholder('Pick a skill...')
+        .setPlaceholder('Pick a skill')
         .addOptions([...SKILL_ORDER].sort((a, b) => a.localeCompare(b)).map((key) => ({
           label: key.charAt(0).toUpperCase() + key.slice(1), value: key,
         }))));
@@ -5110,7 +5110,7 @@ async function hubSwitcherRows(st, userId) {
   if (names.length) {
     rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
       .setCustomId(`hub:clanpick:${enc}`)
-      .setPlaceholder('Pick a clan member...')
+      .setPlaceholder('Pick a clan member')
       .addOptions(names.map((n) => ({ label: n.slice(0, 100), value: n })))));
   }
   return rows;
@@ -5126,7 +5126,7 @@ function hubComparePickerRows(st, userId) {
   if (others.length) {
     rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
       .setCustomId(`hub:cmppick:${enc}`)
-      .setPlaceholder('Pick a player...')
+      .setPlaceholder('Pick a player')
       .addOptions(others.map((n) => ({ label: n.slice(0, 100), value: n })))));
   }
   rows.push(new ActionRowBuilder().addComponents(
@@ -5419,7 +5419,7 @@ async function handleHubSelect(interaction) {
   } else if (kind === 'clanpick') {
     if (st.owner && interaction.user.id !== st.owner) {
       await interaction.followUp({
-        content: "You can't change the players on this one. Would you like to make your own card?",
+        content: "You can't change the players on someone else's card. Use the button below to make your own.",
         components: [hubMineRow(st)],
         ephemeral: true,
       }).catch(() => {});
@@ -5444,7 +5444,7 @@ async function handleHubModal(interaction) {
   if (purpose === 'sw') {
     if (st.owner && interaction.user.id !== st.owner) {
       await interaction.reply({
-        content: "You can't change the players on this one. Would you like to make your own card?",
+        content: "You can't change the players on someone else's card. Use the button below to make your own.",
         components: [hubMineRow(st)],
         ephemeral: true,
       }).catch(() => {});
@@ -5548,7 +5548,7 @@ async function handleLbProfileButton(interaction) {
   else if (st.v === 'driest') tab = 'dry';
   const sel = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
     .setCustomId(`lbprofpick:${tab}:${sub}`)
-    .setPlaceholder('Pick a player...')
+    .setPlaceholder('Pick a player')
     .addOptions(slice.map((r) => ({ label: String(r.name).slice(0, 100), value: String(r.name) }))));
   const components = [...(payload.components || [])];
   const back = backRowFor(findBackRow(interaction.message));

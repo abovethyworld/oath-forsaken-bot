@@ -321,7 +321,7 @@ async function handleCcButton(interaction) {
     data.entries[idx].held = !data.entries[idx].held;
     save(data);
     await refreshChecklist(interaction.guild);
-    const state = data.entries[idx].held ? 'held' : 'unheld';
+    const state = data.entries[idx].held ? 'is on hold' : 'is off hold';
     await interaction.reply({ content: `Entry #${idx + 1} ${state}.`, ephemeral: true });
   }
   return true;

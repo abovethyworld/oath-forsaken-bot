@@ -57,7 +57,7 @@ async function createEvent(interaction) {
   const dt = parseStart(date, time);
   if (!dt) {
     await interaction.reply({
-      content: `Couldn't read that date/time. Use **YYYY-MM-DD** and **HH:MM** (24-hour) in ${(config.calendar && config.calendar.timezone) || 'UTC'} — e.g. \`2026-10-17\` \`19:00\`.`,
+      content: `Couldn't read that date/time. Use **YYYY-MM-DD** and **HH:MM** (24-hour) in ${(config.calendar && config.calendar.timezone) || 'UTC'}, for example \`2026-10-17\` \`19:00\`.`,
       ephemeral: true,
     });
     return;
@@ -148,7 +148,7 @@ async function handleEventButton(interaction) {
       reason: `Event created by ${interaction.user.tag}`,
     });
   } catch (err) {
-    await interaction.followUp({ content: 'Could not create the event. Make sure I have the **Manage Events** permission.', ephemeral: true }).catch(() => {});
+    await interaction.followUp({ content: 'Could not create the event. The bot needs the **Manage Events** permission.', ephemeral: true }).catch(() => {});
     return;
   }
 
@@ -163,7 +163,7 @@ async function handleEventButton(interaction) {
     await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
   }
 
-  await interaction.followUp({ content: `Event created: **${name}** — <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
+  await interaction.followUp({ content: `Event created: **${name}**, <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
   eventsCache = { data: null, at: 0 }; // invalidate — new event exists
 
   // Optional signup roster in the events channel

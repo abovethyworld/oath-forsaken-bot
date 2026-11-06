@@ -81,7 +81,7 @@ async function postRolePanels(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.roles);
   if (!channel) {
-    await interaction.editReply('Roles channel not found. Check config.channels.roles.');
+    await interaction.editReply('Roles channel not found. Tell staff.');
     return;
   }
   let posted = 0;
@@ -107,7 +107,7 @@ async function postRules(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.rules);
   if (!channel) {
-    await interaction.editReply('Rules channel not found. Check config.channels.rules.');
+    await interaction.editReply('Rules channel not found. Tell staff.');
     return;
   }
   const r = config.rules;
@@ -128,7 +128,7 @@ async function postStrikes(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.rules);
   if (!channel) {
-    await interaction.editReply('Rules channel not found. Check config.channels.rules.');
+    await interaction.editReply('Rules channel not found. Tell staff.');
     return;
   }
   const s = config.strikeSystem;
@@ -149,7 +149,7 @@ async function postRanks(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.guild.channels.cache.get(config.channels.clanRanks || config.channels.rules);
   if (!channel) {
-    await interaction.editReply('Rules channel not found. Check config.channels.rules.');
+    await interaction.editReply('Rules channel not found. Tell staff.');
     return;
   }
   const r = config.rankInfo;
@@ -189,7 +189,7 @@ async function warnUser(interaction) {
 
   if (count >= 3) {
     await interaction.followUp({
-      content: `🚨 ${user} has reached 3 strikes, review for a ban per the strike system.`,
+      content: `🚨 ${user} has reached 3 strikes. Review them for a ban under the strike system.`,
       ephemeral: true,
     });
   }
@@ -203,12 +203,12 @@ async function showStrikes(interaction) {
   const user = interaction.options.getUser('user');
   const strikes = store.getStrikes(interaction.guildId, user.id);
   if (strikes.length === 0) {
-    await interaction.reply({ content: `${user} has no strikes. Clean record.`, ephemeral: true });
+    await interaction.reply({ content: `${user} has no strikes.`, ephemeral: true });
     return;
   }
   const lines = strikes.map((s, i) => {
     const date = new Date(s.at).toLocaleDateString();
-    return `**${i + 1}.** ${s.reason} — <@${s.modId}> (${date})`;
+    return `**${i + 1}.** ${s.reason}, by <@${s.modId}> (${date})`;
   });
   const embed = new EmbedBuilder()
     .setTitle(`Strikes for ${user.tag} (${strikes.length}/3)`)

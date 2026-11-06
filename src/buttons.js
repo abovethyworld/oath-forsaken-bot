@@ -55,7 +55,7 @@ async function routeButton(interaction) {
   if (kind === 'lbprof') return handleLbProfileButton(interaction);
   if (kind === 'lbopen') {
     await interaction.reply({
-      content: 'That button predates the board update. Run the command again for the new one.',
+      content: 'That button is from before the board update. Run the command again for the new one.',
       ephemeral: true,
     }).catch(() => {});
     return;
@@ -76,7 +76,7 @@ async function routeButton(interaction) {
 
   const role = interaction.guild.roles.cache.get(roleId);
   if (!role) {
-    await interaction.reply({ content: 'That role no longer exists. Tell staff to update the config.', ephemeral: true });
+    await interaction.reply({ content: 'That role no longer exists. Tell staff.', ephemeral: true });
     return;
   }
 
@@ -86,7 +86,7 @@ async function routeButton(interaction) {
   // #1 gotcha with role bots: the bot's own role must sit ABOVE every role it hands out.
   if (botMember && role.position >= botMember.roles.highest.position) {
     await interaction.reply({
-      content: `I can't assign **${role.name}** — my bot role sits below it.\nFix: Server Settings → Roles → drag my role above **${role.name}**.`,
+      content: `I can't assign **${role.name}**. My bot role sits below it. Move my role above **${role.name}** in Server Settings, under Roles.`,
       ephemeral: true,
     });
     return;

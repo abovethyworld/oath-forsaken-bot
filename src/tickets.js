@@ -31,7 +31,7 @@ async function setupTickets(interaction) {
   const t = config.tickets;
   const channel = interaction.guild.channels.cache.get(t.panelChannelId);
   if (!channel) {
-    await interaction.editReply('Ticket panel channel not found. Check config.tickets.panelChannelId.');
+    await interaction.editReply('Ticket panel channel not found. Tell staff.');
     return;
   }
   const embed = new EmbedBuilder()
@@ -197,7 +197,7 @@ async function showMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const member = interaction.member;
   if (!types.guest?.roleId) {
-    await interaction.reply({ content: 'The guest role is not set up. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await interaction.reply({ content: 'The guest role is not set up. Tell staff.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
@@ -211,7 +211,7 @@ async function showMemberSelect(interaction) {
   }
   const menu = new StringSelectMenuBuilder()
     .setCustomId('member:select')
-    .setPlaceholder('I play an…')
+    .setPlaceholder('Pick your account type')
     .addOptions([
       { label: 'Ironman', value: 'iron', emoji: config.recruit?.ironEmojiId },
       { label: 'Main', value: 'main', emoji: config.recruit?.mainEmojiId },
@@ -229,12 +229,12 @@ async function handleMemberSelect(interaction) {
   const types = config.recruit?.types || {};
   const t = types[choice];
   if (!t || !t.roleId) {
-    await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await interaction.reply({ content: 'Something went wrong. Try again.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const member = interaction.member;
   if (!types.guest?.roleId) {
-    await interaction.reply({ content: 'The guest role is not set up. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await interaction.reply({ content: 'The guest role is not set up. Tell staff.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   // Re-verify guest status: they may have been approved via normal application
@@ -251,7 +251,7 @@ async function handleMemberSelect(interaction) {
   // Verify the role still exists (config could have changed since the menu was shown)
   const role = interaction.guild.roles.cache.get(t.roleId);
   if (!role) {
-    await interaction.reply({ content: 'That member role no longer exists. Tell staff to check the config.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await interaction.reply({ content: 'That member role no longer exists. Tell staff.', ephemeral: true }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   const guild = interaction.guild;
