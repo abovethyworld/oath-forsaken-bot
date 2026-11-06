@@ -28,6 +28,7 @@ const store = require('./store');
 const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole, ZAMORAK_RED } = require('./utils');
 const { getStats } = require('./wom');
 const { addRsn, setActiveRsn, verifiedOwnerOf, setStatedBadge, syncModeRoles, BADGES } = require('./teams');
+const { addEntry: addCcEntry } = require('./cc-checklist');
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -867,6 +868,8 @@ async function handleDecision(interaction) {
     if (type !== 'guest') {
       const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
       if (entry) await target.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+      // Queue the CC checklist entry so staff set the in-game rank too.
+      await addCcEntry(guild, target.id, 'None', 'Initiate').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     }
     // Auto-nickname: "Nickname [RSN]" (all 3 application types)
     const appAnswers = store.getApplicationAnswers(guild.id, userId);

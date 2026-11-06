@@ -1147,6 +1147,26 @@ async function t(name, fn, needFile = true) {
     ok('prelink: join flag wired in the join handler', indexSrc.includes('youngAccountFlag(member.user)'));
   }
 
+  // CC checklist Initiate entries (Nov 6, 2026): approvals and
+  // seniority first assignments both queue a None -> Initiate
+  // entry, so staff set the in-game CC rank for new members too.
+  // Wiring checks only: addEntry writes the live checklist file
+  // and posts to the checklist thread, so it stays out of this
+  // read-only sweep.
+  {
+    const recruitSrc3 = fs.readFileSync(path.join(__dirname, '..', 'src', 'recruit.js'), 'utf8');
+    const senioritySrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'seniority.js'), 'utf8');
+    ok('ccinit: recruit imports the checklist addEntry', recruitSrc3.includes("require('./cc-checklist')"));
+    // The checklist call must sit in the non-guest tenure block,
+    // after the tenure role add.
+    const tenureAt = recruitSrc3.indexOf("if (type !== 'guest') {");
+    const roleAddAt = recruitSrc3.indexOf("'New member tenure rank'", tenureAt);
+    const ccCallAt = recruitSrc3.indexOf("addCcEntry(guild, target.id, 'None', 'Initiate')", tenureAt);
+    ok('ccinit: approval queues a None -> Initiate entry after the tenure role add',
+      tenureAt >= 0 && roleAddAt > tenureAt && ccCallAt > roleAddAt);
+    ok('ccinit: seniority first assignments include Initiate', !senioritySrc.includes("newRankName !== 'Initiate'"));
+  }
+
   // Staff RSN link (Nov 6, 2026): the staff-chat repair panel and
   // the website request merge's quiet flag. The check pipeline and
   // the merge run against fixtures and a scratch folder with
