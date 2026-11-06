@@ -1001,6 +1001,28 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // Launch countdown (Nov 5, 2026): the day-count math picks the
+  // banner for each New York date. Fixed instants, no clock reading.
+  {
+    const LC = require(path.join(__dirname, '..', 'src', 'launch-countdown.js'));
+    const { DateTime } = require('luxon');
+    const at = (iso) => DateTime.fromISO(iso, { zone: 'America/New_York' });
+    ok('countdown: Nov 5 evening is 18 days out', LC.daysRemaining(at('2026-11-05T21:45')) === 18, String(LC.daysRemaining(at('2026-11-05T21:45'))));
+    ok('countdown: just after midnight Nov 6 is 17 days out', LC.daysRemaining(at('2026-11-06T00:05')) === 17, String(LC.daysRemaining(at('2026-11-06T00:05'))));
+    ok('countdown: Nov 22 is 1 day out', LC.daysRemaining(at('2026-11-22T09:00')) === 1, String(LC.daysRemaining(at('2026-11-22T09:00'))));
+    ok('countdown: launch day is 0', LC.daysRemaining(at('2026-11-23T08:00')) === 0, String(LC.daysRemaining(at('2026-11-23T08:00'))));
+    ok('countdown: the day after launch is negative', LC.daysRemaining(at('2026-11-24T00:05')) === -1, String(LC.daysRemaining(at('2026-11-24T00:05'))));
+    ok('countdown: banners map to the rendered files',
+      LC.bannerFileFor(18) === 'day-18.jpg' && LC.bannerFileFor(1) === 'day-01.jpg'
+        && LC.bannerFileFor(0) === 'today.jpg' && LC.bannerFileFor(-3) === 'today.jpg');
+    const assetDir = path.join(__dirname, '..', 'assets', 'countdown');
+    ok('countdown: every banner file exists on disk',
+      [18, 12, 7, 1, 0].every((d) => fs.existsSync(path.join(assetDir, LC.bannerFileFor(d)))));
+    const unix = Math.floor(LC.launchInstant().toSeconds());
+    ok('countdown: message carries the full and relative timestamps',
+      LC.messageContent() === `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>`);
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
