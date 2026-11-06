@@ -9,10 +9,16 @@
 // used to write rsn-links.json directly; moving the write to a
 // request drop keeps the website's access inside the sync store
 // (security review F1, Nov 5 2026).
+//
+// A request may carry "quiet": true (the staff link endpoint on
+// the site sends these when staff link a name for a member). A
+// quiet request applies through linkRsnQuiet instead: the name is
+// appended and the member's active name does not move. Absent or
+// false keeps the addRsn behaviour above, unchanged.
 
 const fs = require('fs');
 const path = require('path');
-const { addRsn, verifiedOwnerOf } = require('./teams');
+const { addRsn, linkRsnQuiet, verifiedOwnerOf } = require('./teams');
 
 const REQ_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'link-requests');
 const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
@@ -22,16 +28,23 @@ function drop(file, name, why) {
   try { fs.unlinkSync(file); } catch { /* already gone */ }
 }
 
-function mergeSiteLinkRequests() {
+// The deps are injectable for the smoke test, which drives the
+// merge against a scratch folder with recording writers instead of
+// the live link store. Production callers pass nothing.
+function mergeSiteLinkRequests(deps = {}) {
+  const dir = deps.dir || REQ_DIR;
+  const applyAdd = deps.addRsn || addRsn;
+  const applyQuiet = deps.linkRsnQuiet || linkRsnQuiet;
+  const ownerOf = deps.verifiedOwnerOf || verifiedOwnerOf;
   let names;
   try {
-    names = fs.readdirSync(REQ_DIR);
+    names = fs.readdirSync(dir);
   } catch {
     return 0; // no request folder yet = nothing pending
   }
   let merged = 0;
   for (const name of names.filter((n) => n.endsWith('.json')).sort()) {
-    const file = path.join(REQ_DIR, name);
+    const file = path.join(dir, name);
     let req;
     try {
       req = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -47,13 +60,14 @@ function mergeSiteLinkRequests() {
       drop(file, name, 'malformed discord id or RSN');
       continue;
     }
-    const owner = verifiedOwnerOf(rsn);
+    const owner = ownerOf(rsn);
     if (owner && owner !== did) {
       drop(file, name, 'RSN is verified to another member');
       continue;
     }
     try {
-      addRsn(did, rsn);
+      if (req.quiet === true) applyQuiet(did, rsn);
+      else applyAdd(did, rsn);
       fs.unlinkSync(file);
       merged++;
     } catch (e) {

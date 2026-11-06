@@ -26,6 +26,7 @@ const teams = require('./teams');
 const showoff = require('./showoff');
 const pluginConnect = require('./plugin-connect');
 const guide = require('./guide');
+const staffLink = require('./staff-link');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -295,6 +296,7 @@ const commands = [
   ...lore.commands,
   ...pluginConnect.commands,
   ...guide.commands,
+  ...staffLink.commands,
 ];
 
 async function handleCommand(interaction) {
