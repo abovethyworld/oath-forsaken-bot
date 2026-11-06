@@ -1,6 +1,7 @@
 // Launch countdown channel: one pinned message carrying a banner with
-// the whole days left until launch, plus Discord timestamps that render
-// live in the app. The banner images are pre-rendered under
+// the whole days left until launch and the site address in its foot
+// stripe, plus Discord timestamps that render live in the app and a
+// link line under them. The banner images are pre-rendered under
 // assets/countdown/ (the bot image ships zero native dependencies, so
 // rasterising the Blood Moon composite happens ahead of time, one file
 // per day count); this module picks the file for today's count and
@@ -58,7 +59,7 @@ function bannerFileFor(days) {
 
 function messageContent() {
   const unix = Math.floor(launchInstant().toSeconds());
-  return `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>`;
+  return `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>\nhttps://oathforsaken.cc`;
 }
 
 function buildOverwrites(client) {
