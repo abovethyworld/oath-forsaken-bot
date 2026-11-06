@@ -43,6 +43,7 @@ const { syncFriends, syncWomGroup } = require('./friends');
 const { mergeSiteLinkRequests } = require('./link-requests');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
+const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -141,6 +142,10 @@ client.once(Events.ClientReady, async (c) => {
       // profile pages carry quest, diary, and combat achievement data.
       await warmProfiles();
 
+      // Launch countdown channel: create and pin on first run, then
+      // top up any missed daily banner refresh.
+      await ensureLaunchCountdown(client);
+
       // Daily gains baseline for !gains (cache-only, no API calls).
       if (snapshotToday()) console.log('Gains: recorded the daily snapshot.');
     } catch (err) {
@@ -159,6 +164,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
   setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
+  setInterval(() => { refreshLaunchCountdown(client); }, 30 * 60 * 1000);
   setInterval(() => sweepExpiredBounties(client), 6 * 3600 * 1000);
   setInterval(() => { refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message)); }, 6 * 3600 * 1000);
   refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message));
