@@ -32,7 +32,7 @@ const { scheduleEphemeralDelete, scheduleMessageDelete, isPlainEphemeralNote, de
 const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
-const { handleModalSubmit, handleAgeSelect } = require('./recruit');
+const { handleModalSubmit, youngAccountFlag } = require('./recruit');
 const { handleHelpSelect } = require('./guide');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
@@ -265,8 +265,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       } else if (interaction.customId.startsWith('team:teamcontractsel:')) {
         const { handleTeamContractSelect } = require('./teams');
         await handleTeamContractSelect(interaction, interaction.customId.split(':')[2]);
-      } else if (interaction.customId.startsWith('apply:age:')) {
-        await handleAgeSelect(interaction);
       } else {
         // Unknown select menu — ignore
         console.warn(`[index.js] Unhandled select menu: ${interaction.customId}`);
@@ -347,6 +345,18 @@ client.on(Events.GuildMemberAdd, async (member) => {
     }
   } catch (e) {
     console.error('Oath Forsakers auto-assign failed:', e.message);
+  }
+  // Under-30 join flag (Nov 5, 2026): a young Discord account is
+  // flagged to the staff log at join, replacing the old application
+  // age question. No role change, no DM, no action on the member.
+  try {
+    const flag = youngAccountFlag(member.user);
+    if (flag) {
+      const log = member.guild.channels.cache.get(config.tickets.logChannelId);
+      if (log) await log.send(flag.text);
+    }
+  } catch (e) {
+    console.error('Under-30 join flag failed:', e.message);
   }
   await handleWelcome(member);
 });
