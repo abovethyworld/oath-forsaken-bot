@@ -508,19 +508,19 @@
         "questions": [
           {
             "id": "rsn",
-            "label": "What is your in-game username(s)?",
+            "label": "What are your RuneScape names?",
             "style": "short",
             "required": true
           },
           {
             "id": "nickname",
-            "label": "What is your preferred name/nickname?",
+            "label": "What should we call you?",
             "style": "short",
             "required": true
           },
           {
             "id": "heard",
-            "label": "How did you hear about/find us?",
+            "label": "How did you hear about us?",
             "style": "paragraph",
             "required": true
           }
@@ -534,19 +534,19 @@
         "questions": [
           {
             "id": "rsn",
-            "label": "What is your in-game username(s)?",
+            "label": "What are your RuneScape names?",
             "style": "short",
             "required": true
           },
           {
             "id": "nickname",
-            "label": "What is your preferred name/nickname?",
+            "label": "What should we call you?",
             "style": "short",
             "required": true
           },
           {
             "id": "heard",
-            "label": "How did you hear about/find us?",
+            "label": "How did you hear about us?",
             "style": "paragraph",
             "required": true
           }
@@ -560,19 +560,19 @@
         "questions": [
           {
             "id": "rsn",
-            "label": "What is your in-game username(s)?",
+            "label": "What are your RuneScape names?",
             "style": "short",
             "required": true
           },
           {
             "id": "nickname",
-            "label": "What is your preferred name/nickname?",
+            "label": "What should we call you?",
             "style": "short",
             "required": true
           },
           {
             "id": "heard",
-            "label": "How did you hear about/find us?",
+            "label": "How did you hear about us?",
             "style": "paragraph",
             "required": true
           }
