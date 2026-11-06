@@ -1244,8 +1244,8 @@ async function t(name, fn, needFile = true) {
     const quietBody = teamsSrc.slice(teamsSrc.indexOf('function linkRsnQuiet'), teamsSrc.indexOf('function setActiveRsn'));
     const addBody = teamsSrc.slice(teamsSrc.indexOf('function addRsn'), teamsSrc.indexOf('function linkRsnQuiet'));
     ok('stafflink: linkRsnQuiet leaves an existing active name alone',
-      !/entry\.active = rsn/.test(quietBody) && quietBody.includes('if (!entry.active) entry.active = rsn;'), quietBody.slice(0, 200));
-    ok('stafflink: addRsn moves the active name', /entry\.active = rsn;/.test(addBody));
+      !/^\s*entry\.active = rsn;/m.test(quietBody) && quietBody.includes('if (!entry.active) entry.active = rsn;'), quietBody.slice(0, 200));
+    ok('stafflink: addRsn moves the active name', /^\s*entry\.active = rsn;/m.test(addBody));
     ok('stafflink: merge routes quiet in source', lrSrc.includes('req.quiet === true') && lrSrc.includes('applyQuiet(did, rsn)'));
   }
 
