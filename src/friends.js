@@ -2,10 +2,13 @@
 // holders their own roster rows, separate from members. The bot is the
 // only side that can see Discord roles, so it publishes the list to
 // data/friends.json for the site exporter: role holders with a linked RSN,
-// under their active name. Refreshed on the startup sweep and daily, from
-// the guild cache, so it costs no extra Discord calls. The same file also
-// publishes the WOM group membership (syncWomGroup below), which the site
-// uses as its members list.
+// under their active name. The same sweep publishes data/rank-holders.json:
+// members holding a seniority rank role, with their rank and linked RSNs.
+// Holding a rank is member standing for the site; the Friend role alone
+// is not. Refreshed on the startup sweep and daily, from the guild cache,
+// so it costs no extra Discord calls. The same file also publishes the
+// WOM group membership (syncWomGroup below), which the site uses as part
+// of its members list.
 const path = require('path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
@@ -15,8 +18,23 @@ const { getGroupMembers, getGroupMemberships } = require('./wom');
 const tenure = require('./tenure');
 
 const FRIENDS_FILE = path.join(__dirname, '..', 'data', 'friends.json');
+const RANKS_FILE = path.join(__dirname, '..', 'data', 'rank-holders.json');
 const GROUP_FILE = path.join(__dirname, '..', 'data', 'wom-group.json');
 const FRIEND_ROLE_ID = (config.seniority || {}).friendOfClanRoleId;
+// Seniority rank roles, highest first, so a member holding more than one
+// is published under the highest. Keys in config are lowercase.
+const RANK_ORDER = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
+const RANK_ROLE_IDS = (config.seniority || {}).rankIds || {};
+
+function heldRank(member) {
+  for (const key of RANK_ORDER) {
+    const roleId = RANK_ROLE_IDS[key];
+    if (roleId && member.roles.cache.has(roleId)) {
+      return key.charAt(0).toUpperCase() + key.slice(1);
+    }
+  }
+  return null;
+}
 
 async function syncFriends(client) {
   if (!FRIEND_ROLE_ID) return 0;
@@ -25,14 +43,24 @@ async function syncFriends(client) {
   const members = await getMembers(guild);
   if (!members) return 0;
   const friends = [];
+  const rankHolders = [];
   for (const member of members.values()) {
-    if (!member.roles.cache.has(FRIEND_ROLE_ID)) continue;
+    const isFriend = member.roles.cache.has(FRIEND_ROLE_ID);
+    const rank = heldRank(member);
+    if (!isFriend && !rank) continue;
     const entry = getRsnEntry(member.id);
     if (!entry.active) continue; // a roster row needs a linked RSN
-    friends.push({ discordId: member.id, rsn: entry.active, rsns: entry.rsns });
+    if (isFriend) {
+      friends.push({ discordId: member.id, rsn: entry.active, rsns: entry.rsns });
+    }
+    if (rank) {
+      rankHolders.push({ discordId: member.id, rank, rsn: entry.active, rsns: entry.rsns });
+    }
   }
   friends.sort((a, b) => a.rsn.toLowerCase().localeCompare(b.rsn.toLowerCase()));
+  rankHolders.sort((a, b) => a.rsn.toLowerCase().localeCompare(b.rsn.toLowerCase()));
   atomicWrite(FRIENDS_FILE, friends);
+  atomicWrite(RANKS_FILE, rankHolders);
   return friends.length;
 }
 
