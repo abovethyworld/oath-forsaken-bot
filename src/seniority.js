@@ -8,7 +8,10 @@
 // (src/membership.js); accrued time comes from the tenure ledger
 // (src/tenure.js), which banks time across leaves, so time away never
 // counts. Non-members are skipped and stripped of any seniority rank
-// they hold. Ascendant is hand-picked and is not in
+// they hold, except anyone who joined the server within the last
+// 7 days: a fresh approval needs time to get into the clan chat and
+// onto the WOM list before the strip can apply. Ascendant is
+// hand-picked and is not in
 // config.seniorityRanks, so this sync never assigns or removes it.
 // After each run the assigned ranks are published to
 // data/seniority.json for the website, so site and bot cannot disagree.
@@ -159,6 +162,13 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
       const isMember = memberIds.has(m.id);
+      // Grace window: a member who joined the server in the last 7 days
+      // is never stripped. Approval hands out Initiate before the new
+      // member has had any chance to join the clan chat, so without
+      // this the next sync run (including the one at bot startup)
+      // takes it straight back.
+      const GRACE_MS = 7 * 24 * 3600 * 1000;
+      if (!isMember && m.joinedTimestamp && now - m.joinedTimestamp < GRACE_MS) continue;
       if (!isMember) {
         const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
         if (hasSeniority) {
