@@ -78,6 +78,24 @@ function lockLeftMs(state, key, now) {
 
 const inFlight = new Set();
 
+// Fast read-only pre-check, mirroring runRefresh's decision
+// order (busy, locked, allowance) so the button handler can
+// answer a refused tap on the spot, before any slow work.
+// 'clear' reserves nothing: runRefresh re-checks everything
+// when the pull actually starts, so a race between the two
+// still lands on the same answer.
+function peekRefresh({ userId, rsn, now = Date.now(), file } = {}) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key || !userId) return { outcome: 'failed' };
+  if (inFlight.has(key)) return { outcome: 'busy' };
+  const state = loadState(file);
+  pruneState(state, now);
+  const lockMs = lockLeftMs(state, key, now);
+  if (lockMs > 0) return { outcome: 'locked', minutes: Math.max(1, Math.ceil(lockMs / 60000)) };
+  if (remainingIn(state, userId, now) <= 0) return { outcome: 'empty' };
+  return { outcome: 'clear' };
+}
+
 // One refresh attempt, fully decided. Checks run busy, locked,
 // allowance; only a pull Wise Old Man accepts is charged, and
 // only a charged pull locks the name. updateFn is injected so
@@ -115,6 +133,7 @@ async function runRefresh({ userId, rsn, updateFn, now = Date.now(), file } = {}
 }
 
 module.exports = {
-  runRefresh, refreshRemaining, remainingIn, loadState, saveState,
-  pruneState, lockLeftMs, dayKey, DAILY_LIMIT, LOCK_MS, STATE_PATH,
+  runRefresh, peekRefresh, refreshRemaining, remainingIn, loadState,
+  saveState, pruneState, lockLeftMs, dayKey, DAILY_LIMIT, LOCK_MS,
+  STATE_PATH,
 };

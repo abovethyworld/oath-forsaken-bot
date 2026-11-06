@@ -3,7 +3,7 @@
 // (code + portal toggle).
 const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, statsFetchedAt, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
-const { runRefresh, refreshRemaining } = require('./refresh');
+const { runRefresh, peekRefresh, refreshRemaining } = require('./refresh');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -415,12 +415,17 @@ async function handleBridgeButton(interaction) {
 
 // Card Refresh: force one player's Wise Old Man update now,
 // charged to the tapper under the rules in refresh.js, then
-// rebuild the same card in place with the new numbers. The
-// interaction is deferred before anything is built: the pull
-// takes seconds and the acknowledgement window is three. A
-// refused or failed pull changes nothing on the card and is
-// answered privately instead.
-async function handleRefreshButton(interaction) {
+// rebuild the same card in place with the new numbers.
+// Feedback comes first, because the pull and the rebuild take
+// seconds while the tapper stares at the card: a refused tap
+// is answered on the spot as the interaction's first response,
+// and a working tap gets its "refreshing" reply inside the
+// acknowledgement window, before any slow work starts. The
+// card itself is edited on its own message once the fresh
+// payload lands, and the private reply is edited into the
+// result line last. deps is the test seam (the pull, the
+// clock, the state file); buttons.js passes none.
+async function handleRefreshButton(interaction, deps = {}) {
   const uid = interaction.user.id;
   const customId = String(interaction.customId || '');
   const parts = customId.split(':');
@@ -443,19 +448,27 @@ async function handleRefreshButton(interaction) {
     if (rsn) rebuild = () => hubRender(st, uid);
   }
   if (!rsn || !rebuild) return;
-  await interaction.deferUpdate().catch(() => {});
-  const note = (content) => interaction.followUp({ content, ephemeral: true }).catch(() => {});
-  const res = await runRefresh({ userId: uid, rsn, updateFn: updatePlayer });
-  if (res.outcome === 'busy') return note('That name is being refreshed right now. Give it a few seconds.');
-  if (res.outcome === 'locked') return note(`That name was just refreshed. It is locked for about ${res.minutes} more minute${res.minutes === 1 ? '' : 's'}.`);
-  if (res.outcome === 'empty') return note('You are out of refreshes for today. Cards keep working off the saved numbers.');
-  if (res.outcome !== 'ok') return note('The update did not go through. Nothing was spent, try again in a bit.');
+  const lockedLine = (m) => `That name was just refreshed. It is locked for about ${m} more minute${m === 1 ? '' : 's'}.`;
+  // Pre-flight: refused taps end here, answered instantly.
+  const say = (content) => interaction.reply({ content, ephemeral: true }).catch(() => {});
+  const peek = peekRefresh({ userId: uid, rsn, now: deps.now, file: deps.file });
+  if (peek.outcome === 'busy') return say('That name is being refreshed right now. Give it a few seconds.');
+  if (peek.outcome === 'locked') return say(lockedLine(peek.minutes));
+  if (peek.outcome === 'empty') return say('You are out of refreshes for today. Cards keep working off the saved numbers.');
+  // Clear: the tapper sees this at once, before the pull.
+  await interaction.reply({ content: 'Refreshing that name now.', ephemeral: true }).catch(() => {});
+  const edit = (content) => interaction.editReply({ content }).catch(() => {});
+  const res = await runRefresh({ userId: uid, rsn, updateFn: deps.updateFn || updatePlayer, now: deps.now, file: deps.file });
+  if (res.outcome === 'busy') return edit('That name is being refreshed right now. Give it a few seconds.');
+  if (res.outcome === 'locked') return edit(lockedLine(res.minutes));
+  if (res.outcome === 'empty') return edit('You are out of refreshes for today. Cards keep working off the saved numbers.');
+  if (res.outcome !== 'ok') return edit('The update did not go through. Nothing was spent, try again in a bit.');
   const payload = await rebuild().catch(() => null);
   if (payload && payload.files) {
     if (isHub) {
-      await interaction.editReply(hubMsg(payload)).catch(() => {});
+      await interaction.message.edit(hubMsg(payload)).catch(() => {});
     } else {
-      await interaction.editReply({
+      await interaction.message.edit({
         content: payload.content || '',
         files: payload.files,
         attachments: [],
@@ -463,9 +476,9 @@ async function handleRefreshButton(interaction) {
       }).catch(() => {});
     }
   } else if (payload && payload.content) {
-    await note(payload.content);
+    await interaction.followUp({ content: payload.content, ephemeral: true }).catch(() => {});
   }
-  return note(`Refreshed. You have ${res.remaining} refresh${res.remaining === 1 ? '' : 'es'} left today.`);
+  return edit(`Refreshed. You have ${res.remaining} refresh${res.remaining === 1 ? '' : 'es'} left today.`);
 }
 
 async function handleLbSwapButton(interaction) {
