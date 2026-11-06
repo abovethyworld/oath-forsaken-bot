@@ -241,7 +241,7 @@ function buildFixModal(type, prefill) {
   const rsnQ = (t.questions || []).find((q) => q.id === 'rsn');
   const input = new TextInputBuilder()
     .setCustomId('rsn')
-    .setLabel(rsnQ ? rsnQ.label : 'What is your in-game username(s)?')
+    .setLabel(rsnQ ? rsnQ.label : 'What are your RuneScape names?')
     .setStyle(TextInputStyle.Short)
     .setRequired(true)
     .setMaxLength(100);
