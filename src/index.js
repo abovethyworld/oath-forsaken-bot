@@ -41,6 +41,7 @@ const { reconcileVerifiedLinks, surfaceHeldPosts } = require('./plugin-connect')
 const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
 const { mergeSiteLinkRequests } = require('./link-requests');
+const { handleStaffLinkSelect, handleStaffLinkModal } = require('./staff-link');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
@@ -269,6 +270,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Unknown select menu — ignore
         console.warn(`[index.js] Unhandled select menu: ${interaction.customId}`);
       }
+    } else if (interaction.isUserSelectMenu()) {
+      if (interaction.customId === 'stafflink:member') {
+        await handleStaffLinkSelect(interaction);
+      } else {
+        console.warn(`[index.js] Unhandled user select menu: ${interaction.customId}`);
+      }
     } else if (interaction.isModalSubmit()) {
       const [modalKind] = interaction.customId.split(':');
       if (modalKind === 'suggest') {
@@ -279,6 +286,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleCompareSwapModal(interaction);
       } else if (modalKind === 'team') {
         await handleTeamModal(interaction);
+      } else if (modalKind === 'stafflink') {
+        await handleStaffLinkModal(interaction);
       } else {
         await handleModalSubmit(interaction);
       }

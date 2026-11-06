@@ -1147,6 +1147,108 @@ async function t(name, fn, needFile = true) {
     ok('prelink: join flag wired in the join handler', indexSrc.includes('youngAccountFlag(member.user)'));
   }
 
+  // Staff RSN link (Nov 6, 2026): the staff-chat repair panel and
+  // the website request merge's quiet flag. The check pipeline and
+  // the merge run against fixtures and a scratch folder with
+  // recording writers: the sweep stays read-only against live data
+  // while still proving which writer each path lands on. Fake ids
+  // and names throughout, per the repo rule.
+  {
+    const SL = require(path.join(__dirname, '..', 'src', 'staff-link.js'));
+    const LR = require(path.join(__dirname, '..', 'src', 'link-requests.js'));
+    const slSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'staff-link.js'), 'utf8');
+    const lrSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'link-requests.js'), 'utf8');
+    const indexSrc2 = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const buttonsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'buttons.js'), 'utf8');
+
+    // Panel: one Danger button with the exact label, house red.
+    const panel = SL.panelPayload();
+    const panelJson = JSON.stringify(panel.components.map((r) => r.toJSON()));
+    ok('stafflink: panel button is labelled Link an RSN', panelJson.includes('"label":"Link an RSN"') && panelJson.includes('stafflink:open'), panelJson);
+    ok('stafflink: panel button is Danger', panelJson.includes('"style":4'), panelJson);
+    ok('stafflink: panel embed is house red', panel.embeds[0].data.color === 0x6b0e0e);
+    ok('stafflink: button routed in buttons.js', buttonsSrc.includes("kind === 'stafflink'"));
+    ok('stafflink: user select and modal routed in index.js',
+      indexSrc2.includes('stafflink:member') && indexSrc2.includes("modalKind === 'stafflink'"));
+    ok('stafflink: command registered', SL.commands.some((c) => c.data.name === 'link-rsn-panel'));
+
+    // Wiring rules in source: the gate is the shared staff helper
+    // on every surface, and the only link writer named is the
+    // quiet one (addRsn must never appear in the module).
+    ok('stafflink: staff gate on command, button, select, modal',
+      (slSrc.match(/isStaff\(interaction\)/g) || []).length >= 4);
+    ok('stafflink: writes only through linkRsnQuiet', slSrc.includes('linkRsnQuiet(targetId, check.rsn)') && !slSrc.includes('addRsn('));
+    ok('stafflink: audit line posts to the mod-log', slSrc.includes('config.channels.modLog') && slSrc.includes('Staff link:'));
+
+    // Check pipeline with fixtures, in the ruled order.
+    const fxLinks = {
+      '111111111': { rsns: ['Target Main'], active: 'Target Main', verified: [], womIds: {} },
+      '222222222': { rsns: ['Other Name'], active: 'Other Name', verified: ['Claimed Name'], womIds: {} },
+    };
+    const fxStats = async (name) => {
+      const k = name.toLowerCase();
+      if (k === 'new name') return { displayName: 'New Name', username: 'new name' };
+      if (k === 'err name') return null;
+      return { notFound: true };
+    };
+    const fxVOwner = (rsn) => (rsn.toLowerCase() === 'claimed name' ? '222222222' : null);
+    const fxBase = { targetId: '111111111', links: fxLinks, statsFn: fxStats, verifiedOwnerFn: fxVOwner };
+    let chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'bad!name' });
+    ok('stafflink: shape-bad name refused', !chk.ok && chk.code === 'shape', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'waytoolongname' });
+    ok('stafflink: overlong name refused on shape', !chk.ok && chk.code === 'shape');
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'Claimed Name' });
+    ok('stafflink: verified owner refusal', !chk.ok && chk.code === 'verified', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'Other Name' });
+    ok('stafflink: name linked to another member refused', !chk.ok && chk.code === 'owned', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'target  main' });
+    ok('stafflink: already linked to the target is a no-op', !chk.ok && chk.code === 'already', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'Ghost Name' });
+    ok('stafflink: name missing on Wise Old Man refused', !chk.ok && chk.code === 'missing', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'Err Name' });
+    ok('stafflink: Wise Old Man unreachable refused, never unchecked', !chk.ok && chk.code === 'unreachable', JSON.stringify(chk));
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: '  New   Name ' });
+    ok('stafflink: found name passes with the Wise Old Man spelling', chk.ok && chk.rsn === 'New Name', JSON.stringify(chk));
+
+    // Check order: shape beats verified, verified beats the WOM
+    // lookup (the stub would call the name missing).
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'claimed!' });
+    ok('stafflink: shape is checked first', !chk.ok && chk.code === 'shape');
+    chk = await SL.checkStaffLink({ ...fxBase, rawRsn: 'Claimed Name', statsFn: async () => ({ notFound: true }) });
+    ok('stafflink: verified is checked before Wise Old Man', !chk.ok && chk.code === 'verified');
+
+    // Quiet-flag merge: recording writers prove the routing, and
+    // the writers' own source proves the active-name behaviour
+    // (quiet never moves an existing active; addRsn sets it).
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-linkreq-'));
+    const calls = [];
+    const deps = {
+      dir,
+      addRsn: (did, rsn) => calls.push(['add', did, rsn]),
+      linkRsnQuiet: (did, rsn) => calls.push(['quiet', did, rsn]),
+      verifiedOwnerOf: (rsn) => (rsn === 'Claimed Name' ? '222222222' : null),
+    };
+    fs.writeFileSync(path.join(dir, 'a.json'), JSON.stringify({ discordId: '123456789', rsn: 'Quiet Name', quiet: true }));
+    fs.writeFileSync(path.join(dir, 'b.json'), JSON.stringify({ discordId: '123456789', rsn: 'Loud Name' }));
+    fs.writeFileSync(path.join(dir, 'c.json'), JSON.stringify({ discordId: '123456789', rsn: 'False Name', quiet: false }));
+    fs.writeFileSync(path.join(dir, 'd.json'), JSON.stringify({ discordId: '123456789', rsn: 'Claimed Name', quiet: true }));
+    const merged = LR.mergeSiteLinkRequests(deps);
+    ok('stafflink: merge applied the three valid requests', merged === 3, String(merged));
+    ok('stafflink: quiet request applies linkRsnQuiet', JSON.stringify(calls[0]) === JSON.stringify(['quiet', '123456789', 'Quiet Name']), JSON.stringify(calls));
+    ok('stafflink: flagless request still applies addRsn', JSON.stringify(calls[1]) === JSON.stringify(['add', '123456789', 'Loud Name']));
+    ok('stafflink: quiet false still applies addRsn', JSON.stringify(calls[2]) === JSON.stringify(['add', '123456789', 'False Name']));
+    ok('stafflink: verified-to-another request dropped, quiet or not', calls.length === 3 && fs.readdirSync(dir).length === 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+    const teamsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'teams.js'), 'utf8');
+    const quietBody = teamsSrc.slice(teamsSrc.indexOf('function linkRsnQuiet'), teamsSrc.indexOf('function setActiveRsn'));
+    const addBody = teamsSrc.slice(teamsSrc.indexOf('function addRsn'), teamsSrc.indexOf('function linkRsnQuiet'));
+    ok('stafflink: linkRsnQuiet leaves an existing active name alone',
+      !/entry\.active = rsn/.test(quietBody) && quietBody.includes('if (!entry.active) entry.active = rsn;'), quietBody.slice(0, 200));
+    ok('stafflink: addRsn moves the active name', /entry\.active = rsn;/.test(addBody));
+    ok('stafflink: merge routes quiet in source', lrSrc.includes('req.quiet === true') && lrSrc.includes('applyQuiet(did, rsn)'));
+  }
+
   // Launch countdown (Nov 5, 2026): the day-count math picks the
   // banner for each New York date. Fixed instants, no clock reading.
   {
