@@ -1020,7 +1020,9 @@ async function t(name, fn, needFile = true) {
       [18, 12, 7, 1, 0].every((d) => fs.existsSync(path.join(assetDir, LC.bannerFileFor(d)))));
     const unix = Math.floor(LC.launchInstant().toSeconds());
     ok('countdown: message carries the full and relative timestamps',
-      LC.messageContent() === `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>`);
+      LC.messageContent() === `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>\nhttps://oathforsaken.cc`);
+    ok('countdown: message ends with the site link line',
+      LC.messageContent().split('\n').pop() === 'https://oathforsaken.cc');
   }
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
