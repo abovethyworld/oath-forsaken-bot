@@ -1001,12 +1001,13 @@ async function t(name, fn, needFile = true) {
     }
   }
 
-  // Application pre-link flow (Nov 5, 2026): the RSN check at
-  // submit, the confirm screen, the in-flow account type ask, the
-  // approval pre-link, and the under-30 join flag. Pure and payload
-  // checks only: the live decision matrix (verified-other skip,
-  // unchecked retry) writes link data, so it runs in an isolated
-  // data sandbox pre-deploy, not against the live caches here.
+  // Application pre-link flow (Nov 5, 2026; reworked Nov 6, 2026):
+  // the account type pick before the form, the RSN check at submit,
+  // the confirm screen, the RSN-only fix modal, the approval
+  // pre-link, and the under-30 join flag. Pure and payload checks
+  // only: the live decision matrix (verified-other skip, unchecked
+  // retry) writes link data, so it runs in an isolated data sandbox
+  // pre-deploy, not against the live caches here.
   {
     const R = require(path.join(__dirname, '..', 'src', 'recruit.js'));
     const U = require(path.join(__dirname, '..', 'src', 'utils.js'));
@@ -1042,30 +1043,79 @@ async function t(name, fn, needFile = true) {
     const cNone = await R.checkApplicationRsns(['ghost name'], stub);
     ok('prelink: missing name drops as notFound', cNone.found.length === 0 && cNone.dropped[0].reason === 'notFound');
     const nf = R.notFoundPayload('ghost name', 'iron', cNone.dropped);
-    ok('prelink: not-found stop names the fix path', nf.content.includes('not on Wise Old Man') && nf.content.includes('has not been sent yet'));
-    ok('prelink: not-found stop carries the restart button',
-      JSON.stringify(nf.components.map((r) => r.toJSON())) .includes('apply:restart:iron'));
+    ok('prelink: not-found stop uses the approved line', nf.content === 'That name is not on Wise Old Man: **ghost name**\nCheck the spelling. Nothing has been sent to staff.', nf.content);
+    ok('prelink: not-found stop carries the fix name button',
+      JSON.stringify(nf.components.map((r) => r.toJSON())).includes('apply:fixname'));
+    const cInv = await R.checkApplicationRsns(['bad!name'], stub);
+    ok('prelink: shape-bad name drops as invalid', cInv.found.length === 0 && cInv.dropped[0].reason === 'invalid');
+    const nfInv = R.notFoundPayload('bad!name', 'iron', cInv.dropped);
+    ok('prelink: invalid stop uses the approved line', nfInv.content === 'RuneScape names cannot use those characters: **bad!name**\nNothing has been sent to staff.', nfInv.content);
     const cPart = await R.checkApplicationRsns(['found name', 'ghost name'], stub);
     ok('prelink: partial drop state', R.linkStateOf(cPart) === 'partial' && R.linkStateFieldText('partial', 1) === 'Partial: 1 name(s) dropped at check');
     const cErr = await R.checkApplicationRsns(['err name'], stub);
     ok('prelink: WOM error goes forward unchecked', cErr.found.length === 1 && cErr.found[0].verified === false && R.linkStateOf(cErr) === 'unchecked');
 
-    // Confirm screen: the double ask carries its buttons.
+    // Confirm screen: the double ask carries its buttons and the
+    // approved copy, including the dropped and unchecked variants.
     const cp = R.confirmPayload({ found: cAll.found, dropped: [], linkState: 'verified' });
     const cpJson = JSON.stringify(cp.components.map((r) => r.toJSON()));
-    ok('prelink: confirm and fix buttons routed', cpJson.includes('apply:confirm') && cpJson.includes('apply:fix'));
+    ok('prelink: confirm and fix buttons routed', cpJson.includes('apply:confirm') && cpJson.includes('apply:fixname'));
     ok('prelink: confirm screen shows the name', cp.content.includes('**Found Name**'));
+    ok('prelink: confirm screen uses the approved copy', cp.content.includes('Your name, as Wise Old Man spells it:')
+      && cp.content.includes('If staff approve you, this name is linked to your Discord. Your account type is set from your pick.'), cp.content);
+    ok('prelink: confirm buttons carry emojis', cpJson.includes('✅') && cpJson.includes('✏️'));
+    const cpDrop = R.confirmPayload({ found: cAll.found, dropped: cPart.dropped, linkState: 'partial' });
+    ok('prelink: confirm screen names dropped names', cpDrop.content.includes('Not going forward: ghost name. You can add them later with Link RSN.'), cpDrop.content);
+    const cpUnchecked = R.confirmPayload({ found: cErr.found, dropped: [], linkState: 'unchecked' });
+    ok('prelink: unchecked confirm uses the approved line', cpUnchecked.content.includes('Wise Old Man did not answer, so your names go to staff as typed, marked unchecked.')
+      && !cpUnchecked.content.includes('Your account type is set from your pick.'), cpUnchecked.content);
 
-    // Account type ask: iron asks flavour, guest asks kind first,
-    // main never asks. Badge pick ids are the teams BADGES ids.
+    // Account type pick (Nov 6, 2026): buttons before the form. Iron
+    // applications get the kind-of-iron screen; guests get the game
+    // mode screen first, Ironman before Main. Badge pick ids are the
+    // teams BADGES ids.
     ok('prelink: badge ids cover the iron family and main',
       JSON.stringify(T.BADGES.map((b) => b.id)) === JSON.stringify(['ironman', 'hc', 'ult', 'gim', 'ugim', 'hcgim', 'main']),
       JSON.stringify(T.BADGES.map((b) => b.id)));
-    const flJson = JSON.stringify(R.askPayload({ type: 'iron' }, { kind: 'flavour', name: 'Found Name' }).components.map((r) => r.toJSON()));
-    ok('prelink: flavour ask offers every iron badge plus AUTO',
-      ['ironman', 'hc', 'ult', 'gim', 'ugim', 'hcgim', 'auto'].every((id) => flJson.includes(`apply:flavour:${id}`)));
-    ok('prelink: guest asks kind first', R.nextAsk({ type: 'guest', found: [{ canonical: 'X' }], askIndex: 0, askStage: null }).kind === 'kind');
-    ok('prelink: main never asks', R.nextAsk({ type: 'main', found: [{ canonical: 'X' }], askIndex: 0, askStage: null }).kind === 'done');
+    const mp = R.modePickPayload();
+    const mpJson = JSON.stringify(mp.components.map((r) => r.toJSON()));
+    ok('prelink: iron pick screen asks the approved question', mp.content === 'What kind of iron are you?', mp.content);
+    const pickLabels = ['"label":"Ironman"', '"label":"Hardcore Ironman"', '"label":"Ultimate Ironman"', '"label":"Group Ironman"', '"label":"Unranked Group Ironman"', '"label":"Hardcore Group Ironman"', '"label":"Not sure"'];
+    ok('prelink: iron pick offers full names in order',
+      pickLabels.every((s, i) => mpJson.indexOf(s) > -1 && (i === 0 || mpJson.indexOf(s) > mpJson.indexOf(pickLabels[i - 1]))), mpJson);
+    ok('prelink: iron pick carries the server mode icons',
+      ['1558644677886869604', '1558644444654473256', '1558644481350303874', '1558644518184685628', '1558644555182768259', '1558644592352436344'].every((id) => mpJson.includes(id)), mpJson);
+    ok('prelink: iron pick routes every badge id plus auto',
+      ['ironman', 'hc', 'ult', 'gim', 'ugim', 'hcgim', 'auto'].every((id) => mpJson.includes(`apply:pick:${id}`)), mpJson);
+    const gk = R.guestKindPayload();
+    const gkJson = JSON.stringify(gk.components.map((r) => r.toJSON()));
+    ok('prelink: guest pick screen asks the approved question', gk.content === 'What game mode do you play?', gk.content);
+    ok('prelink: guest pick puts Ironman before Main',
+      gkJson.indexOf('apply:pickkind:ironman') > -1 && gkJson.indexOf('apply:pickkind:main') > gkJson.indexOf('apply:pickkind:ironman'), gkJson);
+    ok('prelink: guest pick carries the mode emojis', gkJson.includes(cfg.recruit.ironEmojiId) && gkJson.includes(cfg.recruit.mainEmojiId), gkJson);
+    ok('prelink: post-form type asks are gone', !recruitSrc.includes('apply:kind:') && !recruitSrc.includes('apply:flavour:') && !recruitSrc.includes('apply:restart:') && !recruitSrc.includes('One more ask'));
+    ok('prelink: approved flow copy in place', recruitSrc.includes('You already have an application in. Staff will get to it.')
+      && recruitSrc.includes('That step timed out. Start again from the application panel.')
+      && recruitSrc.includes('Application sent. Staff will review it.'));
+
+    // The fix modal is RSN-only and prefilled; the form modal keeps
+    // its three fields. The record badge honours the up-front pick
+    // and never applies one to an unchecked application.
+    const fixModal = R.buildFixModal('iron', 'ghost name').toJSON();
+    ok('prelink: fix modal is RSN-only', fixModal.components.length === 1 && fixModal.components[0].components.length === 1 && fixModal.components[0].components[0].custom_id === 'rsn', JSON.stringify(fixModal));
+    ok('prelink: fix modal prefills the typed name', fixModal.components[0].components[0].value === 'ghost name');
+    const formModal = R.buildFormModal('iron').toJSON();
+    ok('prelink: form modal keeps rsn, nickname, heard', formModal.components.length === 3 && formModal.custom_id === 'apply:modal:iron:none', String(formModal.custom_id));
+    ok('prelink: main records main without a pick', R.recordBadgeFor({ type: 'main', linkState: 'verified', badgePicked: false, badge: null }) === 'main');
+    ok('prelink: the up-front pick applies to the record', R.recordBadgeFor({ type: 'iron', linkState: 'verified', badgePicked: true, badge: 'hc' }) === 'hc');
+    ok('prelink: Not sure stores no badge', R.recordBadgeFor({ type: 'guest', linkState: 'partial', badgePicked: true, badge: null }) === null);
+    ok('prelink: unchecked applies no badge', R.recordBadgeFor({ type: 'iron', linkState: 'unchecked', badgePicked: true, badge: 'hc' }) === null
+      && R.recordBadgeFor({ type: 'main', linkState: 'unchecked', badgePicked: false, badge: null }) === null);
+
+    // Emoji dedupe (Nov 6, 2026): bounty buttons use the kept
+    // zamoraksymbol; the duplicate zamorak id is gone from source.
+    const bountySrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bounty.js'), 'utf8');
+    ok('emoji: bounty buttons use the kept zamoraksymbol', bountySrc.includes("id: '1559104599032594442', name: 'zamoraksymbol'") && !bountySrc.includes('1558477037537329182'));
 
     // Pre-link decision order in source: the verified-owner check
     // runs before any link write, and failures post to the thread.

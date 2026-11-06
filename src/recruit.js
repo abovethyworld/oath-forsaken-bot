@@ -1,11 +1,14 @@
 // Recruitment applications — three types: ironman, main, guest.
 // On member join: opens a private application channel with three buttons.
-// Applicants fill a modal (RSN, nickname, how they heard). On submit the
-// bot checks every RSN on Wise Old Man, shows the found names back for a
-// confirm tap (the double ask), asks the account type in the same flow,
-// and only then opens a forum post in the applications forum titled
-// "<Type> App from <username>" with the answers, so staff can discuss in
-// the thread. Approve / Deny buttons live on the post's starter message.
+// Ironman and guest applicants pick their account type first (buttons,
+// before any typing); main applicants skip the pick. Applicants then fill
+// a modal (RSN, nickname, how they heard). On submit the bot checks every
+// RSN on Wise Old Man and shows the found names back for a confirm tap
+// (the double ask); a bad name is fixed through an RSN-only modal that
+// keeps the other answers. Only after Confirm does the flow open a forum
+// post in the applications forum titled "<Type> App from <username>" with
+// the answers, so staff can discuss in the thread. Approve / Deny buttons
+// live on the post's starter message.
 // Approve assigns the right member role (Iron Sworn/Unbound/Guest) +
 // Initiate seniority, pre-links the confirmed RSNs and their stated
 // types, renames the post to "... - Approved", and locks it.
@@ -39,11 +42,14 @@ function accountAgeDays(user) {
   return Math.floor((Date.now() - user.createdAt.getTime()) / DAY_MS);
 }
 
-// ─── Application pre-link (Nov 5, 2026) ─────────────────────────────
-// Pending flow state: userId -> staged application between the RSN
-// check and the final submit. In-memory only: if the bot restarts
+// ─── Application pre-link (Nov 5, 2026; type pick moved up front
+// Nov 6, 2026) ──────────────────────────────────────────────────────
+// Pending flow state: userId -> staged application. The stage starts
+// at the panel button tap ('pick': the account type buttons shown
+// before the form) and moves to 'confirm' once the form is submitted
+// and the RSN check has run. In-memory only: if the bot restarts
 // mid-flow the applicant simply reapplies. Confirm is the point of no
-// return: it persists the staged names and badge picks into the
+// return: it persists the staged names and badge pick into the
 // stored application answers, the record approval reads.
 const pendingApps = new Map();
 const PENDING_TTL_MS = 15 * 60 * 1000;
@@ -144,6 +150,109 @@ function appTypes() {
   return config.recruit?.types || {};
 }
 
+// ─── Account type picks (Nov 6, 2026) ───────────────────────────────
+// The type is picked with buttons BEFORE the form opens, and one pick
+// covers every name in the application. 'auto' is the "Not sure" pick:
+// it stores no badge, and approval resolves the type from Wise Old Man
+// (the pre-Nov 6 AUTO semantics; group badges stay manual-only because
+// Wise Old Man cannot tell a group iron from a main). Multiple types
+// for alts are parked by the owner and are not built here.
+const MODE_PICKS = [
+  { id: 'ironman', label: 'Ironman', emoji: { id: '1558644677886869604', name: 'standard_iron' } },
+  { id: 'hc', label: 'Hardcore Ironman', emoji: { id: '1558644444654473256', name: 'hardcore_iron' } },
+  { id: 'ult', label: 'Ultimate Ironman', emoji: { id: '1558644481350303874', name: 'ultimate_iron' } },
+  { id: 'gim', label: 'Group Ironman', emoji: { id: '1558644518184685628', name: 'group_iron' } },
+  { id: 'ugim', label: 'Unranked Group Ironman', emoji: { id: '1558644555182768259', name: 'unranked_iron' } },
+  { id: 'hcgim', label: 'Hardcore Group Ironman', emoji: { id: '1558644592352436344', name: 'hc_group_iron' } },
+];
+
+function modePickPayload() {
+  const rows = [new ActionRowBuilder(), new ActionRowBuilder()];
+  MODE_PICKS.forEach((pick, i) => {
+    const btn = new ButtonBuilder()
+      .setCustomId(`apply:pick:${pick.id}`)
+      .setLabel(pick.label)
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji(pick.emoji);
+    rows[i < 3 ? 0 : 1].addComponents(btn);
+  });
+  rows[1].addComponents(
+    new ButtonBuilder().setCustomId('apply:pick:auto').setLabel('Not sure').setStyle(ButtonStyle.Secondary)
+  );
+  return { content: 'What kind of iron are you?', components: rows };
+}
+
+function guestKindPayload() {
+  const rc = config.recruit || {};
+  const ironBtn = new ButtonBuilder()
+    .setCustomId('apply:pickkind:ironman')
+    .setLabel('Ironman')
+    .setStyle(ButtonStyle.Danger);
+  if (rc.ironEmojiId) ironBtn.setEmoji({ id: rc.ironEmojiId, name: 'ironsworn' });
+  const mainBtn = new ButtonBuilder()
+    .setCustomId('apply:pickkind:main')
+    .setLabel('Main')
+    .setStyle(ButtonStyle.Secondary);
+  if (rc.mainEmojiId) mainBtn.setEmoji({ id: rc.mainEmojiId, name: 'unbound' });
+  return {
+    content: 'What game mode do you play?',
+    components: [new ActionRowBuilder().addComponents(ironBtn, mainBtn)],
+  };
+}
+
+// The badge an application's names are stored with on Confirm. Main
+// applications are main by definition. An unchecked application keeps
+// no badge at all: the type pick never applies to unverified names.
+// Anything else is the up-front pick (null for "Not sure"), or null
+// when no pick was staged (a panel posted before this flow shipped).
+function recordBadgeFor(p) {
+  if (p.linkState === 'unchecked') return null;
+  if (p.type === 'main') return 'main';
+  return p.badgePicked ? p.badge ?? null : null;
+}
+
+// The form modal (RSN, nickname, how heard) for an application type.
+function buildFormModal(type, totalBracket) {
+  const t = appTypes()[type];
+  // customId: apply:modal:<type>:<bracket|none>  (keep under 100 chars)
+  const modal = new ModalBuilder()
+    .setCustomId(`apply:modal:${type}:${totalBracket || 'none'}`)
+    .setTitle(`${t.label} Application`);
+  for (const q of t.questions || []) {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(q.id)
+          .setLabel(q.label)
+          .setStyle(q.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+          .setRequired(!!q.required)
+          .setMaxLength(q.style === 'paragraph' ? 500 : 100)
+      )
+    );
+  }
+  return modal;
+}
+
+// The RSN-only fix modal: one field, prefilled with what the applicant
+// typed. The nickname and how-heard answers are already held in the
+// pending record and are never asked twice.
+function buildFixModal(type, prefill) {
+  const t = appTypes()[type] || {};
+  const rsnQ = (t.questions || []).find((q) => q.id === 'rsn');
+  const input = new TextInputBuilder()
+    .setCustomId('rsn')
+    .setLabel(rsnQ ? rsnQ.label : 'What is your in-game username(s)?')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+  const value = String(prefill || '').slice(0, 100);
+  if (value) input.setValue(value);
+  return new ModalBuilder()
+    .setCustomId('apply:fixmodal')
+    .setTitle('Fix name')
+    .addComponents(new ActionRowBuilder().addComponents(input));
+}
+
 // (member-join application channels removed 2026-10-11;
 // users apply via #apply-here or /apply — no join hook needed)
 
@@ -214,36 +323,24 @@ async function applyCommand(interaction) {
 }
 
 async function showApplicationModal(interaction, type, totalBracket) {
-  const types = appTypes();
-  const t = types[type];
+  const t = appTypes()[type];
   if (!t) return;
-  // customId: apply:modal:<type>:<bracket|none>  (keep under 100 chars)
-  const modal = new ModalBuilder()
-    .setCustomId(`apply:modal:${type}:${totalBracket || 'none'}`)
-    .setTitle(`${t.label} Application`);
-  for (const q of t.questions || []) {
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(q.id)
-          .setLabel(q.label)
-          .setStyle(q.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-          .setRequired(!!q.required)
-          .setMaxLength(q.style === 'paragraph' ? 500 : 100)
-      )
-    );
-  }
-  await interaction.showModal(modal);
+  await interaction.showModal(buildFormModal(type, totalBracket));
 }
 
 async function handleModalSubmit(interaction) {
-  // customId: apply:modal:<type>:<bracket|none>:<age|none> OR apply:denyreasonmodal:<userId>:<type>:<bracket>
+  // customId: apply:modal:<type>:<bracket|none> OR apply:fixmodal OR apply:denyreasonmodal:<userId>:<type>:<bracket>
   const parts = interaction.customId.split(':');
   if (parts[0] !== 'apply') return;
 
   // Deny-with-reason modal from staff
   if (parts[1] === 'denyreasonmodal') {
     return handleDenyReasonSubmit(interaction);
+  }
+
+  // RSN-only fix modal from the applicant
+  if (parts[1] === 'fixmodal') {
+    return handleFixModalSubmit(interaction);
   }
 
   if (parts[1] !== 'modal') return;
@@ -258,7 +355,7 @@ async function handleModalSubmit(interaction) {
   try {
   // Prevent multiple submissions
   if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
-    await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    await interaction.reply({ content: 'You already have an application in. Staff will get to it.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
 
@@ -272,6 +369,13 @@ async function handleModalSubmit(interaction) {
     answers[q.id] = interaction.fields.getTextInputValue(q.id);
   }
 
+  // The account type pick was staged at the panel tap, before this
+  // form opened. A missing stage (a panel posted before this flow
+  // shipped, or an expired pick) leaves the badge unset for staff.
+  const staged = getPending(interaction.user.id);
+  const badgePicked = type !== 'main' && !!staged && staged.stage === 'pick' && staged.type === type && !!staged.badgePicked;
+  const pickedBadge = badgePicked ? staged.badge ?? null : null;
+
   await interaction.deferReply({ ephemeral: true });
 
   const rc = config.recruit;
@@ -283,70 +387,120 @@ async function handleModalSubmit(interaction) {
 
   // Pre-link check: every name is looked up on Wise Old Man before the
   // application goes anywhere. A typo is fixed here, by the applicant,
-  // and never reaches staff.
+  // and never reaches staff. When every name fails, the pending record
+  // is kept so the Fix name button can reopen an RSN-only modal with
+  // the nickname and how-heard answers still in hand.
   const names = parseRsnList(answers.rsn);
   const check = await checkApplicationRsns(names);
-  if (!check.found.length) {
-    pendingApps.delete(interaction.user.id);
-    await interaction.editReply(notFoundPayload(answers.rsn, type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
-    return;
-  }
-
   setPending(interaction.user.id, {
     userId: interaction.user.id,
     guildId: interaction.guildId,
     type,
     bracket: bracket || 'none',
+    stage: 'confirm',
     answers,
+    typedRsn: answers.rsn,
+    badge: pickedBadge,
+    badgePicked,
     found: check.found,
     dropped: check.dropped,
     linkState: linkStateOf(check),
-    askIndex: 0,
-    askStage: null,
   });
-  await interaction.editReply(confirmPayload(getPending(interaction.user.id))).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+  const pending = getPending(interaction.user.id);
+  if (!check.found.length) {
+    await interaction.editReply(notFoundPayload(answers.rsn, type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    return;
+  }
+  await interaction.editReply(confirmPayload(pending)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   } finally {
     submitLocks.delete(submitKey);
   }
 }
 
-// Every checked name failed: the application stops here. The restart
-// button reopens the modal so the applicant can fix the spelling.
+// The RSN-only fix modal submit: swap the RSN answer, keep the rest,
+// and re-run the Wise Old Man check back to the confirm screen.
+async function handleFixModalSubmit(interaction) {
+  const submitKey = `submit:${interaction.user.id}`;
+  if (submitLocks.has(submitKey)) {
+    await interaction.reply({ content: 'Your application is already being submitted.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  submitLocks.add(submitKey);
+  try {
+  const p = getPending(interaction.user.id);
+  if (!p || p.stage !== 'confirm' || !p.answers) {
+    await interaction.reply({ content: 'That step timed out. Start again from the application panel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const newRsn = interaction.fields.getTextInputValue('rsn');
+  p.answers = { ...p.answers, rsn: newRsn };
+  p.typedRsn = newRsn;
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const rc = config.recruit;
+  const forum = interaction.guild.channels.cache.get(rc.applicationsChannelId);
+  if (!forum || forum.type !== ChannelType.GuildForum) {
+    await interaction.editReply('Applications forum is not set up. Tell staff.');
+    return;
+  }
+
+  const check = await checkApplicationRsns(parseRsnList(newRsn));
+  p.found = check.found;
+  p.dropped = check.dropped;
+  p.linkState = linkStateOf(check);
+  setPending(interaction.user.id, p);
+  if (!check.found.length) {
+    await interaction.editReply(notFoundPayload(newRsn, p.type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    return;
+  }
+  await interaction.editReply(confirmPayload(p)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+  } finally {
+    submitLocks.delete(submitKey);
+  }
+}
+
+// Every checked name failed: the application stops here. The Fix name
+// button opens the RSN-only modal; the rest of the form is kept.
 function notFoundPayload(rawTyped, type, dropped) {
   const allInvalid = dropped.length > 0 && dropped.every((d) => d.reason === 'invalid');
+  const typed = String(rawTyped || '').trim();
   const content = allInvalid
-    ? 'That name has characters RuneScape does not allow. Try again.\nYour application has not been sent yet.'
-    : `That name is not on Wise Old Man. Check the spelling and try again.\nYou typed: ${String(rawTyped || '').trim()}\nYour application has not been sent yet.`;
+    ? `RuneScape names cannot use those characters: **${typed}**\nNothing has been sent to staff.`
+    : `That name is not on Wise Old Man: **${typed}**\nCheck the spelling. Nothing has been sent to staff.`;
   return {
     content,
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`apply:restart:${type}`).setLabel('Fix name').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId('apply:fixname').setLabel('Fix name').setStyle(ButtonStyle.Danger).setEmoji('✏️')
       ),
     ],
   };
 }
 
 // The double ask: the found names, spelled the way Wise Old Man
-// spells them, with Confirm and Fix. Nothing is stored or sent
-// until Confirm.
+// spells them, with Confirm and Fix name. Nothing is stored or sent
+// until Confirm. An unchecked application shows the names as typed
+// and carries no type pick.
 function confirmPayload(p) {
-  const lines = ['Found on Wise Old Man:'];
-  for (const f of p.found) lines.push(`**${f.canonical}**`);
-  lines.push('Every name shown exactly the way Wise Old Man spells it.');
-  lines.push('If your application is approved, these names get linked to you.');
-  if (p.dropped.length) {
-    lines.push(`Not going forward: ${p.dropped.map((d) => d.typed).join(', ')}. Fix the spelling and apply again to add ${p.dropped.length === 1 ? 'it' : 'them'}.`);
-  }
+  const lines = [];
   if (p.linkState === 'unchecked') {
-    lines.push('Wise Old Man could not be checked just now. The names above are as you typed them, and the application goes to staff marked unchecked.');
+    for (const f of p.found) lines.push(`**${f.canonical}**`);
+    lines.push('Wise Old Man did not answer, so your names go to staff as typed, marked unchecked.');
+  } else {
+    lines.push('Your name, as Wise Old Man spells it:');
+    for (const f of p.found) lines.push(`**${f.canonical}**`);
+    lines.push('If staff approve you, this name is linked to your Discord. Your account type is set from your pick.');
+    if (p.dropped.length) {
+      lines.push(`Not going forward: ${p.dropped.map((d) => d.typed).join(', ')}. You can add them later with Link RSN.`);
+    }
   }
   return {
     content: lines.join('\n'),
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('apply:confirm').setLabel('Confirm').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId('apply:fix').setLabel('Fix').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('apply:confirm').setLabel('Confirm').setStyle(ButtonStyle.Danger).setEmoji('✅'),
+        new ButtonBuilder().setCustomId('apply:fixname').setLabel('Fix name').setStyle(ButtonStyle.Secondary).setEmoji('✏️')
       ),
     ],
   };
@@ -354,125 +508,77 @@ function confirmPayload(p) {
 
 async function handleConfirm(interaction) {
   const p = getPending(interaction.user.id);
-  if (!p) {
-    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+  if (!p || p.stage !== 'confirm') {
+    await interaction.reply({ content: 'That step timed out. Start again from the application panel.', ephemeral: true }).catch(() => {});
     return;
   }
-  // Persist the staged record now: approval reads the names and badge
-  // picks from the stored answers, not from this in-memory state.
+  // Persist the staged record now: approval reads the names and the
+  // badge pick from the stored answers, not from this in-memory state.
+  // The one up-front pick covers every name; an unchecked application
+  // stores no badge (recordBadgeFor).
+  const badge = recordBadgeFor(p);
   const record = {
     ...p.answers,
     rsn: p.found.map((f) => f.canonical).join(', '),
     prelink: {
-      names: p.found.map((f) => ({ name: f.canonical, badge: null })),
+      names: p.found.map((f) => ({ name: f.canonical, badge })),
       linkState: p.linkState,
       dropped: p.dropped.map((d) => d.typed),
     },
   };
   p.record = record;
   store.setApplicationAnswers(interaction.guildId, interaction.user.id, record);
-  await advanceTypeAsk(interaction, p);
-}
-
-async function handleFix(interaction) {
-  const p = getPending(interaction.user.id);
   pendingApps.delete(interaction.user.id);
-  await interaction.update({
-    content: 'Nothing was sent. Fix the names and submit again.',
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`apply:restart:${p ? p.type : 'iron'}`).setLabel('Start again').setStyle(ButtonStyle.Danger)
-      ),
-    ],
-  }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+  return finalizeApplication(interaction, p);
 }
 
-// What the flow still has to ask about the name at askIndex, if
-// anything. Main applications never ask: the type is already known.
-// Guests ask main-or-iron per name first; an iron answer leads to
-// the flavour ask for the same name.
-function nextAsk(p) {
-  if (p.type === 'main' || p.askIndex >= p.found.length) return { kind: 'done' };
-  const name = p.found[p.askIndex].canonical;
-  if (p.type === 'guest' && p.askStage !== 'flavour') return { kind: 'kind', name };
-  return { kind: 'flavour', name };
-}
-
-function flavourRow() {
-  const row1 = new ActionRowBuilder();
-  const row2 = new ActionRowBuilder();
-  BADGES.filter((b) => b.id !== 'main').forEach((b, i) => {
-    const btn = new ButtonBuilder().setCustomId(`apply:flavour:${b.id}`).setLabel(b.label).setStyle(ButtonStyle.Secondary);
-    (i < 4 ? row1 : row2).addComponents(btn);
-  });
-  row2.addComponents(
-    new ButtonBuilder().setCustomId('apply:flavour:auto').setLabel('AUTO (Wise Old Man decides)').setStyle(ButtonStyle.Secondary)
-  );
-  return [row1, row2];
-}
-
-function askPayload(p, ask) {
-  if (ask.kind === 'kind') {
-    return {
-      content: `One more ask, inside the flow.\n\nIs **${ask.name}** a main or an iron?`,
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId('apply:kind:main').setLabel('Main').setStyle(ButtonStyle.Danger),
-          new ButtonBuilder().setCustomId('apply:kind:iron').setLabel('Iron').setStyle(ButtonStyle.Secondary)
-        ),
-      ],
-    };
-  }
-  return {
-    content: `One more ask, inside the flow.\n\nWhat kind of iron is **${ask.name}**?`,
-    components: flavourRow(),
-  };
-}
-
-async function advanceTypeAsk(interaction, p) {
-  // Main applications record main for every name with no ask at all.
-  if (p.type === 'main') {
-    for (const n of p.record.prelink.names) n.badge = 'main';
-    store.setApplicationAnswers(p.guildId, p.userId, p.record);
-  }
-  const ask = nextAsk(p);
-  if (ask.kind === 'done') {
-    pendingApps.delete(p.userId);
-    return finalizeApplication(interaction, p);
-  }
-  await interaction.update(askPayload(p, ask)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
-}
-
-async function handleKindPick(interaction, pick) {
+// Fix name: reopen the RSN-only modal with the typed value in place.
+// The pending record (and its nickname / how-heard answers) survives.
+async function handleFixName(interaction) {
   const p = getPending(interaction.user.id);
-  if (!p || !p.record) {
-    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+  if (!p || p.stage !== 'confirm' || !p.answers) {
+    await interaction.reply({ content: 'That step timed out. Start again from the application panel.', ephemeral: true }).catch(() => {});
     return;
   }
-  if (pick === 'main') {
-    p.record.prelink.names[p.askIndex].badge = 'main';
-    store.setApplicationAnswers(p.guildId, p.userId, p.record);
-    p.askIndex++;
-    p.askStage = null;
-  } else {
-    p.askStage = 'flavour';
-  }
-  await advanceTypeAsk(interaction, p);
+  await interaction.showModal(buildFixModal(p.type, p.typedRsn || p.answers.rsn));
 }
 
-async function handleFlavourPick(interaction, pick) {
+// Guest kind pick, before the form. Ironman leads to the kind-of-iron
+// pick screen; Main completes the pick and opens the form modal.
+async function handleGuestKindPick(interaction, pick) {
   const p = getPending(interaction.user.id);
-  if (!p || !p.record) {
-    await interaction.reply({ content: 'That step expired. Start again from the application panel.', ephemeral: true }).catch(() => {});
+  if (!p || p.stage !== 'pick' || p.type !== 'guest') {
+    await interaction.reply({ content: 'That step timed out. Start again from the application panel.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  if (pick === 'ironman') {
+    p.pickStage = 'flavour';
+    setPending(interaction.user.id, p);
+    await interaction.update(modePickPayload()).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    return;
+  }
+  if (pick !== 'main') return;
+  p.badge = 'main';
+  p.badgePicked = true;
+  setPending(interaction.user.id, p);
+  await showApplicationModal(interaction, 'guest', null);
+}
+
+// Kind-of-iron pick, before the form (iron applications directly,
+// guests after the Ironman kind pick). The pick interaction itself
+// opens the form modal, which Discord allows from a button click.
+async function handleModePick(interaction, pick) {
+  const p = getPending(interaction.user.id);
+  if (!p || p.stage !== 'pick' || (p.type !== 'iron' && p.type !== 'guest')) {
+    await interaction.reply({ content: 'That step timed out. Start again from the application panel.', ephemeral: true }).catch(() => {});
     return;
   }
   const badge = pick === 'auto' ? null : pick;
   if (badge !== null && !BADGES.some((b) => b.id === badge)) return;
-  p.record.prelink.names[p.askIndex].badge = badge;
-  store.setApplicationAnswers(p.guildId, p.userId, p.record);
-  p.askIndex++;
-  p.askStage = null;
-  await advanceTypeAsk(interaction, p);
+  p.badge = badge;
+  p.badgePicked = true;
+  setPending(interaction.user.id, p);
+  await showApplicationModal(interaction, p.type, null);
 }
 
 // Final step of the flow: the forum thread staff review, carrying the
@@ -539,7 +645,7 @@ async function finalizeApplication(interaction, p) {
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
       allowedMentions: { users: [interaction.user.id] },
     }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
-    await interaction.update({ content: 'Application submitted! Staff will review it soon.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    await interaction.update({ content: 'Application sent. Staff will review it.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Mark this application as submitted so it isn't reused
     store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
   } else {
@@ -882,17 +988,36 @@ async function handleApplyButton(interaction) {
     }
     // Prevent starting a second application
     if (store.isApplicationSubmitted(interaction.guildId, interaction.user.id)) {
-      await interaction.reply({ content: 'You already have an application submitted. Staff will review it soon.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+      await interaction.reply({ content: 'You already have an application in. Staff will get to it.', ephemeral: true }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
       return;
     }
     const type = parts[2];
-    return showApplicationModal(interaction, type, null);
+    // Main applications go straight to the form. Ironman and guest
+    // applications pick their account type first: the pick is staged
+    // in the pending record and the pick screen is shown now; the
+    // form modal opens from the pick tap itself.
+    if (type === 'main') return showApplicationModal(interaction, type, null);
+    if (type !== 'iron' && type !== 'guest') return;
+    setPending(interaction.user.id, {
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+      type,
+      bracket: 'none',
+      stage: 'pick',
+      pickStage: type === 'guest' ? 'kind' : 'flavour',
+      badge: null,
+      badgePicked: false,
+    });
+    await interaction.reply({
+      ...(type === 'guest' ? guestKindPayload() : modePickPayload()),
+      ephemeral: true,
+    }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    return;
   }
-  if (action === 'restart') return showApplicationModal(interaction, parts[2], null);
   if (action === 'confirm') return handleConfirm(interaction);
-  if (action === 'fix') return handleFix(interaction);
-  if (action === 'kind') return handleKindPick(interaction, parts[2]);
-  if (action === 'flavour') return handleFlavourPick(interaction, parts[2]);
+  if (action === 'fixname') return handleFixName(interaction);
+  if (action === 'pickkind') return handleGuestKindPick(interaction, parts[2]);
+  if (action === 'pick') return handleModePick(interaction, parts[2]);
   if (action === 'approve' || action === 'deny') return handleDecision(interaction);
   if (action === 'denyreason') return handleDenyReasonPrompt(interaction);
 }
@@ -1000,8 +1125,11 @@ module.exports = {
   linkStateFieldText,
   confirmPayload,
   notFoundPayload,
-  nextAsk,
-  askPayload,
+  modePickPayload,
+  guestKindPayload,
+  recordBadgeFor,
+  buildFormModal,
+  buildFixModal,
   runApprovalPrelink,
   approvalDmText,
   youngAccountFlag,
