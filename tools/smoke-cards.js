@@ -1180,6 +1180,18 @@ async function t(name, fn, needFile = true) {
     ok('stafflink: writes only through linkRsnQuiet', slSrc.includes('linkRsnQuiet(targetId, check.rsn)') && !slSrc.includes('addRsn('));
     ok('stafflink: audit line posts to the mod-log', slSrc.includes('config.channels.modLog') && slSrc.includes('Staff link:'));
 
+    // Panel home: the configured thread wins; with no thread
+    // configured the panel falls back to the staff chat channel.
+    const homeChannels = {
+      '333333333': { id: '333333333' },
+      '444444444': { id: '444444444' },
+    };
+    const homeGuild = { channels: { cache: { get: (id) => homeChannels[id] || null } } };
+    ok('stafflink: panel home is the thread when one is configured',
+      SL.panelHome(homeGuild, { staffLink: { threadId: '444444444' }, ccChecklist: { staffChatId: '333333333' } })?.id === '444444444');
+    ok('stafflink: panel home falls back to staff chat with no thread configured',
+      SL.panelHome(homeGuild, { ccChecklist: { staffChatId: '333333333' } })?.id === '333333333');
+
     // Check pipeline with fixtures, in the ruled order.
     const fxLinks = {
       '111111111': { rsns: ['Target Main'], active: 'Target Main', verified: [], womIds: {} },

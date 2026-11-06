@@ -1,7 +1,7 @@
-// Staff RSN link: a persistent panel in #staff-chat that lets staff
-// link a RuneScape name to a member's Discord for them. It is the
-// repair path for a member who cannot or will not use Link RSN
-// themselves (ruled Nov 6, 2026).
+// Staff RSN link: a persistent panel in its own thread in
+// #staff-chat that lets staff link a RuneScape name to a member's
+// Discord for them. It is the repair path for a member who cannot
+// or will not use Link RSN themselves (ruled Nov 6, 2026).
 //
 // Rules baked in:
 // - Staff only. The gate is the isStaff helper (config.tickets.
@@ -38,9 +38,6 @@ const { computeOwnerMap, entryRsns, loadLinks, normName } = require('./membershi
 const { getStats } = require('./wom');
 
 const TAG = '[staff-link]';
-// The staff chat channel: the same config value the CC checklist
-// panel posts into.
-const STAFF_CHAT_ID = config.ccChecklist?.staffChatId;
 const STATE_FILE = path.join(__dirname, '..', 'data', 'staff-link-panel.json');
 const RSN_SHAPE = /^[A-Za-z0-9 ]{1,12}$/;
 
@@ -70,19 +67,39 @@ function panelPayload() {
   return { embeds: [embed], components: [row] };
 }
 
-// Post the panel in staff chat, or edit the stored message back to
-// the current payload when it still exists (the CC checklist
-// panel's refresh shape). Returns false when the channel is gone.
+// Resolve the panel's home: its own thread in staff chat when
+// config.staffLink.threadId is set (resolved the way the CC
+// checklist resolves its thread), else the staff chat channel
+// itself, which is where the panel lived before it got a thread.
+// Exported for the smoke test.
+function panelHome(guild, cfg = config) {
+  const threadId = cfg.staffLink?.threadId;
+  if (threadId) return guild.channels.cache.get(threadId) || null;
+  const chatId = cfg.ccChecklist?.staffChatId;
+  return chatId ? guild.channels.cache.get(chatId) || null : null;
+}
+
+// Post the panel in its home, or edit the stored message back to
+// the current payload when it still exists there (the CC checklist
+// panel's refresh shape). A stored message from the panel's old
+// home is not edited: the panel posts fresh into the new home.
+// Returns false when the panel home is gone.
 async function refreshStaffLinkPanel(guild) {
-  const channel = STAFF_CHAT_ID ? guild.channels.cache.get(STAFF_CHAT_ID) : null;
+  const channel = panelHome(guild);
   if (!channel) {
-    console.error(`${TAG} staff chat channel not found (config.ccChecklist.staffChatId)`);
+    console.error(`${TAG} panel home not found (config.staffLink.threadId, config.ccChecklist.staffChatId)`);
     return false;
   }
   const payload = panelPayload();
   try {
+    // Threads auto-archive; wake the panel's thread before touching
+    // it. On a locked thread this throws into the catch below and
+    // logs, like any other refresh failure.
+    if (channel.isThread?.() && channel.archived) {
+      await channel.setArchived(false);
+    }
     const state = loadState();
-    if (state.messageId) {
+    if (state.messageId && (!state.channelId || state.channelId === channel.id)) {
       const msg = await safeFetch(channel.messages.fetch(state.messageId), 'staff-link panel refresh');
       if (msg) {
         await msg.edit(payload);
@@ -90,7 +107,7 @@ async function refreshStaffLinkPanel(guild) {
       }
     }
     const msg = await channel.send(payload);
-    saveState({ ...loadState(), messageId: msg.id });
+    saveState({ ...loadState(), messageId: msg.id, channelId: channel.id });
     return true;
   } catch (err) {
     console.error(`${TAG} panel refresh failed:`, err.message);
@@ -228,7 +245,7 @@ async function postPanelCommand(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const posted = await refreshStaffLinkPanel(interaction.guild);
   await interaction.editReply(
-    posted ? 'Panel is up in staff chat.' : 'Staff chat channel not found. Check config.ccChecklist.staffChatId.',
+    posted ? 'Panel is up in the Link an RSN thread.' : 'The panel thread was not found. Check config.staffLink.threadId.',
   );
 }
 
@@ -236,7 +253,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('link-rsn-panel')
-      .setDescription('Post the staff Link an RSN panel in staff chat (Staff only)'),
+      .setDescription('Post the staff Link an RSN panel in its thread (Staff only)'),
     run: postPanelCommand,
   },
 ];
@@ -244,6 +261,7 @@ const commands = [
 module.exports = {
   commands,
   panelPayload,
+  panelHome,
   refreshStaffLinkPanel,
   checkStaffLink,
   handleStaffLinkButton,
