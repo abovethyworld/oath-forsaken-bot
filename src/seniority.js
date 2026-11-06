@@ -274,7 +274,7 @@ async function syncCommand(interaction) {
     if (changes.length === 0) {
       await interaction.editReply('Dry run: no changes would be made.');
     } else {
-      await interaction.editReply(`Dry run — ${changes.length} change(s) would be made:\n${changes.slice(0, 20).join('\n')}${changes.length > 20 ? `\n…(${changes.length - 20} more)` : ''}`);
+      await interaction.editReply(`Dry run: ${changes.length} change(s) would be made:\n${changes.slice(0, 20).join('\n')}${changes.length > 20 ? `\n…(${changes.length - 20} more)` : ''}`);
     }
   } else {
     await interaction.editReply('Seniority ranks synced.');
@@ -304,7 +304,7 @@ const commands = [
       await interaction.reply({
         content: hold
           ? `${user.tag}'s seniority rank is now held. Sync will skip them.`
-          : `${user.tag}'s seniority hold released. Sync will resume.`,
+          : `${user.tag}'s seniority hold is released. Sync will resume.`,
         ephemeral: true,
       });
     },

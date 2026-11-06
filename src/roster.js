@@ -103,7 +103,7 @@ async function handleRosterButton(interaction) {
   } else if (action === 'role' && role) {
     const roleName = ROSTER_ROLES.find((r) => r.toLowerCase() === role);
     if (!roleName) {
-      await interaction.reply({ content: 'Invalid role.', ephemeral: true });
+      await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true });
       return;
     }
     if (!data.roster.hasOwnProperty(userId)) {

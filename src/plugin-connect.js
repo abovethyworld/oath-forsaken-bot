@@ -214,7 +214,7 @@ async function unlink(interaction) {
   await staffLog(interaction.client,
     `<@${interaction.user.id}> unlinked **${rsn}**${wasVerified ? ' (was verified; record owner stamp cleared)' : ''}.`);
   await interaction.reply({
-    content: `**${rsn}** is unlinked.` + (wasVerified ? ' Its synced record is released and can be claimed by a new verified sync.' : ''),
+    content: `**${rsn}** is unlinked.` + (wasVerified ? ' Its saved plugin data is cleared, so a new owner can claim the name.' : ''),
     ephemeral: true,
   });
 }
@@ -235,7 +235,7 @@ async function forceUnlink(interaction) {
     `Staff clear by <@${interaction.user.id}>: **${wanted}** unlinked from <@${target.id}>` +
     `${hadLink ? '' : ' (no link found)'}${cleared ? '; record owner stamp cleared' : ''}.`);
   await interaction.reply({
-    content: `Cleared **${wanted}** for <@${target.id}>.${hadLink ? '' : ' They had no link under that name.'}${cleared ? ' Record stamp cleared.' : ''}`,
+    content: `Cleared **${wanted}** for <@${target.id}>.${hadLink ? '' : ' They had no link under that name.'}${cleared ? ' Saved plugin data cleared.' : ''}`,
     ephemeral: true,
   });
 }

@@ -295,7 +295,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   } catch (err) {
     console.error('Interaction error:', err);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: 'Something went wrong.', ephemeral: true }).catch((e) => console.error("[index.js] Non-fatal error:", e.message));
+      await interaction.reply({ content: 'Something went wrong. Try again.', ephemeral: true }).catch((e) => console.error("[index.js] Non-fatal error:", e.message));
     }
   }
 });

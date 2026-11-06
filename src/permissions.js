@@ -110,12 +110,12 @@ async function checkCommand(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const drifted = await syncDrift(interaction.client, { silent: true });
   if (drifted === null) {
-    await interaction.editReply('Could not run the check. See console.');
+    await interaction.editReply('Could not run the check. Try again.');
   } else if (drifted.length === 0) {
     await interaction.editReply('All clear. New members can only see the expected channels.');
   } else {
     await interaction.editReply(
-      `**Drift found** — ${drifted.length} channel(s) visible to new members that should not be:\n` +
+      `**Drift found:** ${drifted.length} channel(s) visible to new members that should not be:\n` +
       drifted.map((n) => `• #${n}`).join('\n')
     );
   }

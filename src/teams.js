@@ -1452,7 +1452,7 @@ async function handleMyTeamsButton(interaction) {
     const act = (ACTIVITIES[t.activity] || {}).name || t.activity;
     const url = `https://discord.com/channels/${config.guildId}/${t.channelId}/${t.messageId}`;
     const role = t.organizerId === userId ? 'organizer' : 'member';
-    return `• [${act}](${url}) — ${role}`;
+    return `• [${act}](${url}) (${role})`;
   });
   await interaction.reply({
     content: `⛧ Your Teams ⛧\n${lines.join('\n')}`,
@@ -1870,7 +1870,7 @@ async function advanceCreation(interaction, creation) {
 function buildTeamFromData(activityKey, preId, data, organizer) {
   // Returns { team } or { error }. Pure.
   const act = ACTIVITIES[activityKey];
-  if (!act) return { error: 'Unknown activity.' };
+  if (!act) return { error: 'That is not a valid choice.' };
 
   // Region, hub, and world come from the organizer's settings.
   // Size is set after posting via the listing buttons.
@@ -2073,12 +2073,12 @@ async function handleStepTypeOpen(interaction, stepId) {
   }
   const modal = new ModalBuilder()
     .setCustomId(`team:mkmodal:${stepId}`)
-    .setTitle((step.modalTitle || 'Details').slice(0, 45))
+    .setTitle((step.modalTitle || 'Note').slice(0, 45))
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('team:mkvalue')
-          .setLabel((step.modalLabel || 'Value').slice(0, 45))
+          .setLabel((step.modalLabel || 'Note').slice(0, 45))
           .setStyle(step.paragraph ? TextInputStyle.Paragraph : TextInputStyle.Short)
           .setRequired(true)
           .setMaxLength(stepId === 'note' ? 200 : 50)
@@ -2156,7 +2156,7 @@ async function handleRsnButton(interaction) {
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
           .setMaxLength(12)
-          .setPlaceholder('MyRSN')
+          .setPlaceholder('Zezima')
       )
     );
   await interaction.showModal(modal).catch(() => {});
@@ -2639,7 +2639,7 @@ async function handleDefHubButton(interaction) {
   const current = getUserDefaults(interaction.user.id).partyHub;
   const modal = new ModalBuilder()
     .setCustomId('team:defhubmodal')
-    .setTitle('Default party hub')
+    .setTitle('Party hub')
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -2675,7 +2675,7 @@ async function handleDeffcButton(interaction) {
   const current = getUserDefaults(interaction.user.id).fc;
   const modal = new ModalBuilder()
     .setCustomId('team:deffcmodal')
-    .setTitle('Default friends chat')
+    .setTitle('Friends chat')
     .addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -3221,7 +3221,7 @@ async function handleTeamContractButton(interaction, messageId) {
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`team:teamcontractsel:${messageId}`)
-          .setPlaceholder('Choose a contract')
+          .setPlaceholder('Pick a contract')
           .addOptions(options)
       ),
     ],
@@ -3415,7 +3415,7 @@ async function handleTeamSelect(interaction) {
   const activityKey = interaction.values && interaction.values[0];
   const act = ACTIVITIES[activityKey];
   if (!act) {
-    await interaction.reply({ content: 'Unknown activity.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
     return;
   }
   if (act.pre) {
@@ -3428,12 +3428,12 @@ async function handleTeamSelect(interaction) {
 
 async function handlePreChoice(interaction, activityKey, preId) {
   if (!ACTIVITIES[activityKey] || !PRE_CHOICES[ACTIVITIES[activityKey].pre]) {
-    await interaction.reply({ content: 'Unknown activity.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
     return;
   }
   const pre = PRE_CHOICES[ACTIVITIES[activityKey].pre];
   if (!pre.options.some((o) => o.id === preId)) {
-    await interaction.reply({ content: 'Unknown option.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'That is not a valid choice.', ephemeral: true }).catch(() => {});
     return;
   }
   await startCreation(interaction, activityKey, preId);
@@ -3805,12 +3805,12 @@ async function postTeamPanel(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channelId = teamsChannelId();
   if (!channelId) {
-    await interaction.editReply('Team finder channel is not set. Add config.teams.channelId.');
+    await interaction.editReply('Team finder is not set up yet. Tell staff.');
     return;
   }
   const channel = interaction.guild.channels.cache.get(channelId);
   if (!channel) {
-    await interaction.editReply('Team finder channel not found. Check config.teams.channelId.');
+    await interaction.editReply('Could not find the team listings channel. Tell staff.');
     return;
   }
   await channel.send(teamPanelPayload());
