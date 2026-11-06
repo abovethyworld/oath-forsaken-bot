@@ -231,6 +231,16 @@ function getCachedStats(rsn) {
   return cacheLookup(loadCache(), rsn);
 }
 
+// When the cached snapshot for a name was fetched, or null when
+// the name has no cache entry. Card footers show the age of the
+// numbers from this stamp.
+function statsFetchedAt(rsn) {
+  const key = String(rsn || '').toLowerCase().trim();
+  if (!key) return null;
+  const hit = loadCache()[key];
+  return hit && typeof hit.fetchedAt === 'number' ? hit.fetchedAt : null;
+}
+
 // Every cached player with KC on one metric, best first:
 // [{ name, kc }] with name in cache-key (lowercase) form. Cache-only:
 // standings never fire a network lookup.
@@ -551,4 +561,4 @@ async function searchPlayers(username) {
   });
 }
 
-module.exports = { getStats, getCachedStats, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupMemberships, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };
+module.exports = { getStats, getCachedStats, statsFetchedAt, kcStandings, cacheLookup, combatLevel, parseStats, getGroupMembers, getGroupMemberships, getGroupCompetitions, getCompetition, loadVault, mergedPlayers, vaultUpsert, getPlayerIdentity, getPlayerById, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS, CACHE_MS, NOTFOUND_MS };

@@ -480,7 +480,7 @@ async function t(name, fn, needFile = true) {
     !!hubPb && (hasFile(hubPb) || String(hubPb.content || '').includes('clan plugin is live')),
     hubPb && hubPb.content ? hubPb.content.slice(0, 80) : 'no payload');
   ok('hub PBs tab carries only the shell',
-    !!hubPb && flat(hubPb).every((c) => /^(hub:tab:|hub:lb:|hub:cmp:|hub:chg:)/.test(c.id)),
+    !!hubPb && flat(hubPb).every((c) => /^(hub:tab:|hub:lb:|hub:cmp:|hub:chg:|refresh:hub:)/.test(c.id)),
     JSON.stringify(flat(hubPb || {}).map((c) => c.id)));
   // Tab press swaps the card in place.
   const skillsTabBtn = flat(hub).find((c) => c.id.startsWith('hub:tab:skills:'));
@@ -1283,6 +1283,109 @@ async function t(name, fn, needFile = true) {
       LC.messageContent() === `**Oath Forsaken launches** <t:${unix}:F>\n<t:${unix}:R>\nhttps://oathforsaken.cc`);
     ok('countdown: message ends with the site link line',
       LC.messageContent().split('\n').pop() === 'https://oathforsaken.cc');
+  }
+
+  // Card Refresh (Nov 6, 2026): the charge rules in refresh.js,
+  // driven through runRefresh with recording update stubs and a
+  // scratch state file: no network, no live data writes. Fake
+  // ids and names throughout, per the repo rule. The handler's
+  // Discord shell is not simulated; the decision flow it calls
+  // is what carries the rules.
+  {
+    const R = require(path.join(__dirname, '..', 'src', 'refresh.js'));
+    const os = require('os');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-refresh-'));
+    const file = path.join(dir, 'refresh-state.json');
+    const NOW = Date.UTC(2026, 10, 6, 12, 0, 0);
+    let pulls = [];
+    const okPull = async (rsn) => { pulls.push(rsn); return true; };
+    const badPull = async () => { pulls.push('x'); return false; };
+    const UID = '111111111';
+    const UID2 = '222222222';
+    const buttonsSrc2 = fs.readFileSync(path.join(__dirname, '..', 'src', 'buttons.js'), 'utf8');
+    ok('refresh: button routed in buttons.js', buttonsSrc2.includes("kind === 'refresh'"));
+    ok('refresh: handler exported', typeof S.handleRefreshButton === 'function');
+    // Forged or stale refresh ids end quietly, before any defer.
+    for (const bad of ['refresh:kc::', 'refresh:dry:zulrah:', 'refresh:hub:garbage', 'refresh:nope:x:y']) {
+      let threw = false;
+      try { await S.handleRefreshButton({ customId: bad, user: { id: UID } }); } catch { threw = true; }
+      ok(`refresh: malformed id survives: ${bad}`, !threw);
+    }
+
+    // A charged pull: one spend, the count drops, the name locks.
+    pulls = [];
+    let r = await R.runRefresh({ userId: UID, rsn: 'Testiron', updateFn: okPull, now: NOW, file });
+    ok('refresh: success spends one and reports 19 left', r.outcome === 'ok' && r.remaining === 19, JSON.stringify(r));
+    ok('refresh: success pulled exactly once', pulls.length === 1 && pulls[0] === 'Testiron', JSON.stringify(pulls));
+    ok('refresh: spend recorded in the state file', R.loadState(file).users[UID].used === 1);
+    r = await R.runRefresh({ userId: UID2, rsn: 'testiron', updateFn: okPull, now: NOW + 1000, file });
+    ok('refresh: name lock blocks a second refresh inside 5 minutes',
+      r.outcome === 'locked' && r.minutes === 5, JSON.stringify(r));
+    ok('refresh: a locked tap pulls nothing and charges nobody',
+      pulls.length === 1 && !R.loadState(file).users[UID2]);
+    r = await R.runRefresh({ userId: UID, rsn: 'Othertest', updateFn: okPull, now: NOW + 2000, file });
+    ok('refresh: a second name spends a second refresh', r.outcome === 'ok' && r.remaining === 18, JSON.stringify(r));
+    r = await R.runRefresh({ userId: UID, rsn: 'Testiron', updateFn: okPull, now: NOW + R.LOCK_MS + 1, file });
+    ok('refresh: the lock expires after 5 minutes', r.outcome === 'ok' && r.remaining === 17, JSON.stringify(r));
+
+    // A failed pull: no charge, no lock, a retry goes through.
+    const f2 = path.join(dir, 'state-fail.json');
+    pulls = [];
+    r = await R.runRefresh({ userId: UID, rsn: 'Failname', updateFn: badPull, now: NOW, file: f2 });
+    ok('refresh: a failed pull reports failed', r.outcome === 'failed', JSON.stringify(r));
+    ok('refresh: a failed pull charges nothing and locks nothing',
+      !R.loadState(f2).users[UID] && !R.loadState(f2).locks.failname, JSON.stringify(R.loadState(f2)));
+    r = await R.runRefresh({ userId: UID, rsn: 'Failname', updateFn: okPull, now: NOW + 1, file: f2 });
+    ok('refresh: a retry after failure is allowed', r.outcome === 'ok' && r.remaining === 19, JSON.stringify(r));
+
+    // Out of allowance: refused before any pull.
+    const f3 = path.join(dir, 'state-empty.json');
+    fs.writeFileSync(f3, JSON.stringify({ users: { [UID]: { day: R.dayKey(NOW), used: R.DAILY_LIMIT } }, locks: {} }));
+    pulls = [];
+    r = await R.runRefresh({ userId: UID, rsn: 'Anyname', updateFn: okPull, now: NOW, file: f3 });
+    ok('refresh: out of allowance refuses with no pull', r.outcome === 'empty' && pulls.length === 0, JSON.stringify(r));
+    ok('refresh: remaining reads zero at the cap', R.remainingIn(R.loadState(f3), UID, NOW) === 0);
+    fs.writeFileSync(f3, JSON.stringify({ users: { [UID]: { day: R.dayKey(NOW - 86400000), used: R.DAILY_LIMIT } }, locks: {} }));
+    r = await R.runRefresh({ userId: UID, rsn: 'Anyname', updateFn: okPull, now: NOW, file: f3 });
+    ok('refresh: a new UTC day restores the allowance', r.outcome === 'ok' && r.remaining === R.DAILY_LIMIT - 1, JSON.stringify(r));
+
+    // Simultaneous taps on one name: the second waits, uncharged.
+    const f4 = path.join(dir, 'state-busy.json');
+    let release;
+    const gate = new Promise((res) => { release = res; });
+    const slowPull = async () => { await gate; return true; };
+    const first = R.runRefresh({ userId: UID, rsn: 'Busyname', updateFn: slowPull, now: NOW, file: f4 });
+    r = await R.runRefresh({ userId: UID2, rsn: 'Busyname', updateFn: okPull, now: NOW, file: f4 });
+    ok('refresh: a tap during a pull is told busy', r.outcome === 'busy', JSON.stringify(r));
+    release();
+    const firstDone = await first;
+    ok('refresh: the first pull completes and charges once',
+      firstDone.outcome === 'ok' && R.loadState(f4).users[UID].used === 1 && !R.loadState(f4).users[UID2],
+      JSON.stringify(firstDone));
+    fs.rmSync(dir, { recursive: true, force: true });
+
+    // The age line's wording, from fixed stamps.
+    ok('refresh: age line reads just now', S.updatedAgoText(NOW, NOW) === 'Updated just now');
+    ok('refresh: age line reads minutes', S.updatedAgoText(NOW - 12 * 60000, NOW) === 'Updated 12 minutes ago');
+    ok('refresh: age line reads one hour', S.updatedAgoText(NOW - 3600000, NOW) === 'Updated 1 hour ago');
+    ok('refresh: age line reads hours', S.updatedAgoText(NOW - 3 * 3600000, NOW) === 'Updated 3 hours ago');
+    ok('refresh: age line reads one day', S.updatedAgoText(NOW - 86400000, NOW) === 'Updated 1 day ago');
+    ok('refresh: age line is empty with no stamp', S.updatedAgoText(null, NOW) === null);
+
+    // The three cards carry the button and the age line.
+    const kcP = await S.kcPayload('zulrah', PRIMARY, OWNER);
+    const kcBtn = flat(kcP).find((c) => c.id.startsWith('refresh:kc:zulrah:'));
+    ok('refresh: kc card carries the Refresh button', !!kcBtn, JSON.stringify(flat(kcP).map((c) => c.id)));
+    ok('refresh: kc button label shows the count left', !!kcBtn && /^Refresh · \d+ left$/.test(kcBtn.label), kcBtn && kcBtn.label);
+    ok('refresh: kc card carries the Updated line', typeof kcP.content === 'string' && kcP.content.startsWith('Updated '), String(kcP.content));
+    const dryP = await S.dryPayload('zulrah', PRIMARY, OWNER);
+    ok('refresh: dry card carries the Refresh button',
+      flat(dryP).some((c) => c.id.startsWith('refresh:dry:zulrah:')), JSON.stringify(flat(dryP).map((c) => c.id)));
+    ok('refresh: dry card carries the Updated line', typeof dryP.content === 'string' && dryP.content.startsWith('Updated '), String(dryP.content));
+    const hubP = await S.hubPayload(PRIMARY, OWNER, {});
+    ok('refresh: profile hub carries the Refresh button',
+      flat(hubP).some((c) => c.id.startsWith('refresh:hub:')), JSON.stringify(flat(hubP).map((c) => c.id)));
+    ok('refresh: profile hub carries the Updated line', typeof hubP.content === 'string' && hubP.content.startsWith('Updated '), String(hubP.content));
   }
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
