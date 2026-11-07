@@ -1703,6 +1703,140 @@ async function t(name, fn, needFile = true) {
     ok('refresh: profile hub carries the Updated line', typeof hubP.content === 'string' && hubP.content.startsWith('Updated '), String(hubP.content));
   }
 
+  // Website controls (Nov 6, 2026): the staff-chat panel that
+  // edits the recorded membership standing by hand. The handlers
+  // run against a fixture membership.json with fake ids; the
+  // file is restored byte for byte afterwards.
+  {
+    const WC = require(path.join(__dirname, '..', 'src', 'website-controls.js'));
+    const storeW = require(path.join(__dirname, '..', 'src', 'store.js'));
+    const cfgW = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const { Collection } = require('discord.js');
+    const wcSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'website-controls.js'), 'utf8');
+    const wcIndexSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const wcButtonsSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'buttons.js'), 'utf8');
+
+    // Panel: one Danger button with the exact label, house red.
+    const wcPanel = WC.panelPayload();
+    const wcPanelJson = JSON.stringify(wcPanel.components.map((r) => r.toJSON()));
+    const wcPanelFlat = wcPanel.components.flatMap((r) => r.components);
+    ok('webctl: panel button is labelled Set standing', wcPanelJson.includes('"label":"Set standing"') && wcPanelJson.includes('webctl:open'), wcPanelJson);
+    ok('webctl: panel carries exactly one button', wcPanelFlat.length === 1, wcPanelJson);
+    ok('webctl: panel button is Danger', wcPanelJson.includes('"style":4'), wcPanelJson);
+    ok('webctl: panel embed is house red and titled Website controls',
+      wcPanel.embeds[0].data.color === 0x6b0e0e && wcPanel.embeds[0].data.title === 'Website controls');
+    ok('webctl: button routed in buttons.js', wcButtonsSrc.includes("kind === 'webctl'"));
+    ok('webctl: user select routed in index.js', wcIndexSrc.includes("interaction.customId === 'webctl:member'"));
+    ok('webctl: command registered', WC.commands.some((c) => c.data.name === 'website-controls-panel'));
+    ok('webctl: staff gate on command, button, select, and set buttons',
+      (wcSrc.match(/isStaff\(interaction\)/g) || []).length >= 4);
+    ok('webctl: audit line posts to the mod-log', wcSrc.includes('config.channels.modLog') && wcSrc.includes('Website controls:'));
+
+    // Panel home: the configured thread wins; with no thread
+    // configured the panel falls back to the staff chat channel.
+    const wcHomeChannels = {
+      '777777777': { id: '777777777' },
+      '888888888': { id: '888888888' },
+    };
+    const wcHomeGuild = { channels: { cache: { get: (id) => wcHomeChannels[id] || null } } };
+    ok('webctl: panel home is the thread when one is configured',
+      WC.panelHome(wcHomeGuild, { websiteControls: { threadId: '888888888' }, ccChecklist: { staffChatId: '777777777' } })?.id === '888888888');
+    ok('webctl: panel home falls back to staff chat with no thread configured',
+      WC.panelHome(wcHomeGuild, { ccChecklist: { staffChatId: '777777777' } })?.id === '777777777');
+
+    // Writes against a fixture record file.
+    const memPath = path.join(DATA, 'membership.json');
+    const memSaved = fs.existsSync(memPath) ? fs.readFileSync(memPath) : null;
+    const WG = '990000000000009101';
+    const WG2 = '990000000000009102';
+    const WU1 = '990000000000000201';
+    const WU2 = '990000000000000202';
+    const WU3 = '990000000000000203';
+    const STAFF_ROLE = (cfgW.tickets?.staffRoleIds || [])[0];
+    const fakeIx = ({ staff, customId, guildId = WG }) => {
+      const cache = new Collection();
+      if (staff && STAFF_ROLE) cache.set(STAFF_ROLE, { id: STAFF_ROLE });
+      const replies = [];
+      return {
+        customId,
+        guildId,
+        member: { roles: { cache }, permissions: { has: () => false } },
+        user: { id: '990000000000000900', tag: 'fake-staff' },
+        guild: { channels: { cache: { get: (id) => (id === cfgW.channels.modLog ? { send: async () => {} } : null) } } },
+        replies,
+        reply: async (p) => { replies.push(p); },
+      };
+    };
+    try {
+      fs.writeFileSync(memPath, JSON.stringify({
+        [WG]: {
+          [WU1]: { standing: 'member', at: 1, via: 'approval' },
+          [WU2]: { standing: 'guest', at: 1, via: 'approval' },
+        },
+        [WG2]: { [WU3]: { standing: 'member', at: 1, via: 'backfill' } },
+      }));
+
+      // The gate refuses a non-staff id on the panel button and
+      // on a standing button, and writes nothing.
+      const denied = fakeIx({ staff: false, customId: 'webctl:open' });
+      await WC.handleWebsiteControlsButton(denied);
+      ok('webctl: gate rejects a non-staff user on the panel button',
+        denied.replies.length === 1 && denied.replies[0].content === 'That button is for staff only.', JSON.stringify(denied.replies));
+      const deniedSet = fakeIx({ staff: false, customId: `webctl:set:guest:${WU1}` });
+      await WC.handleWebsiteControlsButton(deniedSet);
+      ok('webctl: gate rejects a non-staff user on a standing button',
+        deniedSet.replies.length === 1 && storeW.getMembership(WG)[WU1].standing === 'member');
+
+      // Current standing reads truthfully for all three states,
+      // and the picker step carries the three write buttons.
+      ok('webctl: current standing reads member, guest, and no record',
+        WC.currentStanding(WG, WU1) === 'member' && WC.currentStanding(WG, WU2) === 'guest' && WC.currentStanding(WG, WU3) === null);
+      const spMember = WC.standingPayload(WG, WU1);
+      const spNone = WC.standingPayload(WG, WU3);
+      const spJson = JSON.stringify(spMember.components.map((r) => r.toJSON()));
+      ok('webctl: standing lines are truthful for a record and for no record',
+        spMember.content === `<@${WU1}> is recorded as a member.` && spNone.content === `<@${WU3}> has no standing record.`,
+        `${spMember.content} / ${spNone.content}`);
+      ok('webctl: picker step carries the three standing buttons',
+        spJson.includes(`webctl:set:member:${WU1}`) && spJson.includes(`webctl:set:guest:${WU1}`) && spJson.includes(`webctl:set:clear:${WU1}`), spJson);
+
+      // Set guest overwrites a member record, via the panel.
+      const setGuest = fakeIx({ staff: true, customId: `webctl:set:guest:${WU1}` });
+      await WC.handleWebsiteControlsButton(setGuest);
+      const afterGuest = storeW.getMembership(WG);
+      ok('webctl: set guest overwrites the record via the panel',
+        afterGuest[WU1].standing === 'guest' && afterGuest[WU1].via === 'panel'
+        && setGuest.replies[0].content === `Standing for <@${WU1}> is now guest.`, JSON.stringify(afterGuest[WU1]));
+
+      // Set member writes a guest record up to member.
+      const setMember = fakeIx({ staff: true, customId: `webctl:set:member:${WU2}` });
+      await WC.handleWebsiteControlsButton(setMember);
+      ok('webctl: set member writes the record',
+        storeW.getMembership(WG)[WU2].standing === 'member'
+        && setMember.replies[0].content === `Standing for <@${WU2}> is now member.`);
+
+      // Clear deletes only that entry: the other member in the
+      // guild and the other guild's record both survive.
+      const clear = fakeIx({ staff: true, customId: `webctl:set:clear:${WU1}` });
+      await WC.handleWebsiteControlsButton(clear);
+      const afterClear = JSON.parse(fs.readFileSync(memPath, 'utf8'));
+      ok('webctl: clear deletes only that entry',
+        !(WU1 in (afterClear[WG] || {})) && afterClear[WG][WU2].standing === 'member'
+        && afterClear[WG2][WU3].standing === 'member'
+        && clear.replies[0].content === `The record for <@${WU1}> was cleared.`, JSON.stringify(afterClear));
+
+      // Clearing a member with no record changes nothing and
+      // says so.
+      const clearNone = fakeIx({ staff: true, customId: `webctl:set:clear:${WU1}` });
+      await WC.handleWebsiteControlsButton(clearNone);
+      ok('webctl: clear with no record is a truthful no-op',
+        clearNone.replies[0].content === `There is no record for <@${WU1}>. Nothing changed.`, JSON.stringify(clearNone.replies));
+    } finally {
+      if (memSaved === null) { try { fs.unlinkSync(memPath); } catch {} }
+      else fs.writeFileSync(memPath, memSaved);
+    }
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown

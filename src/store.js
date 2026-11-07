@@ -281,6 +281,14 @@ module.exports = {
     data[guildId][userId] = { standing, at: Date.now(), via };
     saveJson(MEMBERSHIP_FILE, data);
   },
+  // The Website controls panel's hand fix: drop one member's
+  // record entirely. Only ever run by a staff tap; nothing calls
+  // this automatically. Other members and guilds are untouched.
+  clearMembershipStanding(guildId, userId) {
+    const data = loadJson(MEMBERSHIP_FILE);
+    if (data[guildId]) delete data[guildId][userId];
+    saveJson(MEMBERSHIP_FILE, data);
+  },
 
   // Physically drop expired strikes (getStrikes only filters on read,
   // so without this the file grows forever).

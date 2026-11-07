@@ -42,6 +42,7 @@ const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
 const { mergeSiteLinkRequests } = require('./link-requests');
 const { handleStaffLinkSelect, handleStaffLinkModal } = require('./staff-link');
+const { handleWebsiteControlsSelect } = require('./website-controls');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
@@ -277,6 +278,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isUserSelectMenu()) {
       if (interaction.customId === 'stafflink:member') {
         await handleStaffLinkSelect(interaction);
+      } else if (interaction.customId === 'webctl:member') {
+        await handleWebsiteControlsSelect(interaction);
       } else {
         console.warn(`[index.js] Unhandled user select menu: ${interaction.customId}`);
       }
