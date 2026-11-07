@@ -1167,6 +1167,201 @@ async function t(name, fn, needFile = true) {
     ok('ccinit: seniority first assignments include Initiate', !senioritySrc.includes("newRankName !== 'Initiate'"));
   }
 
+  // Recorded membership standing (Nov 6, 2026 ruling): approval is
+  // the membership decision and gets recorded in data/membership.json;
+  // the seniority sync reads that record alongside the WOM group list
+  // and never strips or deranks anyone. The store, the backfill seed,
+  // and a dry-run sync run here against fixture data files with fake
+  // ids and names; every file the fixtures touch is restored byte for
+  // byte afterwards, and the module caches are reset so later checks
+  // see the real data again.
+  {
+    const storeM = require(path.join(__dirname, '..', 'src', 'store.js'));
+    const membershipM = require(path.join(__dirname, '..', 'src', 'membership.js'));
+    const cfgM = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const { MONTH_MS } = require(path.join(__dirname, '..', 'src', 'utils.js'));
+    const RIDS = cfgM.seniority.rankIds;
+    const GID = cfgM.guildId;
+    const recruitSrc4 = fs.readFileSync(path.join(__dirname, '..', 'src', 'recruit.js'), 'utf8');
+    const senioritySrc4 = fs.readFileSync(path.join(__dirname, '..', 'src', 'seniority.js'), 'utf8');
+    const indexSrc4 = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+
+    // Wiring: the approval path writes standing once (denials write
+    // nothing), after the role grants; the sync has no strip path or
+    // grace window left; startup seeds standing before the first sync.
+    ok('standing: approval records standing through the store',
+      recruitSrc4.includes("store.setMembershipStanding(guild.id, userId, type === 'guest' ? 'guest' : 'member', 'approval')"));
+    ok('standing: exactly one standing write in recruit (denials record nothing)',
+      (recruitSrc4.match(/setMembershipStanding\(/g) || []).length === 1);
+    ok('standing: the standing write sits after the approval role grants',
+      recruitSrc4.indexOf('setMembershipStanding(') > recruitSrc4.indexOf("'New member tenure rank'"));
+    ok('standing: sync strip path and grace window are gone',
+      !senioritySrc4.includes('strip seniority') && !senioritySrc4.includes('GRACE_MS'));
+    const seedAt = indexSrc4.indexOf('await seedMembership(client)');
+    const firstSyncAt = indexSrc4.indexOf('await syncSeniority(client)');
+    ok('standing: startup seeds standing before the first sync', seedAt >= 0 && firstSyncAt > seedAt);
+
+    // Snapshot every data file the fixtures touch.
+    const touched = ['wom-group.json', 'rsn-links.json', 'tenure.json', 'membership.json', 'seniority-holds.json'];
+    const saved = {};
+    for (const name of touched) {
+      const p = path.join(DATA, name);
+      saved[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const writeFixture = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreAll = () => {
+      for (const name of touched) {
+        const p = path.join(DATA, name);
+        if (saved[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, saved[name]);
+      }
+    };
+
+    const U = {
+      womMember: '990000000000000101',
+      rankHolder: '990000000000000102',
+      plainGuest: '990000000000000103',
+      nonMemberRank: '990000000000000104',
+      memberHigh: '990000000000000105',
+      memberLow: '990000000000000106',
+      memberAsc: '990000000000000107',
+      memberFirst: '990000000000000108',
+      recordMember: '990000000000000109',
+      recordGuest: '990000000000000110',
+    };
+    try {
+      writeFixture('wom-group.json', [
+        { rsn: 'Fake Wom' }, { rsn: 'Fake High' }, { rsn: 'Fake Low' },
+        { rsn: 'Fake Asc' }, { rsn: 'Fake First' },
+      ]);
+      writeFixture('rsn-links.json', {
+        [U.womMember]: { rsns: ['Fake Wom'] },
+        [U.memberHigh]: { rsns: ['Fake High'] },
+        [U.memberLow]: { rsns: ['Fake Low'] },
+        [U.memberAsc]: { rsns: ['Fake Asc'] },
+        [U.memberFirst]: { rsns: ['Fake First'] },
+      });
+      writeFixture('seniority-holds.json', {});
+      writeFixture('membership.json', {});
+
+      // (e) Store round-trip: the exact write the approval path makes,
+      // under a throwaway guild so no real record set is disturbed.
+      const TG = '990000000000009999';
+      ok('standing: unknown guild reads as an empty record set',
+        Object.keys(storeM.getMembership(TG)).length === 0);
+      storeM.setMembershipStanding(TG, U.womMember, 'member', 'approval');
+      storeM.setMembershipStanding(TG, U.plainGuest, 'guest', 'approval');
+      const roundTrip = storeM.getMembership(TG);
+      ok('standing: member approval writes a member record',
+        !!roundTrip[U.womMember] && roundTrip[U.womMember].standing === 'member'
+        && roundTrip[U.womMember].via === 'approval' && typeof roundTrip[U.womMember].at === 'number',
+        JSON.stringify(roundTrip[U.womMember]));
+      ok('standing: guest approval writes a guest record',
+        !!roundTrip[U.plainGuest] && roundTrip[U.plainGuest].standing === 'guest'
+        && roundTrip[U.plainGuest].via === 'approval');
+
+      // (f) Backfill seed: WOM-derived members and current rank
+      // holders become recorded members; a plain guest does not; an
+      // existing record set is never overwritten.
+      writeFixture('membership.json', {});
+      const seededCount = membershipM.seedBackfill(GID, [U.rankHolder]);
+      const seededMap = storeM.getMembership(GID);
+      ok('standing: backfill seeds the WOM-derived member',
+        seededCount >= 2 && !!seededMap[U.womMember] && seededMap[U.womMember].standing === 'member'
+        && seededMap[U.womMember].via === 'backfill', JSON.stringify(Object.keys(seededMap)));
+      ok('standing: backfill seeds a rank holder who is not on the WOM list',
+        !!seededMap[U.rankHolder] && seededMap[U.rankHolder].standing === 'member'
+        && seededMap[U.rankHolder].via === 'backfill');
+      ok('standing: backfill leaves a plain guest unrecorded', !(U.plainGuest in seededMap));
+      writeFixture('membership.json', {
+        [GID]: { [U.plainGuest]: { standing: 'guest', at: 1, via: 'approval' } },
+      });
+      const reseeded = membershipM.seedBackfill(GID, [U.rankHolder]);
+      const afterReseed = storeM.getMembership(GID);
+      ok('standing: backfill never overwrites an existing record set',
+        reseeded === 0 && Object.keys(afterReseed).length === 1
+        && afterReseed[U.plainGuest].standing === 'guest');
+
+      // (a)-(d) Dry-run sync over fake guild members. Tenure and
+      // seniority are re-required fresh so the tenure module reads
+      // the fixture ledger instead of any cached live one.
+      writeFixture('membership.json', {
+        [GID]: {
+          [U.recordMember]: { standing: 'member', at: 1, via: 'approval' },
+          [U.recordGuest]: { standing: 'guest', at: 1, via: 'approval' },
+        },
+      });
+      writeFixture('tenure.json', {
+        users: {
+          [U.memberLow]: { bankedMs: 4 * MONTH_MS, stretchStart: null, stretches: [] },
+          [U.recordMember]: { bankedMs: 4 * MONTH_MS, stretchStart: null, stretches: [] },
+        },
+        seededAt: 'fixture',
+      });
+      const roleCalls = [];
+      const mkMember = (id, heldIds) => {
+        const held = new Set(heldIds);
+        return {
+          id,
+          user: { id, bot: false, tag: `fake${id.slice(-3)}` },
+          joinedTimestamp: Date.now() - 40 * 86400000,
+          roles: {
+            cache: { has: (rid) => held.has(rid) },
+            add: async (rid) => { roleCalls.push(['add', id, rid]); },
+            remove: async (rid) => { roleCalls.push(['remove', id, rid]); },
+          },
+        };
+      };
+      const fakeMembers = [
+        mkMember(U.womMember, [RIDS.initiate]),
+        mkMember(U.rankHolder, [RIDS.devout]),
+        mkMember(U.plainGuest, []),
+        mkMember(U.nonMemberRank, [RIDS.devout]),
+        mkMember(U.memberHigh, [RIDS.devout]),
+        mkMember(U.memberLow, [RIDS.initiate]),
+        mkMember(U.memberAsc, [RIDS.ascendant]),
+        mkMember(U.memberFirst, []),
+        mkMember(U.recordMember, [RIDS.initiate]),
+        mkMember(U.recordGuest, [RIDS.acolyte]),
+      ];
+      const fakeGuild = {
+        id: GID,
+        members: { fetch: async () => new Map(fakeMembers.map((m) => [m.id, m])) },
+        channels: { cache: { get: () => null } },
+      };
+      const fakeClient = { guilds: { cache: { get: (id) => (id === GID ? fakeGuild : null) } } };
+      const tenurePath = require.resolve(path.join(__dirname, '..', 'src', 'tenure.js'));
+      const seniorityPath = require.resolve(path.join(__dirname, '..', 'src', 'seniority.js'));
+      delete require.cache[tenurePath];
+      delete require.cache[seniorityPath];
+      const SEN = require(seniorityPath);
+      require(path.join(__dirname, '..', 'src', 'guild-cache.js')).invalidateCache();
+      const changes = await SEN.syncSeniority(fakeClient, { dryRun: true });
+      const joined = changes.join('\n');
+      const entryFor = (id) => changes.find((c) => c.startsWith(`fake${id.slice(-3)}:`));
+      ok('standing: (a) a non-member holding a rank is not stripped',
+        !entryFor(U.nonMemberRank) && !joined.includes('strip') && roleCalls.length === 0,
+        joined || '(no changes)');
+      ok('standing: (b) a member above their tenure rank is left untouched',
+        !entryFor(U.memberHigh), joined);
+      ok('standing: (c) a member below their tenure rank is swapped up only',
+        entryFor(U.memberLow) === `fake${U.memberLow.slice(-3)}: Initiate → Devout`, joined);
+      ok('standing: (d) an Ascendant holder is untouched', !entryFor(U.memberAsc), joined);
+      ok('standing: a recorded member not on the WOM list still ranks up',
+        entryFor(U.recordMember) === `fake${U.recordMember.slice(-3)}: Initiate → Devout`, joined);
+      ok('standing: a recorded guest is skipped, rank and all',
+        !entryFor(U.recordGuest), joined);
+      ok('standing: a member with no rank gets the first assignment',
+        entryFor(U.memberFirst) === `fake${U.memberFirst.slice(-3)}: None → Initiate (initial)`, joined);
+      // Reset the module caches so later checks bind to the real data.
+      delete require.cache[tenurePath];
+      delete require.cache[seniorityPath];
+      require(seniorityPath);
+    } finally {
+      restoreAll();
+    }
+  }
+
   // Staff RSN link (Nov 6, 2026): the staff-chat repair panel and
   // the website request merge's quiet flag. The check pipeline and
   // the merge run against fixtures and a scratch folder with

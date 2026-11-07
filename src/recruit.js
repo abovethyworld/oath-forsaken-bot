@@ -871,6 +871,14 @@ async function handleDecision(interaction) {
       // Queue the CC checklist entry so staff set the in-game rank too.
       await addCcEntry(guild, target.id, 'None', 'Initiate').catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     }
+    // Record the decision (ruling Nov 6, 2026): approval is what makes
+    // someone a member or a guest, and this record is what the
+    // seniority sync and the website read. Denials record nothing.
+    try {
+      store.setMembershipStanding(guild.id, userId, type === 'guest' ? 'guest' : 'member', 'approval');
+    } catch (e) {
+      console.error('[recruit.js] Membership record failed:', e.message);
+    }
     // Auto-nickname: "Nickname [RSN]" (all 3 application types)
     const appAnswers = store.getApplicationAnswers(guild.id, userId);
     if (appAnswers && appAnswers.nickname && appAnswers.rsn) {

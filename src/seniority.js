@@ -2,17 +2,17 @@
 // A daily loop assigns each clan member the seniority role matching their
 // accrued time in the clan chat: Initiate (<1 mo) -> Acolyte (1-2) ->
 // Devout (3-5) -> Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
-// Membership and tenure follow the clan rule (set Nov 5, 2026): nobody is a
-// member until they are in the clan chat, and only time in the clan
-// chat counts. Membership = any linked RSN on the WOM group list
-// (src/membership.js); accrued time comes from the tenure ledger
+// Membership and tenure follow the clan rules: standing is recorded
+// at approval (data/membership.json, ruling Nov 6, 2026) and the WOM
+// group list (src/membership.js) counts too; either one makes a
+// member. Accrued time comes from the tenure ledger
 // (src/tenure.js), which banks time across leaves, so time away never
-// counts. Non-members are skipped and stripped of any seniority rank
-// they hold, except anyone who joined the server within the last
-// 7 days: a fresh approval needs time to get into the clan chat and
-// onto the WOM list before the strip can apply. Ascendant is
-// hand-picked and is not in
-// config.seniorityRanks, so this sync never assigns or removes it.
+// counts. This sync only assigns and advances ranks. It never
+// removes a rank: a member holding a rank at or above what their
+// tenure earns is left exactly as they are, and non-members are
+// skipped with no role changes. Removing a rank is a staff decision,
+// never the sync's. Ascendant is hand-picked and is not in
+// config.seniorityRanks, so this sync never assigns it either.
 // After each run the assigned ranks are published to
 // data/seniority.json for the website, so site and bot cannot disagree.
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
@@ -134,9 +134,10 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     const members = await getMembers(guild);
     if (!members) return changes;
 
-    // Fail closed: membership comes from the published WOM group list
-    // (the clan chat mirror). If it cannot be read there is no safe way
-    // to tell members from non-members, so abort before any role changes.
+    // Fail closed: the WOM group list (the clan chat mirror) is one
+    // leg of the membership union. If it cannot be read there is no
+    // safe way to tell members from non-members, so abort before any
+    // role changes.
     const memberIds = membership.memberIds();
     if (memberIds === null) {
       console.error('[seniority] WOM group list (data/wom-group.json) is unreadable. Aborting seniority sync.');
@@ -149,50 +150,48 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     let updatedCount = 0; // role changes actually made (non-dry-run log total)
     // Load holds once: the per-member store lookup re-read the file every time
     const seniorityHolds = store.getSeniorityHolds(guild.id);
+    // Recorded standing (approval decisions), read once per run.
+    const standingRecords = store.getMembership(guild.id);
+    const isRecordedMember = (id) => {
+      const rec = standingRecords[id];
+      return !!rec && rec.standing === 'member';
+    };
+    // Ladder order for held-vs-wanted comparisons: the tenure brackets
+    // ascending by minMonths, with the hand-picked Ascendant above all.
+    const ladderIds = [...ranks].sort((a, b) => a.minMonths - b.minMonths).map((r) => r.roleId);
+    if (RANK_IDS.ascendant) ladderIds.push(RANK_IDS.ascendant);
+    const rankOrder = new Map(ladderIds.map((id, i) => [id, i]));
 
     for (const m of members.values()) {
       if (m.user.bot) continue;
       // Seniority hold: staff-set exception (honorary rank, etc.) — skip entirely
       if (seniorityHolds.has(m.id)) continue;
-      // Only clan members get seniority roles: a linked RSN on the WOM
-      // group list (clan chat mirror). Everyone else, including account
-      // holders whose characters sit in another clan, is stripped of
-      // any seniority rank they hold, then skipped.
+      // Only members get seniority roles. Everyone else is skipped,
+      // with no role changes either way.
       // The permission-audit canary account must stay @everyone-only.
       const skipUsers = ['261537945943539712']; // audit canary
       if (skipUsers.includes(m.id)) continue;
-      const isMember = memberIds.has(m.id);
-      // Grace window: a member who joined the server in the last 7 days
-      // is never stripped. Approval hands out Initiate before the new
-      // member has had any chance to join the clan chat, so without
-      // this the next sync run (including the one at bot startup)
-      // takes it straight back.
-      const GRACE_MS = 7 * 24 * 3600 * 1000;
-      if (!isMember && m.joinedTimestamp && now - m.joinedTimestamp < GRACE_MS) continue;
-      if (!isMember) {
-        const hasSeniority = rankIds.some((id) => m.roles.cache.has(id));
-        if (hasSeniority) {
-          if (dryRun) {
-            changes.push(`${m.user.tag}: strip seniority (not a clan member)`);
-          } else {
-            await m.roles.remove(rankIds, 'Seniority sync: only clan members hold seniority roles').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
-            updatedCount++;
-          }
-        }
-        continue;
-      }
+      // Membership is a union: the WOM group list (clan chat mirror)
+      // or a recorded member standing from an approval.
+      const isMember = memberIds.has(m.id) || isRecordedMember(m.id);
+      if (!isMember) continue;
       // Accrued time in the clan chat, from the tenure ledger. A member
       // with no ledger record yet has no accrued time.
       const months = tenure.accruedMs(tenure.getRecord(m.id), now) / MONTH_MS;
       const want = rankForMonths(months);
       if (!want) continue;
+      // Never derank: a member already holding a rank at or above the
+      // tenure-wanted one keeps it, untouched. This also keeps
+      // hand-picked Ascendant holders beyond the sync's reach.
+      let heldId = null;
+      for (const id of ladderIds) {
+        if (m.roles.cache.has(id)) heldId = id;
+      }
+      if (heldId !== null && rankOrder.get(heldId) >= rankOrder.get(want.roleId)) continue;
       const has = m.roles.cache.has(want.roleId);
-      const hasOther = rankIds.some((id) => id !== want.roleId && m.roles.cache.has(id));
-      if (has && !hasOther) continue;
-      // Detect actual rank-up (had a different seniority role before)
-      const oldRank = ranks.find((r) => r.roleId !== want.roleId && m.roles.cache.has(r.roleId));
-      const isRankUp = !!oldRank;
-      const oldRankName = oldRank ? oldRank.name.split(' ')[0] : 'None';
+      const isRankUp = heldId !== null;
+      const heldRank = heldId ? ranks.find((r) => r.roleId === heldId) : null;
+      const oldRankName = heldRank ? heldRank.name.split(' ')[0] : 'None';
       const newRankName = want.name.split(' ')[0];
 
       if (dryRun) {
@@ -222,7 +221,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
         const ladder = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
         const published = {};
         for (const m of members.values()) {
-          if (m.user.bot || !memberIds.has(m.id)) continue;
+          if (m.user.bot || (!memberIds.has(m.id) && !isRecordedMember(m.id))) continue;
           let rank = null;
           for (const key of ladder) {
             if (RANK_IDS[key] && m.roles.cache.has(RANK_IDS[key])) {
@@ -263,6 +262,31 @@ async function syncSeniority(client, { dryRun = false } = {}) {
   } catch (err) {
     console.error('Seniority sync failed:', err.message);
     return changes;
+  }
+}
+
+// One-time recorded-standing seed, run at startup ahead of the first
+// sync: everyone the WOM list already calls a member, plus everyone
+// holding a seniority rank role, starts out recorded as a member
+// (src/membership.js does the write; it no-ops once records exist).
+async function seedMembership(client) {
+  try {
+    const guild = client.guilds.cache.get(config.guildId);
+    if (!guild) return 0;
+    const members = await getMembers(guild);
+    if (!members) return 0;
+    const allRankIds = Object.values(RANK_IDS).filter(Boolean);
+    const holders = [];
+    for (const m of members.values()) {
+      if (m.user.bot) continue;
+      if (allRankIds.some((id) => m.roles.cache.has(id))) holders.push(m.id);
+    }
+    const seeded = membership.seedBackfill(guild.id, holders);
+    if (seeded) console.log(`Membership: backfilled standing for ${seeded} member(s).`);
+    return seeded;
+  } catch (err) {
+    console.error('Membership backfill failed:', err.message);
+    return 0;
   }
 }
 
@@ -311,4 +335,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, syncSeniority, rankForMonths, RANK_ANNOUNCEMENTS, postRankUpStory };
+module.exports = { commands, syncSeniority, seedMembership, rankForMonths, RANK_ANNOUNCEMENTS, postRankUpStory };
