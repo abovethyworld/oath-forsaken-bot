@@ -298,31 +298,6 @@ async function setupApplications(interaction) {
   await interaction.editReply(`Application panel posted in ${channel}.`);
 }
 
-async function applyCommand(interaction) {
-  const types = appTypes();
-  const embed = new EmbedBuilder()
-    .setTitle('⛧ Clan Application ⛧')
-    .setDescription(
-      `Pick the application that fits you.\n\n` +
-        `**Ironman** - you play an ironman.\n` +
-        `**Main** - you play a main.\n` +
-        `**Guest** - just visiting or here for a friend.`
-    )
-    .setColor(ZAMORAK_RED);
-
-  const row = new ActionRowBuilder();
-  for (const [key, t] of Object.entries(types)) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`apply:type:${key}`)
-        .setLabel(t.buttonLabel || t.label)
-        .setStyle(ButtonStyle.Danger)
-        .setEmoji(t.emoji || '📝')
-    );
-  }
-  await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-}
-
 async function showApplicationModal(interaction, type, totalBracket) {
   const t = appTypes()[type];
   if (!t) return;
@@ -1047,12 +1022,6 @@ async function handleApplyButton(interaction) {
 const { SlashCommandBuilder, PermissionFlagsBits: PFB } = require('discord.js');
 
 const commands = [
-  {
-    data: new SlashCommandBuilder()
-      .setName('apply')
-      .setDescription('Start a clan application'),
-    run: applyCommand,
-  },
   {
     data: new SlashCommandBuilder()
       .setName('setup-applications')

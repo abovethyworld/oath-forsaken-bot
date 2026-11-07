@@ -88,7 +88,6 @@ Run these once in your server to post the panels:
 | `/calendar-sync` | Forces a refresh of the event calendar embed | Manage Events |
 | `/poll` | Creates a poll (up to 4 options) with live button voting | Everyone |
 | `/sync-seniority` | Re-checks everyone's tenure rank now | Manage Roles |
-| `/apply` | Starts an application manually | Everyone |
 | `/reset-application @user` | Resets a user's application so they can reapply | Staff |
 
 ## Deployment
