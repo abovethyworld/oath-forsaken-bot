@@ -45,6 +45,7 @@ const { handleStaffLinkSelect, handleStaffLinkModal } = require('./staff-link');
 const { handleWebsiteControlsSelect } = require('./website-controls');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
+const { syncCompetitions } = require('./competitions');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 
 // Command cooldowns: userId:commandName -> timestamp
@@ -144,6 +145,10 @@ client.once(Events.ClientReady, async (c) => {
       const newChamps = await syncChampions();
       if (newChamps) console.log(`Champions: archived ${newChamps} finished competition(s).`);
 
+      // Publish running and upcoming WOM competitions for the website.
+      const liveComps = await syncCompetitions();
+      if (liveComps) console.log(`Competitions: published ${liveComps} running/upcoming competition(s).`);
+
       // Warm the RuneProfile cache for the website's tracked names, so
       // profile pages carry quest, diary, and combat achievement data.
       await warmProfiles();
@@ -166,6 +171,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncFriends(client), 24 * 3600 * 1000);
   setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
   setInterval(() => syncChampions(), 24 * 3600 * 1000);
+  setInterval(() => syncCompetitions(), 24 * 3600 * 1000);
   setInterval(() => warmProfiles(), 24 * 3600 * 1000);
   setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
