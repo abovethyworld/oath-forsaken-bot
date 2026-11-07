@@ -255,7 +255,7 @@ function buildFixModal(type, prefill) {
 }
 
 // (member-join application channels removed 2026-10-11;
-// users apply via #apply-here or /apply — no join hook needed)
+// users apply via the #apply-here panel — no join hook needed)
 
 // Posts the 3-button application panel to a channel.
 // Used by /setup-applications and for the #apply-here channel.
