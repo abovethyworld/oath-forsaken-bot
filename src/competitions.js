@@ -188,7 +188,10 @@ async function syncCompetitions() {
     const history = loadHistory();
     const snapshots = pruneSnapshots(history.snapshots, endedAtByComp, now);
     const pruned = snapshots.length !== history.snapshots.length;
-    if (recordSnapshots(competitions, snapshots, now) || pruned) {
+    const added = recordSnapshots(competitions, snapshots, now);
+    // Write on any change, and also when the file does not exist yet,
+    // so the site exporter always finds the file after the first run.
+    if (added || pruned || !fs.existsSync(HISTORY_FILE)) {
       atomicWrite(HISTORY_FILE, { snapshots });
     }
 
