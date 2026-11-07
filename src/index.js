@@ -346,6 +346,10 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
   if (oldRoles.size === newRoles.size && oldRoles.every((r) => newRoles.has(r.id))) return;
   const { invalidateCache } = require('./guild-cache');
   invalidateCache();
+  // Not in the Clan Yet watch: once any standing role lands (for
+  // example a staff hand-grant), the waiting marker comes off.
+  const { handleNotInClanUpdate } = require('./not-in-clan');
+  handleNotInClanUpdate(newMember);
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -361,6 +365,18 @@ client.on(Events.GuildMemberAdd, async (member) => {
     }
   } catch (e) {
     console.error('Oath Forsakers auto-assign failed:', e.message);
+  }
+  // Not in the Clan Yet marker: everyone who lands here is in the
+  // Discord but not in the clan yet, applied or not. Bots never wear it.
+  try {
+    const { markerRoleId } = require('./not-in-clan');
+    const markerId = markerRoleId();
+    if (!member.user.bot && markerId && !member.roles.cache.has(markerId)) {
+      const markerRole = member.guild.roles.cache.get(markerId);
+      if (markerRole) await member.roles.add(markerRole, 'New joiner; not in the clan yet');
+    }
+  } catch (e) {
+    console.error('[join] Not in the Clan Yet assign failed:', e.message);
   }
   // Under-30 join flag (Nov 5, 2026): a young Discord account is
   // flagged to the staff log at join, replacing the old application

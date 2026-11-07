@@ -863,6 +863,17 @@ async function handleDecision(interaction) {
     } catch (e) {
       console.error('[recruit.js] Ping role assign failed:', e.message);
     }
+    // Not in the Clan Yet marker comes off on every approval, guests
+    // included: approval means they are in, one way or the other.
+    try {
+      const { markerRoleId } = require('./not-in-clan');
+      const markerId = markerRoleId();
+      if (markerId && target.roles.cache.has(markerId)) {
+        await target.roles.remove(markerId, 'Approved; no longer waiting');
+      }
+    } catch (e) {
+      console.error('[recruit.js] Not in the Clan Yet removal failed:', e.message);
+    }
     // Total-level ranks removed 2026-10-13 (age-ranks-only overhaul).
     // New members start at the bottom of the tenure ladder (not guests).
     if (type !== 'guest') {

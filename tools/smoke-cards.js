@@ -1476,6 +1476,58 @@ async function t(name, fn, needFile = true) {
     ok('stafflink: merge routes quiet in source', lrSrc.includes('req.quiet === true') && lrSrc.includes('applyQuiet(did, rsn)'));
   }
 
+  // Not in the Clan Yet marker (Nov 6, 2026): granted on join beside
+  // the Oath Forsakers role, removed on approval, and removed by the
+  // member-update watch when any standing role lands. The predicate
+  // matrix runs on config role ids; the wiring checks read source.
+  {
+    const NC = require(path.join(__dirname, '..', 'src', 'not-in-clan.js'));
+    const cfgN = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const indexSrcN = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const recruitSrcN = fs.readFileSync(path.join(__dirname, '..', 'src', 'recruit.js'), 'utf8');
+    const marker = '1568425058823569468';
+
+    ok('notinclan: config carries the marker role id', cfgN.roles?.notInClanYetId === marker && NC.markerRoleId() === marker);
+    const standing = NC.standingRoleIds();
+    ok('notinclan: standing set covers every family',
+      Object.values(cfgN.recruit.types).every((t) => standing.has(t.roleId))
+        && Object.values(cfgN.seniority.rankIds).every((id) => standing.has(id))
+        && standing.has(cfgN.seniority.friendOfClanRoleId)
+        && cfgN.tickets.staffRoleIds.every((id) => standing.has(id)),
+      [...standing].join(','));
+
+    // Predicate matrix: marker+standing → true for one id drawn from
+    // each standing family; every other shape → false.
+    const fam = {
+      'application type': cfgN.recruit.types.iron.roleId,
+      'seniority ladder': cfgN.seniority.rankIds.ascendant,
+      'friend of the clan': cfgN.seniority.friendOfClanRoleId,
+      'staff': cfgN.tickets.staffRoleIds[0],
+    };
+    for (const [name, id] of Object.entries(fam)) {
+      ok(`notinclan: watch fires with ${name} standing`,
+        NC.shouldRemoveMarker({ isBot: false, roleIds: new Set([marker, id]) }) === true);
+    }
+    ok('notinclan: marker alone does not fire',
+      NC.shouldRemoveMarker({ isBot: false, roleIds: new Set([marker]) }) === false);
+    ok('notinclan: standing alone does not fire (marker already gone)',
+      NC.shouldRemoveMarker({ isBot: false, roleIds: new Set([fam['seniority ladder']]) }) === false);
+    ok('notinclan: bot user never fires',
+      NC.shouldRemoveMarker({ isBot: true, roleIds: new Set([marker, fam.staff]) }) === false);
+    ok('notinclan: unrelated roles do not fire',
+      NC.shouldRemoveMarker({ isBot: false, roleIds: new Set([marker, cfgN.roles.oathForsakersId]) }) === false);
+
+    ok('notinclan: approval path removes the marker',
+      recruitSrcN.includes("require('./not-in-clan')") && recruitSrcN.includes("target.roles.remove(markerId, 'Approved; no longer waiting')"));
+    ok('notinclan: join path grants the marker',
+      indexSrcN.includes("require('./not-in-clan')") && indexSrcN.includes("member.roles.add(markerRole, 'New joiner; not in the clan yet')"));
+    ok('notinclan: update watch is wired in index',
+      indexSrcN.includes('handleNotInClanUpdate(newMember)'));
+    ok('notinclan: watch removal is logged once and errors are not swallowed',
+      fs.readFileSync(path.join(__dirname, '..', 'src', 'not-in-clan.js'), 'utf8').includes('[not-in-clan] Removed the Not in the Clan Yet marker')
+        && fs.readFileSync(path.join(__dirname, '..', 'src', 'not-in-clan.js'), 'utf8').includes("console.error('[not-in-clan] Marker removal failed:'"));
+  }
+
   // Launch countdown (Nov 5, 2026): the day-count math picks the
   // banner for each New York date. Fixed instants, no clock reading.
   {
