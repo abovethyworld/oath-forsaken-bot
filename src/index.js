@@ -23,7 +23,7 @@ const { commands, handleCommand } = require('./commands');
 const { routeButton } = require('./buttons');
 const { handleWelcome } = require('./welcome');
 const { syncReminders } = require('./calendar');
-const { syncSeniority } = require('./seniority');
+const { syncSeniority, seedMembership } = require('./seniority');
 const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
 const { syncDrift } = require('./permissions');
@@ -112,6 +112,10 @@ client.once(Events.ClientReady, async (c) => {
       // Merge any RSN link requests the website dropped while the
       // bot was down (the minute loop below takes it from here).
       mergeSiteLinkRequests();
+
+      // Seed recorded membership standing once (WOM members + rank
+      // holders), before the first sync reads the records.
+      await seedMembership(client);
 
       // Seniority sync (uses cached members)
       await syncSeniority(client);

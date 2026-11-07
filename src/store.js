@@ -11,6 +11,7 @@ const APP_STATS_FILE = path.join(__dirname, '..', 'data', 'application-stats.jso
 const POLLS_FILE = path.join(__dirname, '..', 'data', 'polls.json');
 const ROSTERS_FILE = path.join(__dirname, '..', 'data', 'rosters.json');
 const HOLDS_FILE = path.join(__dirname, '..', 'data', 'seniority-holds.json');
+const MEMBERSHIP_FILE = path.join(__dirname, '..', 'data', 'membership.json');
 
 const STRIKE_EXPIRY_DAYS = 90;
 
@@ -261,6 +262,24 @@ module.exports = {
       delete data[guildId][userId];
     }
     saveJson(HOLDS_FILE, data);
+  },
+
+  // ---- Membership standing: { guildId: { userId: { standing, at, via } } } ----
+  // Recorded when staff decide an application (ruling Nov 6, 2026):
+  // approval is the membership decision, and this record is what the
+  // seniority sync reads alongside the WOM group list. Standing is
+  // only ever written here or by the one-time backfill seed; nothing
+  // removes it automatically.
+  getMembership(guildId) {
+    const data = loadJson(MEMBERSHIP_FILE);
+    const map = data[guildId];
+    return map && typeof map === 'object' ? map : {};
+  },
+  setMembershipStanding(guildId, userId, standing, via) {
+    const data = loadJson(MEMBERSHIP_FILE);
+    data[guildId] ??= {};
+    data[guildId][userId] = { standing, at: Date.now(), via };
+    saveJson(MEMBERSHIP_FILE, data);
   },
 
   // Physically drop expired strikes (getStrikes only filters on read,

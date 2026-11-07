@@ -8,6 +8,7 @@
 // they say nothing about membership and gate nothing here.
 const fs = require('fs');
 const path = require('path');
+const store = require('./store');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const GROUP_FILE = path.join(DATA_DIR, 'wom-group.json');
@@ -86,6 +87,30 @@ function isMember(userId) {
   return ids !== null && ids.has(userId);
 }
 
+// One-time seed for the recorded-standing file (data/membership.json,
+// ruling Nov 6, 2026: approval is the membership decision). Everyone
+// the WOM-derived test above already calls a member, plus everyone
+// currently holding a seniority rank role (ids passed in by the
+// caller, which can see the guild), starts out recorded as a member
+// so the recorded system begins from the standing people already
+// have. Runs only while the guild has no records at all; an existing
+// record set is never overwritten. When the WOM list is unreadable
+// the seed falls back to rank holders alone rather than guessing.
+function seedBackfill(guildId, rankHolderIds) {
+  const existing = store.getMembership(guildId);
+  if (Object.keys(existing).length) return 0;
+  const ids = new Set(memberIds() || []);
+  for (const id of rankHolderIds || []) {
+    if (id) ids.add(String(id));
+  }
+  let seeded = 0;
+  for (const id of ids) {
+    store.setMembershipStanding(guildId, id, 'member', 'backfill');
+    seeded++;
+  }
+  return seeded;
+}
+
 module.exports = {
   normName,
   entryRsns,
@@ -95,4 +120,5 @@ module.exports = {
   loadLinks,
   memberIds,
   isMember,
+  seedBackfill,
 };
