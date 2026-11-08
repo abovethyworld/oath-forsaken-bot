@@ -1,5 +1,5 @@
 // All slash commands: definitions + handlers.
-// Setup commands need Administrator. Warn/strike commands need Manage Messages.
+// Setup commands need Administrator. Warn/strike commands need Moderate Members.
 const {
   ActionRowBuilder,
   ButtonBuilder,
@@ -165,7 +165,7 @@ async function postRanks(interaction) {
 }
 
 async function warnUser(interaction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
     await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     return;
   }
@@ -198,7 +198,7 @@ async function warnUser(interaction) {
 }
 
 async function showStrikes(interaction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
     await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     return;
   }
@@ -220,7 +220,7 @@ async function showStrikes(interaction) {
 }
 
 async function clearStrikesCmd(interaction) {
-  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
     await interaction.reply({ content: 'You do not have permission to use this command.', ephemeral: true });
     return;
   }
@@ -261,8 +261,8 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('warn')
-      .setDescription('Give a user a strike (Manage Messages only)')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+      .setDescription('Give a user a strike (Timeout Members only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) => o.setName('user').setDescription('Who to warn').setRequired(true))
       .addStringOption((o) => o.setName('reason').setDescription('Why').setRequired(true).setMaxLength(1000)),
     run: warnUser,
@@ -270,16 +270,16 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('strikes')
-      .setDescription("Show a user's strikes (Manage Messages only)")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+      .setDescription("Show a user's strikes (Timeout Members only)")
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) => o.setName('user').setDescription('Who to check').setRequired(true)),
     run: showStrikes,
   },
   {
     data: new SlashCommandBuilder()
       .setName('clear-strikes')
-      .setDescription("Clear a user's strikes (Manage Messages only)")
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+      .setDescription("Clear a user's strikes (Timeout Members only)")
+      .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) => o.setName('user').setDescription('Who to clear').setRequired(true)),
     run: clearStrikesCmd,
   },
