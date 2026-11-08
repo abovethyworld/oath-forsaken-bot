@@ -776,7 +776,7 @@ function approvalDmText(prelink) {
   const tail = 'One thing left: run /connect if you use the clan plugin. One code covers every account you play.';
   if (!prelink.attempted) return head;
   if (!prelink.failed.length) {
-    return `${head}\n\nYour names are already linked and their types are set: ${prelink.linked.join(', ')}.\n${tail}`;
+    return `${head}\n\n**Your RSN is already linked and your types are set:** **${prelink.linked.join(', ')}**.\n${tail}`;
   }
   const linkedLine = prelink.linked.length ? `Linked and set: ${prelink.linked.join(', ')}.\n` : '';
   return `${head}\n\n${linkedLine}Your link needs a hand for: ${prelink.failed.map((f) => f.rsn).join(', ')}. Staff have been told and will sort it with you.\n${tail}`;

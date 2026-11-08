@@ -1150,14 +1150,14 @@ async function t(name, fn, needFile = true) {
     ok('prelink: first listed name set active after linking', preSrc.includes('setActiveRsn(userId, pre.names[0].name)'));
 
     // Approval DM variants.
-    ok('prelink: DM says linked when all link', R.approvalDmText({ attempted: true, linked: ['Found Name'], failed: [] }).includes('Your names are already linked and their types are set: Found Name.'));
+    ok('prelink: DM says linked when all link', R.approvalDmText({ attempted: true, linked: ['Found Name'], failed: [] }).includes('**Your RSN is already linked and your types are set:** **Found Name**.'));
     ok('prelink: DM is honest on failure', R.approvalDmText({ attempted: true, linked: [], failed: [{ rsn: 'Found Name', reason: 'x' }] }).includes('Your link needs a hand for: Found Name.'));
     ok('prelink: legacy DM unchanged without a record', R.approvalDmText({ attempted: false, linked: [], failed: [] }) === '⛧ Welcome to Oath Forsaken ⛧\n\nYour application was approved.');
 
     // Welcome posts: linked members are not told to link.
-    ok('prelink: initiate welcome swaps the link bullet', U.buildInitiateWelcome('111', ['Found Name']).includes('Your names are already linked: Found Name')
+    ok('prelink: initiate welcome swaps the link bullet', U.buildInitiateWelcome('111', ['Found Name']).includes('**Your RSN is already linked:** **Found Name**')
       && U.buildInitiateWelcome('111').includes('Hit **Link RSN**'));
-    ok('prelink: guest welcome only adds the line when linked', U.buildGuestWelcome('111', ['Found Name']).includes('Your names are already linked: Found Name')
+    ok('prelink: guest welcome only adds the line when linked', U.buildGuestWelcome('111', ['Found Name']).includes('**Your RSN is already linked:** **Found Name**')
       && !U.buildGuestWelcome('111').includes('already linked'));
 
     // Join flag age math: 29 days flags, 30 does not.
