@@ -1118,6 +1118,16 @@ async function t(name, fn, needFile = true) {
     ok('prelink: fix modal prefills the typed name', fixModal.components[0].components[0].value === 'ghost name');
     const formModal = R.buildFormModal('iron').toJSON();
     ok('prelink: form modal keeps rsn, nickname, heard', formModal.components.length === 3 && formModal.custom_id === 'apply:modal:iron:none', String(formModal.custom_id));
+    // Nickname warning (Nov 8, 2026): the nickname box in every type's
+    // form carries the locked placeholder; the other boxes carry none.
+    const nickText = 'This becomes your server nickname: Name [RSN]. Example: Mike [Durial321]';
+    const nickOk = ['iron', 'main', 'guest'].every((tp) => {
+      const m = R.buildFormModal(tp).toJSON();
+      const byId = {};
+      for (const row of m.components) for (const c of row.components) byId[c.custom_id] = c;
+      return byId.nickname && byId.nickname.placeholder === nickText && !byId.rsn.placeholder && !byId.heard.placeholder;
+    });
+    ok('nickname warning: placeholder on the nickname box, all types', nickOk);
     ok('prelink: main records main without a pick', R.recordBadgeFor({ type: 'main', linkState: 'verified', badgePicked: false, badge: null }) === 'main');
     ok('prelink: the up-front pick applies to the record', R.recordBadgeFor({ type: 'iron', linkState: 'verified', badgePicked: true, badge: 'hc' }) === 'hc');
     ok('prelink: Not sure stores no badge', R.recordBadgeFor({ type: 'guest', linkState: 'partial', badgePicked: true, badge: null }) === null);
