@@ -55,7 +55,7 @@ function buildInitiateWelcome(userId, linkedNames) {
   // Pre-linked applicants (application flow, Nov 5, 2026) already have
   // their names on file: telling them to hit Link RSN would be wrong.
   const linkBullet = linkedNames && linkedNames.length
-    ? `• Your names are already linked: ${linkedNames.join(', ')}`
+    ? `• **Your RSN is already linked:** **${linkedNames.join(', ')}**`
     : `• Hit **Link RSN** in <#${botGuideId}> so the clan bot knows your name`;
 
   return (
@@ -63,10 +63,10 @@ function buildInitiateWelcome(userId, linkedNames) {
     `⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧\n` +
     `<@${userId}> has joined Oath Forsaken.\n\n` +
     `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
-    `• Drop an intro in <#${introduceId}> so we can get to meet you\n` +
-    `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
+    `• **Drop an intro** in <#${introduceId}> so we can get to meet you\n` +
+    `• **Pick what you would like to be pinged for** in <#${rolesId}>\n` +
     `${linkBullet}\n` +
-    `• Ping <@&${staffId}> when you're ready for a clan chat invite`
+    `• **Ping <@&${staffId}>** when you're ready for a clan chat invite`
   );
 }
 
@@ -80,7 +80,7 @@ function buildGuestWelcome(userId, linkedNames) {
   // The guest post carries no link bullet today; pre-linked guests
   // (application flow, Nov 5, 2026) get one line saying so.
   const linkedLine = linkedNames && linkedNames.length
-    ? `• Your names are already linked: ${linkedNames.join(', ')}\n`
+    ? `• **Your RSN is already linked:** **${linkedNames.join(', ')}**\n`
     : '';
 
   return (
@@ -88,8 +88,8 @@ function buildGuestWelcome(userId, linkedNames) {
     `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
     `<@${userId}>\n\n` +
     `The door's open. Come see what the forsaken built.\n\n` +
-    `• Drop an intro in <#${introduceId}>\n` +
-    `• Pick what you would like to be pinged for in <#${rolesId}>\n` +
+    `• **Drop an intro** in <#${introduceId}>\n` +
+    `• **Pick what you would like to be pinged for** in <#${rolesId}>\n` +
     `${linkedLine}` +
     `• Join the clan chat as a guest any time: type **OathForsaken** in the guest tab\n` +
     `• Like what you see? To become an official member, hit Become a Member in <#${contactId}>`
