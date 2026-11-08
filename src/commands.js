@@ -137,7 +137,7 @@ async function postStrikes(interaction) {
   const embed = new EmbedBuilder()
     .setTitle(s.title)
     .setDescription(sectionsToDescription(s.intro, s.levels, s.footer))
-    .setColor(s.color ?? 0xff0000);
+    .setColor(s.color ?? ZAMORAK_RED);
   if (s.banner) embed.setImage(s.banner);
   await postOrEdit(channel, 'strikes', { embeds: [embed] });
   await interaction.editReply(`Strike system posted/refreshed in ${channel}.`);
@@ -184,7 +184,7 @@ async function warnUser(interaction) {
     const embed = new EmbedBuilder()
       .setTitle(`Strike ${count}/3: ${user.tag}`)
       .setDescription(`**Reason:** ${reason}\n**Warned by:** ${interaction.user.tag}`)
-      .setColor(count >= 3 ? 0xff0000 : 0xffa500)
+      .setColor(count >= 3 ? ZAMORAK_RED : 0xffa500)
       .setTimestamp();
     await log.send({ embeds: [embed] }).catch((e) => console.error("[commands.js] Non-fatal error:", e.message));
   }
@@ -215,7 +215,7 @@ async function showStrikes(interaction) {
   const embed = new EmbedBuilder()
     .setTitle(`Strikes for ${user.tag} (${strikes.length}/3)`)
     .setDescription(lines.join('\n'))
-    .setColor(0xffa500);
+    .setColor(strikes.length >= 3 ? ZAMORAK_RED : 0xffa500);
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 

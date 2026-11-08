@@ -1046,13 +1046,23 @@ function applyRoleClaim(team, userId, roleIdx) {
 
 // ─── Embed + components (pure, unit-tested) ─────────────────────────
 
+// The spots count ("3/4", or "Mass") for a team, or null when
+// the team has no size to fill. Carried in the listing title so
+// a scanning reader sees it first (audit fix, Nov 7, 2026).
+function sizeStrFor(team) {
+  const count = memberCount(team);
+  const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
+  return team.mass ? 'Mass' : (denom ? `${count}/${denom}` : null);
+}
+
 function teamTitle(team) {
   const act = ACTIVITIES[team.activity] || {};
   const emoji = ACTIVITY_EMOJI[team.activity] ? `${ACTIVITY_EMOJI[team.activity]} ` : '';
   const base = `${act.short || act.name || 'Team'} - Find a Team`;
   const pre = preLabel(team.activity, team.pre);
   if (team.status === 'closed') return `${emoji}${base} (Closed)`;
-  return pre ? `${emoji}${base} (${pre})` : `${emoji}${base}`;
+  const sizeStr = sizeStrFor(team);
+  return `${emoji}${base}${pre ? ` (${pre})` : ''}${sizeStr ? ` · ${sizeStr}` : ''}`;
 }
 
 function buildTeamEmbed(team, opts) {
@@ -1101,11 +1111,8 @@ function buildTeamEmbed(team, opts) {
   if (team.contract && contractLabel(team.contract)) lines.push(`📜 **Contract:** ${contractLabel(team.contract)}`);
   if (team.note) lines.push(`📝 **Note:** ${team.note}`);
 
-  const count = memberCount(team);
-  const denom = team.size != null ? team.size : (team.roleMode === 'exclusive' ? (team.roles || []).length : null);
-  const sizeStr = team.mass ? 'Mass' : (denom ? `${count}/${denom}` : null);
   lines.push('');
-  lines.push(sizeStr ? `Posted by ${names[team.organizerId] || 'organizer'} · ${sizeStr}` : `Posted by ${names[team.organizerId] || 'organizer'}`);
+  lines.push(`Posted by ${names[team.organizerId] || 'organizer'}`);
   if (team.status === 'closed') lines.push('**Closed.**');
 
   return new EmbedBuilder().setColor(ZAMORAK_RED).setTitle(teamTitle(team)).setDescription(clampDesc(lines.join('\n'))).setTimestamp();
