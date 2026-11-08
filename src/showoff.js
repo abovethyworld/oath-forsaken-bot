@@ -3171,6 +3171,19 @@ const SKILL_CLOG_PAGES = {
 };
 const SKILL_SECTION_METRIC = { Wintertodt: 'wintertodt', Tempoross: 'tempoross', Zalcano: 'zalcano' };
 
+// Cache-only clog page read for the compare inspect build:
+// serves whatever the cache holds, stale included, so the build
+// never waits on the RuneProfile request queue. A page with no
+// cache entry at all gets a background fetch (not awaited) so a
+// later look can show it.
+function cachedPage(rsn, tab, title) {
+  const hit = getCachedClogPageItems(rsn, tab, title);
+  if (hit) return hit;
+  getClogPageWithItems(rsn, tab, title)
+    .catch((e) => console.error('[showoff] clog background fetch failed:', e.message));
+  return null;
+}
+
 // Draft 3 skill sections: paired
 // per page, only the items the two players differ on, plus how
 // many they share. Scored skilling-boss pages keep a compact
@@ -3180,10 +3193,8 @@ async function skillDiffSections(aName, bName, skillKey, kcMapA, kcMapB) {
   const out = [];
   for (const [tab, title] of SKILL_CLOG_PAGES[skillKey] || []) {
     try {
-      const [ra, rb] = await Promise.all([
-        getClogPageWithItems(aName, tab, title).catch(() => null),
-        getClogPageWithItems(bName, tab, title).catch(() => null),
-      ]);
+      const ra = cachedPage(aName, tab, title);
+      const rb = cachedPage(bName, tab, title);
       const okA = !!(ra && !ra.notFound);
       const okB = !!(rb && !rb.notFound);
       if (!okA && !okB) continue;
@@ -3257,9 +3268,10 @@ async function compareSkillsPayload(aName, bName, userId, ownerId, ui = {}) {
     let skillPets = null;
     const petNames = SKILL_PETS[picked] || [];
     if (petNames.length) {
-      const [petItemsA, petItemsB] = await Promise.all([
-        allPetsItems(aName), allPetsItems(bName),
-      ]);
+      const petPageA = cachedPage(aName, 'Other', 'All Pets');
+      const petPageB = cachedPage(bName, 'Other', 'All Pets');
+      const petItemsA = petPageA ? petPageA.items : null;
+      const petItemsB = petPageB ? petPageB.items : null;
       const list = [];
       for (const name of petNames) {
         const ia = (petItemsA || []).find((it) => it.name === name);
