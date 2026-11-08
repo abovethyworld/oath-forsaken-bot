@@ -615,11 +615,16 @@ async function petIconB64(id, name) {
   try { return fs.readFileSync(p).toString('base64'); } catch { return null; }
 }
 
+// Cache-only on purpose: petIdSet's one caller is the compare
+// clogs page build, which must never wait on the RuneProfile
+// request queue (see cachedPage).
 async function petIdSet(aName, bName) {
   const ids = new Set();
   for (const rsn of [aName, bName]) {
-    const items = await allPetsItems(rsn);
-    if (items) for (const it of items) ids.add(it.id);
+    const page = cachedPage(rsn, 'Other', 'All Pets');
+    if (page && Array.isArray(page.items)) {
+      for (const it of page.items) ids.add(it.id);
+    }
   }
   return ids;
 }
@@ -3802,9 +3807,13 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     let stb = null;
     const tab0 = gap.tab || gbp.tab;
     if (tab0) {
-      [fa, fb, sta, stb] = await Promise.all([
-        getClogPageWithItems(aName, tab0, pageTitle).catch(() => null),
-        getClogPageWithItems(bName, tab0, pageTitle).catch(() => null),
+      // Pages come from the cache only (stale is fine): a live
+      // fetch here would put the whole build behind the
+      // RuneProfile request queue. Stats still read live-first
+      // through their own cache.
+      fa = cachedPage(aName, tab0, pageTitle);
+      fb = cachedPage(bName, tab0, pageTitle);
+      [sta, stb] = await Promise.all([
         getStats(aName).catch(() => null),
         getStats(bName).catch(() => null),
       ]);
@@ -3830,7 +3839,7 @@ async function compareClogsPayload(aName, bName, userId, ownerId, ui = {}) {
     let pagePets = null;
     const pageTab = tab0;
     if (pageTab) {
-      const full = await getClogPageWithItems(aName, pageTab, pageTitle).catch(() => null);
+      const full = cachedPage(aName, pageTab, pageTitle);
       if (full && Array.isArray(full.items)) {
         const ids = await petIdSet(aName, bName);
         const found = full.items.filter((it) => ids.has(it.id));
