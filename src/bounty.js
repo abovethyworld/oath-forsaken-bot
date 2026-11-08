@@ -147,6 +147,17 @@ function posterProofText(proof) {
   return `Proof: ${label}: ${proof.target}${amount}, must land after the post date.`;
 }
 
+// Card calls share one keep-alive agent: the card service is a
+// same-machine hop, and a fresh connection setup per card was pure
+// overhead on every command. If undici is ever unavailable the
+// fetch simply runs without a dispatcher, as it did before.
+let _cardAgent = null;
+try {
+  const { Agent } = require('undici');
+  _cardAgent = new Agent({ keepAliveTimeout: 30000, keepAliveMaxTimeout: 60000 });
+} catch { _cardAgent = null; }
+const _cardDispatcher = _cardAgent ? { dispatcher: _cardAgent } : {};
+
 // Wanted-poster render from the card service. Null on any failure;
 // callers fall back to the text embed so posting never breaks.
 async function fetchPoster(bounty, hunters, statusText) {
@@ -178,6 +189,7 @@ async function fetchPoster(bounty, hunters, statusText) {
         image: bounty.image ? await thumbB64(bounty.image) : null,
       }),
       signal: ctrl.signal,
+      ..._cardDispatcher,
     });
     clearTimeout(timer);
     if (!res.ok) return null;

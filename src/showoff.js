@@ -1840,6 +1840,17 @@ async function handleClogCommand(message, args) {
 const SITE_BASE = 'https://oathforsaken.cc';
 const CARD_API = 'https://oathforsaken.cc/api/cards';
 
+// Card calls share one keep-alive agent: the card service is a
+// same-machine hop, and a fresh connection setup per card was pure
+// overhead on every command. If undici is ever unavailable the
+// fetch simply runs without a dispatcher, as it did before.
+let _cardAgent = null;
+try {
+  const { Agent } = require('undici');
+  _cardAgent = new Agent({ keepAliveTimeout: 30000, keepAliveMaxTimeout: 60000 });
+} catch { _cardAgent = null; }
+const _cardDispatcher = _cardAgent ? { dispatcher: _cardAgent } : {};
+
 // The website renders the kc / clog / leaderboard cards in the same
 // share-card style as the profile card. The bot POSTs the numbers it
 // already computed and posts the PNG that comes back. Any failure
@@ -1854,6 +1865,7 @@ async function fetchCard(path, body) {
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'OathForsaken-Bot/1.0 (https://oathforsaken.cc)' },
       body: JSON.stringify(body),
       signal: ctrl.signal,
+      ..._cardDispatcher,
     });
     clearTimeout(timer);
     if (!res.ok) return null;

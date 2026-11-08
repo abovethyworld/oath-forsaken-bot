@@ -29,6 +29,7 @@ const DATA = path.join(__dirname, '..', 'data');
 // partner and name-lookup target); SPACED is an account whose name
 // contains a space.
 const T = require(path.join(__dirname, '..', 'src', 'teams.js'));
+const LORE = require(path.join(__dirname, '..', 'src', 'lore.js'));
 function readDataJson(name) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA, name), 'utf8')); } catch { return null; }
 }
@@ -146,6 +147,8 @@ async function t(name, fn, needFile = true) {
   await t('compare overall', () => S.compareOverallPayload(PRIMARY, PARTNER, OWNER, OWNER));
   await t('compare skills', () => S.compareSkillsPayload(PRIMARY, PARTNER, OWNER, OWNER, {}));
   await t('compare skill inspect (Fishing)', () => S.compareSkillsPayload(PRIMARY, PARTNER, OWNER, OWNER, { skill: 'fishing' }));
+  const lawDrop = LORE.LORE_DROPS.find((d) => d.title === "Zamorak's Law");
+  await t('lore card', () => LORE.lorePayload(lawDrop.title, lawDrop.text));
   // Regression (Nov 2): the clogs totals branch crashed on an
   // out-of-scope variable after badges were added to compare.
   await t('compare clogs totals', () => S.compareClogsPayload(PRIMARY, PARTNER, OWNER, OWNER, {}));
