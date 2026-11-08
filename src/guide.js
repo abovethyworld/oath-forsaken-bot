@@ -167,9 +167,9 @@ function menuButtons() {
     ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setStyle(ButtonStyle.Danger)
+        .setStyle(ButtonStyle.Secondary)
         .setCustomId('help:setup')
-        .setLabel('View Setup Guide')
+        .setLabel('🙋 View Setup Guide')
     ),
   ];
 }
@@ -199,7 +199,7 @@ function setupEmbed() {
 function setupButtons() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setStyle(ButtonStyle.Danger)
+      .setStyle(ButtonStyle.Secondary)
       .setCustomId('team:rsn')
       .setLabel('Link your RSN'),
     new ButtonBuilder()

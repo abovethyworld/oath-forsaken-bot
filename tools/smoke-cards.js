@@ -1973,12 +1973,12 @@ async function t(name, fn, needFile = true) {
   const menuBtns = menuRows.flat();
   const menuLinkUrl = menuPayload && menuPayload.components && menuPayload.components[0]
     && menuPayload.components[0].toJSON().components[0].url;
-  ok('help: menu buttons are the guide link row + one red setup button',
+  ok('help: menu buttons are the guide link row + one gray setup button',
     menuRows.length === 2
       && menuRows[0].length === 1 && menuRows[0][0].label === 'Bot Guide ↗' && menuRows[0][0].style === 5
       && menuLinkUrl === 'https://oathforsaken.cc/guide/'
       && menuRows[1].length === 1 && menuRows[1][0].id === 'help:setup'
-      && menuRows[1][0].label === 'View Setup Guide' && menuRows[1][0].style === 4
+      && menuRows[1][0].label === '🙋 View Setup Guide' && menuRows[1][0].style === 2
       && !menuBtns.some((b) => /github|ko-fi/i.test(b.label)),
     JSON.stringify(menuBtns));
 
@@ -2000,9 +2000,9 @@ async function t(name, fn, needFile = true) {
     JSON.stringify(setupBtns));
   // The Link button reuses the #bot-guide post flow: buttons.js
   // routes the team: kind to handleTeamButton, so the team:rsn id
-  // on a red button IS the wiring.
+  // on the button IS the wiring.
   ok('help: setup card carries the Link RSN action on the shared team flow',
-    setupBtns.some((b) => b.id === 'team:rsn' && b.label === 'Link your RSN' && b.style === 4),
+    setupBtns.some((b) => b.id === 'team:rsn' && b.label === 'Link your RSN' && b.style === 2),
     JSON.stringify(setupBtns));
 
   const staffCmd = GD.commands.find((c) => c.data.name === 'staff-help');
