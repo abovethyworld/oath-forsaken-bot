@@ -221,16 +221,14 @@ function buildFormModal(type, totalBracket) {
     .setCustomId(`apply:modal:${type}:${totalBracket || 'none'}`)
     .setTitle(`${t.label} Application`);
   for (const q of t.questions || []) {
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(q.id)
-          .setLabel(q.label)
-          .setStyle(q.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
-          .setRequired(!!q.required)
-          .setMaxLength(q.style === 'paragraph' ? 500 : 100)
-      )
-    );
+    const input = new TextInputBuilder()
+      .setCustomId(q.id)
+      .setLabel(q.label)
+      .setStyle(q.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+      .setRequired(!!q.required)
+      .setMaxLength(q.style === 'paragraph' ? 500 : 100);
+    if (q.placeholder) input.setPlaceholder(q.placeholder);
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
   return modal;
 }

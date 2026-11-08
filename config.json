@@ -515,6 +515,7 @@
           {
             "id": "nickname",
             "label": "What should we call you?",
+            "placeholder": "This becomes your server nickname: Name [RSN]. Example: Mike [Durial321]",
             "style": "short",
             "required": true
           },
@@ -541,6 +542,7 @@
           {
             "id": "nickname",
             "label": "What should we call you?",
+            "placeholder": "This becomes your server nickname: Name [RSN]. Example: Mike [Durial321]",
             "style": "short",
             "required": true
           },
@@ -567,6 +569,7 @@
           {
             "id": "nickname",
             "label": "What should we call you?",
+            "placeholder": "This becomes your server nickname: Name [RSN]. Example: Mike [Durial321]",
             "style": "short",
             "required": true
           },
