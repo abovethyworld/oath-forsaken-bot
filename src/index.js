@@ -33,7 +33,6 @@ const store = require('./store');
 const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, youngAccountFlag } = require('./recruit');
-const { handleHelpSelect } = require('./guide');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
@@ -272,8 +271,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await handleCompareSkillSelect(interaction);
       } else if (interaction.customId.startsWith('cmpclog:')) {
         await handleCompareClogSelect(interaction);
-      } else if (interaction.customId === 'help:topic') {
-        await handleHelpSelect(interaction);
       } else if (interaction.customId === 'member:select') {
         await handleMemberSelect(interaction);
       } else if (interaction.customId === 'team:pick') {

@@ -1,7 +1,10 @@
-// /help: the bot guide, one topic at a time, answered privately.
-// Content comes from guide-content.json: the live copy sits in the data
-// dir (same file the website guide page is built from, so the words can
-// never drift apart); the bundled src copy is the first-boot fallback.
+// /help: one index menu, answered privately. The teaching lives in
+// the website Bot Guide (one short page per topic); this menu lists
+// the commands with their guide one-liners and opens the setup card.
+// Content comes from guide-content.json (pages shape, the same file
+// the website guide is built from, so the words can never drift
+// apart): the live copy sits in the data dir; the bundled src copy
+// is the first-boot fallback.
 const fs = require('fs');
 const path = require('path');
 const {
@@ -10,14 +13,11 @@ const {
   ButtonStyle,
   EmbedBuilder,
   SlashCommandBuilder,
-  StringSelectMenuBuilder,
 } = require('discord.js');
 const { ZAMORAK_RED } = require('./utils');
 const { scheduleEphemeralDelete } = require('./auto-delete');
-const { getRsnEntry, getStatedBadge } = require('./teams');
 
 const CONTENT_FILE = path.join(__dirname, '..', 'data', 'guide-content.json');
-const MEMBERS_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'members');
 
 let CONTENT = null;
 let contentMtime = 0;
@@ -28,14 +28,14 @@ function loadContent() {
     if (st.mtimeMs !== contentMtime) {
       CONTENT = JSON.parse(fs.readFileSync(CONTENT_FILE, 'utf8'));
       contentMtime = st.mtimeMs;
-      console.log(`Guide content loaded from data dir: ${(CONTENT.topics || []).length} topics`);
+      console.log(`Guide content loaded from data dir: ${(CONTENT.pages || []).length} pages`);
     }
   } catch {
     if (!CONTENT) {
       try {
         CONTENT = require('./guide-content.json');
       } catch {
-        CONTENT = { intro: '', siteUrl: 'https://oathforsaken.cc/guide', topics: [] };
+        CONTENT = { intro: '', siteUrl: 'https://oathforsaken.cc/guide', pages: [] };
       }
     }
   }
@@ -43,124 +43,121 @@ function loadContent() {
 }
 loadContent();
 
-function topicById(id) {
-  return (loadContent().topics || []).find((t) => t.id === id) || null;
+function pageBySlug(slug) {
+  return (loadContent().pages || []).find((p) => p.slug === slug) || null;
 }
 
-function linkedRsns(discordId) {
-  let files = [];
-  try {
-    files = fs.readdirSync(MEMBERS_DIR).filter((f) => f.endsWith('.json'));
-  } catch {
-    return [];
-  }
-  const rsns = [];
-  for (const file of files) {
-    try {
-      const record = JSON.parse(fs.readFileSync(path.join(MEMBERS_DIR, file), 'utf8'));
-      if (record && record.discordId === discordId && record.rsn) rsns.push(record.rsn);
-    } catch { /* skip unreadable records */ }
-  }
-  return rsns;
+// First content line (short, then fullExtra) starting with the given
+// text: the menu lines are the guide pages' own lines, pulled live.
+function pageLine(page, startsWith) {
+  if (!page) return null;
+  const lines = [...(page.short || []), ...(page.fullExtra || [])];
+  return lines.find((l) => l.startsWith(startsWith)) || null;
 }
 
-function topicMenu() {
-  const topics = loadContent().topics || [];
-  return new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId('help:topic')
-      .setPlaceholder('Pick a topic')
-      .addOptions(topics.map((t) => ({ label: t.title, value: t.id })))
-  );
-}
-
-function guideButton(topicId) {
+function guideUrl(slug) {
   const base = loadContent().siteUrl || 'https://oathforsaken.cc/guide';
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setStyle(ButtonStyle.Link)
-      .setLabel('Full guide on the website')
-      .setURL(topicId ? `${base}#${topicId}` : base)
-  );
+  return slug ? `${base}/${slug}/` : `${base}/`;
 }
 
-function homeEmbed(user) {
-  const content = loadContent();
-  const rsns = linkedRsns(user.id);
-  let status = rsns.length
-    ? `Your linked accounts: ${rsns.join(', ')}`
-    : 'No RSN linked yet. The Link RSN button is under the guide post in #bot-guide.';
-  const linkEntry = getRsnEntry(user.id);
-  const unstated = linkEntry.rsns.filter((r) => !getStatedBadge(user.id, r));
-  if (linkEntry.rsns.length && unstated.length) {
-    status += `\nAccount type not set for ${unstated.join(', ')}. The Account Type button is under the guide post in #bot-guide.`;
-  }
-  const topicList = (content.topics || []).map((t) => `**${t.title}**`).join(' · ');
+function menuEmbed() {
+  const gains = pageBySlug('gains-profile-pbs');
+  const cards = [
+    pageLine(pageBySlug('boss-cards'), '`/kc'),
+    pageLine(pageBySlug('collection-log-cards'), '`/clog`'),
+    pageLine(pageBySlug('dry-and-luck'), '`/dry'),
+    pageLine(gains, '`/skills`'),
+    pageLine(gains, '`/gains`'),
+    pageLine(gains, 'Also:'),
+    pageLine(pageBySlug('compare'), '`/compare'),
+  ].filter(Boolean);
+  const clan = [
+    pageLine(pageBySlug('events-competitions'), '`/events`'),
+    '`/help` - This menu.',
+  ].filter(Boolean);
+  const text = pageBySlug('text-commands');
+  const parts = [
+    `Guides for everything are in the [Bot Guide](${guideUrl()}).`,
+    '',
+    '**Cards**',
+    ...cards,
+    '',
+    '**Clan**',
+    ...clan,
+  ];
+  if (text && (text.short || []).length) parts.push('', text.short[0]);
   return new EmbedBuilder()
     .setTitle('⛧ Bot Guide ⛧')
     .setColor(ZAMORAK_RED)
-    .setDescription(
-      `${content.intro}\n\n${status}\n\nPick a topic below and the bot answers here, privately. Topics: ${topicList}`
-    );
+    .setDescription(parts.join('\n'));
 }
 
-function topicEmbed(topic) {
+function menuButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Bot Guide')
+      .setURL(guideUrl()),
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Danger)
+      .setCustomId('help:setup')
+      .setLabel('View Setup Guide')
+  );
+}
+
+function setupEmbed() {
+  const start = pageBySlug('getting-started');
+  const safety = pageBySlug('safety');
+  const parts = start ? [...(start.short || [])] : [];
+  const scamLine = safety
+    ? (safety.short || []).find((l) => l.includes('Jagex login'))
+    : null;
+  if (scamLine) parts.push(scamLine);
   return new EmbedBuilder()
-    .setTitle(`⛧ ${topic.title} ⛧`)
+    .setTitle('⛧ Getting started with Oath Forsaken ⛧')
     .setColor(ZAMORAK_RED)
-    .setDescription([...(topic.short || []), ...(topic.fullExtra || [])].join('\n\n'));
+    .setDescription(parts.join('\n\n'));
+}
+
+function setupButtons() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Bot Guide')
+      .setURL(guideUrl()),
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Safety and your code')
+      .setURL(guideUrl('safety'))
+  );
 }
 
 async function helpCommand(interaction) {
-  const topicId = interaction.options.getString('topic');
-  const topic = topicId ? topicById(topicId) : null;
-  if (topic) {
-    await interaction.reply({
-      embeds: [topicEmbed(topic)],
-      components: [topicMenu(), guideButton(topic.id)],
-      ephemeral: true,
-    });
-    scheduleEphemeralDelete(interaction);
-    return;
-  }
   await interaction.reply({
-    embeds: [homeEmbed(interaction.user)],
-    components: [topicMenu(), guideButton(null)],
+    embeds: [menuEmbed()],
+    components: [menuButtons()],
     ephemeral: true,
   });
   scheduleEphemeralDelete(interaction);
 }
 
-async function handleHelpSelect(interaction) {
-  const topic = topicById(interaction.values[0]);
-  if (!topic) return;
-  await interaction.update({
-    embeds: [topicEmbed(topic)],
-    components: [topicMenu(), guideButton(topic.id)],
+async function handleHelpButton(interaction) {
+  if (interaction.customId !== 'help:setup') return;
+  await interaction.reply({
+    embeds: [setupEmbed()],
+    components: [setupButtons()],
+    ephemeral: true,
   });
+  scheduleEphemeralDelete(interaction);
 }
 
 const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('help')
-      .setDescription('Bot guide: pick a topic, get the full version privately')
-      .addStringOption((o) =>
-        o
-          .setName('topic')
-          .setDescription('Jump straight to a topic')
-          .setRequired(false)
-          .addChoices(
-            { name: 'RSN Sync', value: 'sync' },
-            { name: 'Cards', value: 'cards' },
-            { name: 'Text commands', value: 'text-commands' },
-            { name: 'Compare', value: 'compare' },
-            { name: 'Bounties', value: 'bounties' },
-            { name: 'Fixes', value: 'fixes' }
-          )
-      ),
+      .setDescription('Bot guide, answered privately'),
     run: helpCommand,
   },
 ];
 
-module.exports = { commands, handleHelpSelect };
+module.exports = { commands, handleHelpButton };

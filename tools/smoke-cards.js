@@ -30,6 +30,7 @@ const DATA = path.join(__dirname, '..', 'data');
 // contains a space.
 const T = require(path.join(__dirname, '..', 'src', 'teams.js'));
 const LORE = require(path.join(__dirname, '..', 'src', 'lore.js'));
+const GD = require(path.join(__dirname, '..', 'src', 'guide.js'));
 function readDataJson(name) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA, name), 'utf8')); } catch { return null; }
 }
@@ -1929,6 +1930,47 @@ async function t(name, fn, needFile = true) {
       else fs.writeFileSync(memPath, memSaved);
     }
   }
+
+  // ── Help menu + setup card (guide rework phase 3) ──
+  // /help is one index menu now: the guide pages' own one-liners,
+  // a link button to the website guide, and a setup button that
+  // answers with the Getting started page plus the scam line.
+  const helpIx = fakeIx(null);
+  helpIx.deleteReply = async () => {};
+  await GD.commands.find((c) => c.data.name === 'help').run(helpIx);
+  const menuPayload = helpIx.replied;
+  const menuDesc = menuPayload && menuPayload.embeds && menuPayload.embeds[0]
+    && menuPayload.embeds[0].data.description;
+  ok('help: menu renders ephemeral with guide lines',
+    !!menuDesc && menuPayload.ephemeral === true
+      && menuDesc.includes('Guides for everything are in the [Bot Guide](https://oathforsaken.cc/guide/)')
+      && menuDesc.includes('`/kc zulrah` - Boss kills and its collection log items.')
+      && menuDesc.includes('Also: `/profile`, `/pb`, `/leaderboard`.')
+      && menuDesc.includes('Every card command has a text version.'),
+    menuDesc ? menuDesc.slice(0, 120) : 'no reply');
+  const menuBtns = menuPayload ? flat(menuPayload) : [];
+  ok('help: menu carries guide link + setup button, no topic select',
+    menuBtns.some((b) => b.label === 'Bot Guide')
+      && menuBtns.some((b) => b.id === 'help:setup')
+      && !menuBtns.some((b) => b.id === 'help:topic'),
+    JSON.stringify(menuBtns));
+
+  const setupIx = fakeIx('help:setup');
+  setupIx.deleteReply = async () => {};
+  await GD.handleHelpButton(setupIx);
+  const setupPayload = setupIx.replied;
+  const setupDesc = setupPayload && setupPayload.embeds && setupPayload.embeds[0]
+    && setupPayload.embeds[0].data.description;
+  ok('help: setup card renders the getting-started steps + scam line',
+    !!setupDesc && setupPayload.ephemeral === true
+      && setupDesc.includes('1. Link your RSN.')
+      && setupDesc.includes('3. Sync your collection log.')
+      && setupDesc.includes('We never ask for a Jagex login anywhere. Anything that does is a scam.'),
+    setupDesc ? setupDesc.slice(0, 120) : 'no reply');
+  const setupBtns = setupPayload ? flat(setupPayload) : [];
+  ok('help: setup card links guide + safety page',
+    setupBtns.filter((b) => b.label === 'Bot Guide' || b.label === 'Safety and your code').length === 2,
+    JSON.stringify(setupBtns));
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction

@@ -11,6 +11,7 @@ const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
 const { handleCompareButton, handleCompareSwapButton, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLbSwapButton, handleLbBackButton, handleGainsButton, handleBridgeButton, handleRefreshButton, handleDryCatButton, handleDryViewButton, handleHubButton, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton } = require('./showoff');
 const { handleWipeButton } = require('./wipe');
+const { handleHelpButton } = require('./guide');
 const { handleStaffLinkButton } = require('./staff-link');
 const { handleWebsiteControlsButton } = require('./website-controls');
 const config = require('./config');
@@ -27,6 +28,7 @@ function panelRoleIds() {
 
 async function routeButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
+  if (kind === 'help') return handleHelpButton(interaction);
   if (kind === 'ticket') return handleTicketButton(interaction);
   if (kind === 'stafflink') return handleStaffLinkButton(interaction);
   if (kind === 'webctl') return handleWebsiteControlsButton(interaction);
