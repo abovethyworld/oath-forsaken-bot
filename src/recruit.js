@@ -26,6 +26,7 @@ const {
 const config = require('./config');
 const store = require('./store');
 const { buildInitiateWelcome, buildGuestWelcome, isStaff, safeRoleAdd, getPingRole, ZAMORAK_RED } = require('./utils');
+const { postOrEdit } = require('./panel-store');
 const { getStats } = require('./wom');
 const { addRsn, setActiveRsn, verifiedOwnerOf, setStatedBadge, syncModeRoles, BADGES } = require('./teams');
 const { addEntry: addCcEntry } = require('./cc-checklist');
@@ -284,7 +285,7 @@ async function postApplicationPanel(channel) {
         .setEmoji(t.emoji || '📝')
     );
   }
-  await channel.send({ embeds: [embed], components: [row] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+  await postOrEdit(channel, `applications:${channel.id}`, { embeds: [embed], components: [row] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
 }
 
 async function setupApplications(interaction) {
@@ -295,7 +296,7 @@ async function setupApplications(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const channel = interaction.channel;
   await postApplicationPanel(channel);
-  await interaction.editReply(`Application panel posted in ${channel}.`);
+  await interaction.editReply(`Application panel posted/refreshed in ${channel}.`);
 }
 
 async function showApplicationModal(interaction, type, totalBracket) {

@@ -20,6 +20,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   UserSelectMenuBuilder,
 } = require('discord.js');
@@ -224,7 +225,8 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('website-controls-panel')
-      .setDescription('Post the staff Website controls panel in its thread (Staff only)'),
+      .setDescription('Post the staff Website controls panel in its thread (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
     run: postPanelCommand,
   },
 ];

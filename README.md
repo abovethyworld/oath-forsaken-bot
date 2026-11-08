@@ -5,7 +5,7 @@ A custom Discord bot for the Oath Forsaken OSRS clan. Handles onboarding, senior
 ## Features
 
 - **Button roles** — `/setup-roles` posts embed panels with clickable role buttons
-- **Rules + strike system** — `/post-rules` and `/post-strikes` post themed embeds
+- **Rules + strike system** — `/setup-rules` and `/setup-strikes` post themed embeds
 - **Welcome messages** — automatic themed welcome when someone joins
 - **Strike tracking** — `/warn`, `/strikes`, `/clear-strikes` with mod-log channel
 - **Tickets** — `/setup-tickets` posts a panel with four themed ticket types: Report, Inquiry, Claim Reward, Become a Member
@@ -67,9 +67,9 @@ Run these once in your server to post the panels:
 | Command | What it posts |
 |---|---|
 | `/setup-roles` | Button-role panels |
-| `/post-rules` | Rules embed |
-| `/post-ranks` | Clan ranks embed |
-| `/post-strikes` | Strike system embed |
+| `/setup-rules` | Rules embed |
+| `/setup-ranks` | Clan ranks embed |
+| `/setup-strikes` | Strike system embed |
 | `/setup-tickets` | Ticket panel (Report, Inquiry, Claim Reward, Become a Member) |
 | `/setup-applications` | Application panel |
 | `/setup-cc-checklist` | CC Rank Checklist tracker |
@@ -81,7 +81,6 @@ Run these once in your server to post the panels:
 | `/warn @user reason` | Adds a strike, logs it to the mod channel | Mods |
 | `/strikes @user` | Shows a user's strikes | Mods |
 | `/clear-strikes @user` | Clears a user's strikes | Mods |
-| `/close` | Closes the current ticket (archives and locks the thread) | Staff |
 | `/event-create` | Creates a Discord scheduled event + announcement. Date `YYYY-MM-DD`, time `HH:MM` 24h in your configured timezone | Manage Events |
 | `/events` | Lists upcoming events | Everyone |
 | `/event-cancel` | Cancels an event by name | Manage Events |

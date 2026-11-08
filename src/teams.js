@@ -20,6 +20,7 @@ const path = require('path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
 const { isStaff, ZAMORAK_RED, DAY_MS, clampDesc } = require('./utils');
+const { postOrEdit } = require('./panel-store');
 const { getStats, getCachedStats } = require('./wom');
 const { getClogPage, getCachedClogPage } = require('./runeprofile');
 
@@ -3813,14 +3814,14 @@ async function postTeamPanel(interaction) {
     await interaction.editReply('Could not find the team listings channel. Tell staff.');
     return;
   }
-  await channel.send(teamPanelPayload());
-  await interaction.editReply(`Team panel posted in ${channel}.`);
+  await postOrEdit(channel, 'team-panel', teamPanelPayload());
+  await interaction.editReply(`Team panel posted/refreshed in ${channel}.`);
 }
 
 const commands = [
   {
     data: new SlashCommandBuilder()
-      .setName('post-team-panel')
+      .setName('setup-team-panel')
       .setDescription('Post the team finder panel (Admin only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     run: postTeamPanel,

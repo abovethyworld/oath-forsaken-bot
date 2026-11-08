@@ -263,7 +263,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('force-unlink')
-      .setDescription('Staff: clear an RSN link and record claim for a member')
+      .setDescription('Clear an RSN link and record claim for a member (Admin only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
       .addUserOption((o) => o.setName('user').setDescription('The member').setRequired(true))
       .addStringOption((o) => o.setName('rsn').setDescription('The RSN to clear').setRequired(true)),

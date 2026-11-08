@@ -23,6 +23,7 @@ const {
   ButtonStyle,
   EmbedBuilder,
   ModalBuilder,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -253,7 +254,8 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('link-rsn-panel')
-      .setDescription('Post the staff Link an RSN panel in its thread (Staff only)'),
+      .setDescription('Post the staff Link an RSN panel in its thread (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
     run: postPanelCommand,
   },
 ];
