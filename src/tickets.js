@@ -14,6 +14,7 @@ const {
 const config = require('./config');
 const store = require('./store');
 const { isStaff, buildInitiateWelcome, safeFetch, ZAMORAK_RED } = require('./utils');
+const { postOrEdit } = require('./panel-store');
 
 // Per-button ticket themes (every ticket themed to the button clicked)
 const TICKET_TYPES = {
@@ -71,8 +72,8 @@ async function setupTickets(interaction) {
       .setStyle(ButtonStyle.Danger)
       .setEmoji('⬆️')
   );
-  await channel.send({ embeds: [embed], components: [row] });
-  await interaction.editReply(`Ticket panel posted in ${channel}.`);
+  await postOrEdit(channel, 'tickets', { embeds: [embed], components: [row] });
+  await interaction.editReply(`Ticket panel posted/refreshed in ${channel}.`);
 }
 
 async function createTicket(interaction, ticketType) {
@@ -282,12 +283,6 @@ const commands = [
       .setDescription('Post the ticket panel (Admin only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     run: setupTickets,
-  },
-  {
-    data: new SlashCommandBuilder()
-      .setName('close')
-      .setDescription('Close this ticket (staff only)'),
-    run: closeTicket,
   },
 ];
 

@@ -914,7 +914,8 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('bounty')
-      .setDescription('Manage bounty contracts')
+      .setDescription('Post a bounty contract (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
       .addSubcommand((s) =>
         s
           .setName('post')

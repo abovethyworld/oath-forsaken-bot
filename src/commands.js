@@ -28,6 +28,7 @@ const pluginConnect = require('./plugin-connect');
 const guide = require('./guide');
 const staffLink = require('./staff-link');
 const websiteControls = require('./website-controls');
+const { postOrEdit, postOrEditMany } = require('./panel-store');
 
 const STYLE_MAP = {
   Primary: ButtonStyle.Primary,
@@ -85,7 +86,7 @@ async function postRolePanels(interaction) {
     await interaction.editReply('Roles channel not found. Tell staff.');
     return;
   }
-  let posted = 0;
+  const payloads = [];
   for (const panel of config.rolePanels) {
     const rows = chunkButtons(panel.buttons || []);
     // Split into multiple messages if a panel somehow exceeds 25 buttons.
@@ -93,11 +94,11 @@ async function postRolePanels(interaction) {
       const msgRows = rows.slice(i, i + 5);
       const payload = { components: msgRows };
       if (i === 0) payload.embeds = [panelToEmbed(panel)];
-      await channel.send(payload);
-      posted++;
+      payloads.push(payload);
     }
   }
-  await interaction.editReply(`Posted ${posted} role panel message(s) in ${channel}.`);
+  const posted = await postOrEditMany(channel, 'roles', payloads);
+  await interaction.editReply(`Posted/refreshed ${posted} role panel message(s) in ${channel}.`);
 }
 
 async function postRules(interaction) {
@@ -117,8 +118,8 @@ async function postRules(interaction) {
     .setDescription(sectionsToDescription(r.intro, r.sections, r.footer))
     .setColor(r.color ?? ZAMORAK_RED);
   if (r.banner) embed.setImage(r.banner);
-  await channel.send({ embeds: [embed] });
-  await interaction.editReply(`Rules posted in ${channel}.`);
+  await postOrEdit(channel, 'rules', { embeds: [embed] });
+  await interaction.editReply(`Rules posted/refreshed in ${channel}.`);
 }
 
 async function postStrikes(interaction) {
@@ -138,8 +139,8 @@ async function postStrikes(interaction) {
     .setDescription(sectionsToDescription(s.intro, s.levels, s.footer))
     .setColor(s.color ?? 0xff0000);
   if (s.banner) embed.setImage(s.banner);
-  await channel.send({ embeds: [embed] });
-  await interaction.editReply(`Strike system posted in ${channel}.`);
+  await postOrEdit(channel, 'strikes', { embeds: [embed] });
+  await interaction.editReply(`Strike system posted/refreshed in ${channel}.`);
 }
 
 async function postRanks(interaction) {
@@ -159,8 +160,8 @@ async function postRanks(interaction) {
     .setDescription(sectionsToDescription(r.intro, r.sections, r.footer))
     .setColor(r.color ?? ZAMORAK_RED);
   if (r.banner) embed.setImage(r.banner);
-  await channel.send({ embeds: [embed] });
-  await interaction.editReply(`Ranks info posted in ${channel}.`);
+  await postOrEdit(channel, 'ranks', { embeds: [embed] });
+  await interaction.editReply(`Ranks info posted/refreshed in ${channel}.`);
 }
 
 async function warnUser(interaction) {
@@ -238,21 +239,21 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
-      .setName('post-rules')
+      .setName('setup-rules')
       .setDescription('Post the rules embed (Admin only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     run: postRules,
   },
     {
       data: new SlashCommandBuilder()
-        .setName('post-ranks')
+        .setName('setup-ranks')
         .setDescription('Post the clan ranks info embed (Admin only)')
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
       run: postRanks,
     },
   {
     data: new SlashCommandBuilder()
-      .setName('post-strikes')
+      .setName('setup-strikes')
       .setDescription('Post the strike system embed (Admin only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
     run: postStrikes,
@@ -260,7 +261,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('warn')
-      .setDescription('Give a user a strike')
+      .setDescription('Give a user a strike (Manage Messages only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
       .addUserOption((o) => o.setName('user').setDescription('Who to warn').setRequired(true))
       .addStringOption((o) => o.setName('reason').setDescription('Why').setRequired(true).setMaxLength(1000)),
@@ -269,7 +270,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('strikes')
-      .setDescription("Show a user's strikes")
+      .setDescription("Show a user's strikes (Manage Messages only)")
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
       .addUserOption((o) => o.setName('user').setDescription('Who to check').setRequired(true)),
     run: showStrikes,
@@ -277,7 +278,7 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('clear-strikes')
-      .setDescription("Clear a user's strikes")
+      .setDescription("Clear a user's strikes (Manage Messages only)")
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
       .addUserOption((o) => o.setName('user').setDescription('Who to clear').setRequired(true)),
     run: clearStrikesCmd,
