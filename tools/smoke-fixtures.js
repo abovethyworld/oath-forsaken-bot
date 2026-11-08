@@ -184,14 +184,39 @@ const PAGES = [
   ['Clues', 'Master Treasure Trails', ['clue_scrolls_master']],
   ['Clues', 'Shared Treasure Trail Rewards', CLUE_COUNTERS],
   ['Minigames', 'Wintertodt', ['wintertodt']],
-  ['Minigames', 'Tempoross', ['tempoross']],
+  // The Fishing compare inspect reads these three pages; none of
+  // them hold luck-data items, so their real contents are listed
+  // as game facts (item ids and names as the pages carry them).
+  ['Bosses', 'Tempoross', [
+    { id: 25602, name: 'Tiny tempor' }, { id: 25559, name: 'Big harpoonfish' },
+    { id: 25592, name: 'Spirit angler headband' }, { id: 25594, name: 'Spirit angler top' },
+    { id: 25596, name: 'Spirit angler waders' }, { id: 25598, name: 'Spirit angler boots' },
+    { id: 25576, name: 'Tome of Water (empty)' }, { id: 25578, name: 'Soaked page' },
+    { id: 25580, name: 'Tackle box' }, { id: 25582, name: 'Fish barrel' },
+    { id: 21028, name: 'Dragon harpoon' }, { id: 25588, name: 'Spirit flakes' },
+  ]],
+  ['Minigames', 'Fishing Trawler', [
+    { id: 13258, name: 'Angler hat' }, { id: 13259, name: 'Angler top' },
+    { id: 13260, name: 'Angler waders' }, { id: 13261, name: 'Angler boots' },
+  ]],
+  ['Other', 'Aerial Fishing', [
+    { id: 22838, name: 'Fish sack' }, { id: 22840, name: 'Golden tench' },
+    { id: 22842, name: 'Pearl barbarian rod' }, { id: 22844, name: 'Pearl fly fishing rod' },
+    { id: 22846, name: 'Pearl fishing rod' },
+    { id: 13258, name: 'Angler hat' }, { id: 13259, name: 'Angler top' },
+    { id: 13260, name: 'Angler waders' }, { id: 13261, name: 'Angler boots' },
+  ]],
   ['Other', 'All Pets', null], // filled from petItems()
 ];
 
 function buildPages(acctIndex) {
   const pages = [];
   for (const [tab, title, counters] of PAGES) {
-    const base = counters ? itemsForCounters(counters) : petItems();
+    // A page entry carries either luck-data counter names, a
+    // literal item list, or null (the pets page).
+    const base = !counters ? petItems()
+      : counters[0] && typeof counters[0] === 'object' ? counters
+      : itemsForCounters(counters);
     if (!base.length) continue;
     const items = base.map((it, i) => ({
       id: it.id,
