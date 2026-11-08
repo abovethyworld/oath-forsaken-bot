@@ -156,9 +156,10 @@ async function handleEventButton(interaction) {
   const ch = interaction.guild.channels.cache.get(config.calendar.eventsChannelId);
   const ping = config.calendar.pingRoleId ? `<@&${config.calendar.pingRoleId}>` : '';
   if (ch) {
+    const where = isVoice ? `<#${voice.id}>` : 'In-game (Gielinor)';
     const embed = new EmbedBuilder()
       .setTitle(`📅 ${name}`)
-      .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)`)
+      .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)\n**Where:** ${where}`)
       .setColor(0x6b0e0e);
     await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
   }
@@ -314,7 +315,9 @@ async function syncReminders(client) {
       if (minsLeft <= 0) continue;
       for (const r of config.calendar.reminders || [60, 15]) {
         if (minsLeft <= r && !store.wasReminded(e.id, r)) {
-          const sent = await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!`.trim()).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
+          const where = e.channelId ? ` Meet in <#${e.channelId}>.`
+            : (e.entityMetadata && e.entityMetadata.location ? ` Where: ${e.entityMetadata.location}.` : '');
+          const sent = await ch.send(`${ping} ⏰ **${e.name}** starts in ~${r} minutes!${where}`.trim()).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
           // Only mark as reminded once the ping actually went out — marking
           // first would permanently eat the reminder if the send failed.
           if (sent) store.markReminded(e.id, r);
