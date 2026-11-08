@@ -740,9 +740,9 @@ async function t(name, fn, needFile = true) {
 
   // N. Dry list rate/KC fields and the !dry text parse
   // (Nov 2, 2026, late): dryReport missing units carry the
-  // activity count and a per-attempt rate, blended across
-  // sources; a name after !dry opens the list, a boss opens
-  // its card (takeActivity used to eat the name whole).
+  // activity count and rate of their main source group; a
+  // name after !dry opens the list, a boss opens its card
+  // (takeActivity used to eat the name whole).
   const L = require(path.join(__dirname, '..', 'src', 'luck.js'));
   const blud = L.dryReport({ abyssal_sire: 1077 },
     [{ id: 13274, quantity: 0 }, { id: 13275, quantity: 0 }, { id: 13276, quantity: 0 }]);
@@ -753,7 +753,7 @@ async function t(name, fn, needFile = true) {
   const page = L.dryReport({ clue_scrolls_hard: 100, clue_scrolls_master: 50 },
     [{ id: 12624, quantity: 0 }]);
   const pageRow = page && page.missing[0];
-  ok('dry rate: clue page blended rate', !!pageRow && pageRow.rate > 0.007 && pageRow.rate < 0.009,
+  ok('dry rate: clue page prints no blended rate', !!pageRow && pageRow.rate === null,
     pageRow && String(pageRow.rate));
   ok('dry rate: clue page kc sums tiers', !!pageRow && pageRow.kc === 150);
   const shard = L.dryReport(
@@ -777,6 +777,15 @@ async function t(name, fn, needFile = true) {
   const virtusRow = virtus && virtus.missing[0];
   ok('dry pool: virtus names the Forgotten Four', !!virtusRow && virtusRow.pool === 'Forgotten Four' && virtusRow.kc === 40,
     virtusRow && `${virtusRow.pool} ${virtusRow.kc}`);
+  const axe = L.dryReport(
+    { dagannoth_rex: 85, dagannoth_prime: 2, dagannoth_supreme: 3, wintertodt: 101 },
+    [{ id: 6739, quantity: 0 }]);
+  const axeRow = axe && axe.missing[0];
+  ok('dry rate: dragon axe prints the kings rate', !!axeRow
+    && Math.abs(axeRow.rate - 0.0078125) < 0.0001 && !axeRow.pool,
+    axeRow && String(axeRow.rate));
+  ok('dry kc: dragon axe counts kings only, not Wintertodt', !!axeRow && axeRow.kc === 90,
+    axeRow && String(axeRow.kc));
   async function fakeDryMsg(userId, args) {
     const replies = [];
     const msg = {
