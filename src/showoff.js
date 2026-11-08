@@ -1914,7 +1914,7 @@ async function siteCardPayload(rsn) {
 
 // The player's driest missing scored item across every synced
 // collection log page, in the luck plugin's phrasing ("85%
-// luckier than you"). Cache-only: pages the bot has never seen
+// would have this by now"). Cache-only: pages the bot has never seen
 // are skipped, never fetched. The headline pick is the Uniques
 // view (legit drops only, no clues, no Barrows or Moons); a
 // player with no qualifying legit drop falls back to their
@@ -1959,7 +1959,7 @@ function driestItemUnit(rsn, st) {
 
 function driestItemText(rsn, st) {
   const u = driestItemUnit(rsn, st);
-  return u ? `${u.name} (${u.dryness}% luckier than you)` : null;
+  return u ? `${u.name} (${u.dryness}% would have this by now)` : null;
 }
 
 // Cold start: the first time ANY card
@@ -2068,7 +2068,7 @@ async function refreshProfileLuck() {
     const st = await getStats(rsn).catch(() => null);
     const u = driestItemUnit(rsn, st);
     if (u) {
-      out[rsn.toLowerCase()] = `${u.name} (${u.dryness}% luckier than you)`;
+      out[rsn.toLowerCase()] = `${u.name} (${u.dryness}% would have this by now)`;
       units[rsn.toLowerCase()] = u;
     }
   }
@@ -2106,7 +2106,7 @@ async function profilePayload(rsn, userId) {
   const pBadgeId = badgeForAccount(fields.name, null);
   const stL = await getStats(fields.name).catch(() => null);
   const luckUnitRaw = driestItemUnit(fields.name, stL);
-  const luckLine = luckUnitRaw ? `${luckUnitRaw.name} (${luckUnitRaw.dryness}% luckier than you)` : null;
+  const luckLine = luckUnitRaw ? `${luckUnitRaw.name} (${luckUnitRaw.dryness}% would have this by now)` : null;
   const luckUnit = luckUnitRaw
     ? { ...luckUnitRaw, icon: await petIconB64(luckUnitRaw.id, luckUnitRaw.name) }
     : null;
@@ -2434,7 +2434,7 @@ function lbBuildBoard(st, names) {
         name: rsn, badge: lbBadgeFor(rsn, s ? s.accountType : null),
         value: 100 - u.score,
         valueText: `${u.name} · ${ord(u.score)}`,
-        sub: `${u.dryness}% luckier than you`,
+        sub: `${u.dryness}% would have this by now`,
       });
     }
     rows.sort((a, b) => b.value - a.value);
