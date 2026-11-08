@@ -2,7 +2,7 @@
 // Remixes content from the seniority rank-up stories. Reinforces the clan
 // theme without staff effort. No AI generation — all lines are hand-written
 // from existing clan copy.
-const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 const { ZAMORAK_RED } = require('./utils');
 
 const LORE_DROPS = [
@@ -40,13 +40,56 @@ const LORE_DROPS = [
   },
 ];
 
+const CARD_API = 'https://oathforsaken.cc/api/cards';
+
+// Card calls share one keep-alive agent: the card service is a
+// same-machine hop, and a fresh connection setup per card was pure
+// overhead on every command. If undici is ever unavailable the
+// fetch simply runs without a dispatcher, as it did before.
+let _cardAgent = null;
+try {
+  const { Agent } = require('undici');
+  _cardAgent = new Agent({ keepAliveTimeout: 30000, keepAliveMaxTimeout: 60000 });
+} catch { _cardAgent = null; }
+const _cardDispatcher = _cardAgent ? { dispatcher: _cardAgent } : {};
+
+// Lore card render from the card service, in the same shape as
+// showoff's fetchCard. Null on any failure; the caller falls
+// back to the embed so the command never breaks.
+async function fetchLoreCard(title, text) {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    const res = await fetch(CARD_API + '/lore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'DiscordBot (https://oathforsaken.cc, 1.0)' },
+      body: JSON.stringify({ title, text }),
+      signal: ctrl.signal,
+      ..._cardDispatcher,
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+// The /lore reply: the drawn card when the card service
+// answers, the original embed when it does not.
+async function lorePayload(title, text) {
+  const card = await fetchLoreCard(title, text);
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'lore.png' })] };
+  const embed = new EmbedBuilder()
+    .setTitle(`⛧ ${title} ⛧`)
+    .setDescription(text)
+    .setColor(ZAMORAK_RED);
+  return { embeds: [embed] };
+}
+
 async function loreCommand(interaction) {
   const drop = LORE_DROPS[Math.floor(Math.random() * LORE_DROPS.length)];
-  const embed = new EmbedBuilder()
-    .setTitle(`⛧ ${drop.title} ⛧`)
-    .setDescription(drop.text)
-    .setColor(ZAMORAK_RED);
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply(await lorePayload(drop.title, drop.text));
 }
 
 const commands = [
@@ -58,4 +101,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, LORE_DROPS };
+module.exports = { commands, LORE_DROPS, lorePayload };
