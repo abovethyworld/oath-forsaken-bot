@@ -1969,7 +1969,7 @@ async function t(name, fn, needFile = true) {
     setupDesc ? setupDesc.slice(0, 120) : 'no reply');
   const setupBtns = setupPayload ? flat(setupPayload) : [];
   ok('help: setup card links guide + safety page',
-    setupBtns.filter((b) => b.label === 'Bot Guide' || b.label === 'Safety and your code').length === 2,
+    setupBtns.filter((b) => b.label === 'Bot Guide' || b.label === 'Safety').length === 2,
     JSON.stringify(setupBtns));
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
