@@ -445,19 +445,95 @@ function luckForPage(counters, pageItems) {
   return { word, dry };
 }
 
+// The family a counter belongs to by name: the kings
+// (dagannoth_rex, dagannoth_prime, dagannoth_supreme)
+// share a stem, and so do the clue tiers (clue_scrolls_easy
+// and up). A counter with no underscore is its own stem.
+function counterStem(counter) {
+  const c = String(counter);
+  const i = c.lastIndexOf('_');
+  return i >= 0 ? c.slice(0, i) : c;
+}
+
+// A unit's source counters split into display groups: pool
+// families first, then counters sharing a name stem, then
+// every other counter alone. Each counter counted once, in
+// source order.
+function sourceGroups(u) {
+  const order = [];
+  for (const s of u.sources || []) {
+    if (!order.includes(s.c)) order.push(s.c);
+  }
+  const groups = [];
+  const used = new Set();
+  for (const f of POOL_FAMILIES) {
+    const members = order.filter((c) => f.counters.includes(c));
+    if (members.length) {
+      groups.push(members);
+      for (const c of members) used.add(c);
+    }
+  }
+  const byStem = new Map();
+  for (const c of order) {
+    if (used.has(c)) continue;
+    const stem = counterStem(c);
+    if (!byStem.has(stem)) byStem.set(stem, []);
+    byStem.get(stem).push(c);
+  }
+  for (const g of byStem.values()) groups.push(g);
+  return groups;
+}
+
+// The source group a dry row's printed KC and rate are
+// measured against: the pool family the row is labelled by
+// when one matches, a pool family the unit draws from in
+// full (the Dragon axe's kings, with Wintertodt tagged on
+// as a side source), otherwise the group with the most
+// attempts. Ties go to the earliest group in source order.
+function mainSourceGroup(u, counters) {
+  const groups = sourceGroups(u);
+  if (!groups.length) return [];
+  const have = new Set((u.sources || []).map((s) => s.c));
+  const labelled = poolLabelFor(u);
+  if (labelled) {
+    for (const f of POOL_FAMILIES) {
+      if (f.label === labelled) return f.counters.filter((c) => have.has(c));
+    }
+  }
+  for (const f of POOL_FAMILIES) {
+    if (f.counters.length && f.counters.every((c) => have.has(c))) {
+      return f.counters.filter((c) => have.has(c));
+    }
+  }
+  const attempts = (group) => group.reduce(
+    (a, c) => a + (counters && typeof counters[c] === 'number' ? counters[c] : 0), 0);
+  let best = groups[0];
+  let bestAttempts = attempts(best);
+  for (const group of groups.slice(1)) {
+    const a = attempts(group);
+    if (a > bestAttempts) {
+      best = group;
+      bestAttempts = a;
+    }
+  }
+  return best;
+}
+
 // What sits behind a scored unit, for display: the activity
-// count its score is measured against (the counters of its
-// sources, each counted once) and a drop rate. When every
-// attempted source shares one rate, that rate shows per
-// counter counted (boss rolls folded in, clue rates as
-// quoted). Entries fed by several counters at different
-// rates (clue pages and blessings drop from every tier)
-// blend their sources by the attempts the player actually
-// has at each, rolls folded in, so the rate is per KC
-// shown. A pieces-mode set scores any piece, so its rate
-// scales by the piece count first.
+// count and drop rate its row prints. The luck score pools
+// every source (so does the plugin), but the printed
+// numbers do not: KC and rate come from the unit's main
+// source group only, so a Dragon axe reads as its Dagannoth
+// Kings count at the kings' rate, not a pool of kings plus
+// Wintertodt games at a blended rate no drop table quotes.
+// Within the group, when every attempted source shares one
+// rate, that rate shows per counter counted (boss rolls
+// folded in, clue rates as quoted); mixed rates print no
+// rate at all. A pieces-mode set scores any piece, so its
+// rate scales by the piece count first.
 function unitDropInfo(u, counters) {
-  const srcs = u.sources || [];
+  const main = new Set(mainSourceGroup(u, counters));
+  const srcs = (u.sources || []).filter((s) => main.has(s.c));
   const keys = [...new Set(srcs.map((s) => s.c))];
   const kc = keys.reduce(
     (a, c) => a + (counters && typeof counters[c] === 'number' ? counters[c] : 0), 0);
@@ -489,23 +565,20 @@ function unitDropInfo(u, counters) {
     }
     return { kc: kc > 0 ? kc : null, rate: distinct[0] };
   }
-  let weighted = 0;
-  let attempts = 0;
-  for (const s of attempted) {
-    weighted += s.n * (1 - Math.pow(1 - s.rate, s.rolls));
-    attempts += s.n;
-  }
-  return { kc: kc > 0 ? kc : null, rate: attempts > 0 ? weighted / attempts : null };
+  return { kc: kc > 0 ? kc : null, rate: null };
 }
 
 // Drops pooled across a whole boss family name the family
 // on the driest list, not the one boss page they were read
 // from: godsword shards fall at all four generals, Virtus
-// and the ingot at all four DT2 bosses. Their KC stays the
-// pooled total the score is measured against.
+// and the ingot at all four DT2 bosses, the Dragon axe at
+// all three kings. A unit drawing on a whole family also
+// has its printed KC and rate measured against that family
+// alone (see mainSourceGroup).
 const POOL_FAMILIES = [
   { counters: ['commander_zilyana', 'general_graardor', 'kreearra', 'kril_tsutsaroth'], label: 'GWD' },
   { counters: ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], label: 'Forgotten Four' },
+  { counters: ['dagannoth_prime', 'dagannoth_rex', 'dagannoth_supreme'], label: 'Dagannoth Kings' },
 ];
 
 function poolLabelFor(u) {
