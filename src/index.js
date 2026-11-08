@@ -87,10 +87,15 @@ client.once(Events.ClientReady, async (c) => {
 
   // Register guild slash commands (instant, no 1-hour global wait).
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-  await rest.put(
+  const registered = await rest.put(
     Routes.applicationGuildCommands(process.env.CLIENT_ID, config.guildId),
     { body: commands.map((cmd) => cmd.data.toJSON()) }
   );
+  // /help renders slash mention pills, which need the registered
+  // command ids; hand them to the guide module.
+  if (Array.isArray(registered)) {
+    require('./guide').setCommandIds(new Map(registered.map((c) => [c.name, c.id])));
+  }
   console.log(`Registered ${commands.length} slash commands for guild ${config.guildId}.`);
   console.log('Bot is running. Leave this process on 24/7 (see README for hosting).');
 

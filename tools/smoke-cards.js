@@ -1931,28 +1931,55 @@ async function t(name, fn, needFile = true) {
     }
   }
 
-  // ── Help menu + setup card (guide rework phase 3) ──
-  // /help is one index menu now: the guide pages' own one-liners,
-  // a link button to the website guide, and a setup button that
-  // answers with the Getting started page plus the scam line.
+  // ── Help menu + setup card + staff help ──
+  // /help mimics the DropTracker menu: plain "Help Menu" title, logo
+  // thumbnail, every member command as a slash mention pill plus one
+  // plain sentence, a Bot Guide link row, and one red setup button.
+  // /staff-help is the same shape for staff commands, gated on
+  // Moderate Members. The setup card answers with the Getting
+  // started page plus the scam line.
+  GD.setCommandIds(new Map([
+    ['connect', '101'], ['unlink', '102'], ['kc', '103'], ['clog', '104'],
+    ['dry', '105'], ['skills', '106'], ['gains', '107'], ['profile', '108'],
+    ['pb', '109'], ['leaderboard', '110'], ['compare', '111'], ['events', '112'],
+    ['poll', '113'], ['poll-close', '114'], ['lore', '115'], ['help', '116'],
+    ['warn', '117'], ['strikes', '118'], ['clear-strikes', '119'],
+    ['seniority-hold', '120'], ['sync-seniority', '121'], ['apply-stats', '122'],
+    ['reset-application', '123'], ['force-unlink', '124'], ['link-rsn-panel', '125'],
+    ['event-create', '126'], ['event-cancel', '127'], ['roster', '128'],
+    ['calendar-sync', '129'], ['bounty', '130'], ['setup-roles', '131'],
+    ['setup-rules', '132'], ['setup-ranks', '133'], ['setup-strikes', '134'],
+    ['setup-tickets', '135'], ['setup-cc-checklist', '136'], ['setup-applications', '137'],
+    ['setup-team-panel', '138'], ['website-controls-panel', '139'], ['check-permissions', '140'],
+  ]));
   const helpIx = fakeIx(null);
   helpIx.deleteReply = async () => {};
   await GD.commands.find((c) => c.data.name === 'help').run(helpIx);
   const menuPayload = helpIx.replied;
-  const menuDesc = menuPayload && menuPayload.embeds && menuPayload.embeds[0]
-    && menuPayload.embeds[0].data.description;
-  ok('help: menu renders ephemeral with guide lines',
+  const menuEmbedData = menuPayload && menuPayload.embeds && menuPayload.embeds[0]
+    && menuPayload.embeds[0].data;
+  const menuDesc = menuEmbedData && menuEmbedData.description;
+  ok('help: menu is the plain index with mention pills',
     !!menuDesc && menuPayload.ephemeral === true
-      && menuDesc.includes('Guides for everything are in the [Bot Guide](https://oathforsaken.cc/guide/)')
-      && menuDesc.includes('`/kc zulrah` - Boss kills and its collection log items.')
-      && menuDesc.includes('Also: `/profile`, `/pb`, `/leaderboard`.')
-      && menuDesc.includes('Every card command has a text version.'),
+      && menuEmbedData.title === 'Help Menu'
+      && menuEmbedData.thumbnail && menuEmbedData.thumbnail.url === 'https://oathforsaken.cc/assets/server-icon-helm.gif'
+      && menuDesc.startsWith('Guides for everything are in the [Bot Guide](https://oathforsaken.cc/guide/).')
+      && menuDesc.includes('**Your account**') && menuDesc.includes('**Cards**') && menuDesc.includes('**Clan**')
+      && menuDesc.includes('</kc:103> - Posts the kill count and collection log card for a boss.')
+      && menuDesc.includes('</compare:111> - Compares two players on one card.')
+      && menuDesc.includes('</help:116> - Opens this help menu.'),
     menuDesc ? menuDesc.slice(0, 120) : 'no reply');
-  const menuBtns = menuPayload ? flat(menuPayload) : [];
-  ok('help: menu carries guide link + setup button, no topic select',
-    menuBtns.some((b) => b.label === 'Bot Guide')
-      && menuBtns.some((b) => b.id === 'help:setup')
-      && !menuBtns.some((b) => b.id === 'help:topic'),
+  const menuRows = menuPayload ? compsOf(menuPayload) : [];
+  const menuBtns = menuRows.flat();
+  const menuLinkUrl = menuPayload && menuPayload.components && menuPayload.components[0]
+    && menuPayload.components[0].toJSON().components[0].url;
+  ok('help: menu buttons are the guide link row + one red setup button',
+    menuRows.length === 2
+      && menuRows[0].length === 1 && menuRows[0][0].label === 'Bot Guide ↗' && menuRows[0][0].style === 5
+      && menuLinkUrl === 'https://oathforsaken.cc/guide/'
+      && menuRows[1].length === 1 && menuRows[1][0].id === 'help:setup'
+      && menuRows[1][0].label === 'View Setup Guide' && menuRows[1][0].style === 4
+      && !menuBtns.some((b) => /github|ko-fi/i.test(b.label)),
     JSON.stringify(menuBtns));
 
   const setupIx = fakeIx('help:setup');
@@ -1971,6 +1998,41 @@ async function t(name, fn, needFile = true) {
   ok('help: setup card links guide + safety page',
     setupBtns.filter((b) => b.label === 'Bot Guide' || b.label === 'Safety').length === 2,
     JSON.stringify(setupBtns));
+  // The Link button reuses the #bot-guide post flow: buttons.js
+  // routes the team: kind to handleTeamButton, so the team:rsn id
+  // on a red button IS the wiring.
+  ok('help: setup card carries the Link RSN action on the shared team flow',
+    setupBtns.some((b) => b.id === 'team:rsn' && b.label === 'Link your RSN' && b.style === 4),
+    JSON.stringify(setupBtns));
+
+  const staffCmd = GD.commands.find((c) => c.data.name === 'staff-help');
+  ok('staff-help: registered with the Moderate Members default',
+    !!staffCmd && staffCmd.data.toJSON().default_member_permissions === '1099511627776');
+  const staffIx = fakeIx(null);
+  staffIx.deleteReply = async () => {};
+  staffIx.memberPermissions = { has: () => true };
+  await staffCmd.run(staffIx);
+  const staffPayload = staffIx.replied;
+  const staffEmbedData = staffPayload && staffPayload.embeds && staffPayload.embeds[0]
+    && staffPayload.embeds[0].data;
+  const staffDesc = staffEmbedData && staffEmbedData.description;
+  ok('staff-help: renders staff commands as pills for a permitted member',
+    !!staffDesc && staffPayload.ephemeral === true
+      && staffEmbedData.title === 'Staff Help'
+      && staffDesc.includes('</warn:117> - Gives a member a strike and logs the reason.')
+      && staffDesc.includes('</seniority-hold:120>')
+      && staffDesc.includes('</check-permissions:140>')
+      && !(staffPayload.components || []).length,
+    staffDesc ? staffDesc.slice(0, 120) : 'no reply');
+  const deniedIx = fakeIx(null);
+  deniedIx.deleteReply = async () => {};
+  deniedIx.memberPermissions = { has: () => false };
+  await staffCmd.run(deniedIx);
+  ok('staff-help: refuses a member without Moderate Members',
+    !!deniedIx.replied && deniedIx.replied.ephemeral === true
+      && deniedIx.replied.content === 'You do not have permission to use this command.'
+      && !deniedIx.replied.embeds,
+    JSON.stringify(deniedIx.replied));
 
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
