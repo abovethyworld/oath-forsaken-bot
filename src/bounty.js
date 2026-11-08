@@ -266,16 +266,23 @@ function findContract(query) {
   );
 }
 
-// "Next" for a lane: the earliest sheet row in that lane that has never
-// been posted; once the whole lane has run, the least recently posted.
+// "Next" for a lane: a random draw from the lane's contracts that have
+// never been posted. Once the whole lane has run, the draw covers the
+// lane again but leaves out the most recently posted contract, so the
+// same contract never runs twice in a row.
 function nextContract(lane, state) {
   const posted = state.poolPosted || {};
   const inLane = loadPool().filter((c) => (c.lane === 'Skilling' ? 'Skilling' : 'PvM') === lane);
-  return (
-    inLane.find((c) => !posted[c.name]) ||
-    inLane.sort((a, b) => (posted[a.name] || 0) - (posted[b.name] || 0))[0] ||
-    null
-  );
+  if (!inLane.length) return null;
+  const fresh = inLane.filter((c) => !posted[c.name]);
+  if (fresh.length) return fresh[Math.floor(Math.random() * fresh.length)];
+  let latest = inLane[0];
+  for (const c of inLane) {
+    if ((posted[c.name] || 0) > (posted[latest.name] || 0)) latest = c;
+  }
+  const rest = inLane.filter((c) => c !== latest);
+  const drawFrom = rest.length ? rest : inLane;
+  return drawFrom[Math.floor(Math.random() * drawFrom.length)];
 }
 
 function bountyAutocompleteChoices(focused) {
@@ -962,4 +969,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleBountyButton, sweepExpiredBounties, bountyAutocompleteChoices };
+module.exports = { commands, handleBountyButton, sweepExpiredBounties, bountyAutocompleteChoices, nextContract };
