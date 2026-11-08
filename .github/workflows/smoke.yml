@@ -1,0 +1,37 @@
+name: Smoke suite
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The suite derives its test accounts from the files in
+      # data/. Production data is never committed, so CI stages
+      # the generated fake fixture set first.
+      - name: Stage fixture data
+        run: node tools/smoke-fixtures.js
+
+      - name: Run the smoke suite
+        run: node tools/smoke-cards.js
