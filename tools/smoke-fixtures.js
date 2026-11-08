@@ -396,6 +396,7 @@ function main() {
   write('tenure.json', { users: {}, seededAt: NOW });
   write('membership.json', {});
   write('seniority-holds.json', {});
+  write('seniority-assigned.json', {});
   write('rank-holders.json', {});
   write('friends.json', []);
   write('join-dates.json', {});
