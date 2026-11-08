@@ -946,8 +946,8 @@
    "lane": "PvM",
    "winners": 1,
    "pet": false,
-   "blurb": null,
-   "winLine": null
+   "blurb": "In Ver Sinhaza, Verzik Vitur offers freedom from blood tithes to anyone who beats her theatre. No one is meant to win it. Beat her and loot one unique from her vault.",
+   "winLine": "A Theatre of Blood unique has been looted."
   },
   {
    "id": 81,
