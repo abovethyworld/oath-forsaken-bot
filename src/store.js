@@ -11,6 +11,7 @@ const APP_STATS_FILE = path.join(__dirname, '..', 'data', 'application-stats.jso
 const POLLS_FILE = path.join(__dirname, '..', 'data', 'polls.json');
 const ROSTERS_FILE = path.join(__dirname, '..', 'data', 'rosters.json');
 const HOLDS_FILE = path.join(__dirname, '..', 'data', 'seniority-holds.json');
+const ASSIGNED_FILE = path.join(__dirname, '..', 'data', 'seniority-assigned.json');
 const MEMBERSHIP_FILE = path.join(__dirname, '..', 'data', 'membership.json');
 
 const STRIKE_EXPIRY_DAYS = 90;
@@ -262,6 +263,30 @@ module.exports = {
       delete data[guildId][userId];
     }
     saveJson(HOLDS_FILE, data);
+  },
+
+  // ---- Seniority assigned record: { guildId: { userId: { rank, at } } } ----
+  // Everyone the sync has ever ranked, or seen holding a rank. A member
+  // in this record who currently holds no rank had the rank removed by
+  // staff; the sync reads that as a staff decision and never re-assigns
+  // over it. The sync is the only writer, batched once per run.
+  getSeniorityAssigned(guildId) {
+    const data = loadJson(ASSIGNED_FILE);
+    const map = data[guildId];
+    return map && typeof map === 'object' ? map : {};
+  },
+  markSeniorityAssigned(guildId, marks) {
+    const data = loadJson(ASSIGNED_FILE);
+    data[guildId] ??= {};
+    let changed = false;
+    for (const [userId, rank] of Object.entries(marks || {})) {
+      const cur = data[guildId][userId];
+      if (!cur || cur.rank !== rank) {
+        data[guildId][userId] = { rank, at: Date.now() };
+        changed = true;
+      }
+    }
+    if (changed) saveJson(ASSIGNED_FILE, data);
   },
 
   // ---- Membership standing: { guildId: { userId: { standing, at, via } } } ----

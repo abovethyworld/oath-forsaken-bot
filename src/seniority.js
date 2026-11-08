@@ -11,7 +11,11 @@
 // removes a rank: a member holding a rank at or above what their
 // tenure earns is left exactly as they are, and non-members are
 // skipped with no role changes. Removing a rank is a staff decision,
-// never the sync's. Ascendant is hand-picked and is not in
+// never the sync's. The mirror rule holds too (Nov 8, 2026): once a
+// member has been ranked, holding no rank is read as a staff removal
+// and the sync never re-assigns over it. data/seniority-assigned.json
+// is the sync's memory of everyone it has ranked or seen ranked.
+// Ascendant is hand-picked and is not in
 // config.seniorityRanks, so this sync never assigns it either.
 // After each run the assigned ranks are published to
 // data/seniority.json for the website, so site and bot cannot disagree.
@@ -20,6 +24,7 @@
 // Stories finalized 2026-10-13: unified single arc (no iron/main split).
 // Format is PLAIN TEXT (not embeds) because Discord doesn't render role
 // mentions in embed titles.
+const fs = require('fs');
 const path = require('path');
 const { PermissionFlagsBits, SlashCommandBuilder } = require('discord.js');
 const config = require('./config');
@@ -156,6 +161,23 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       const rec = standingRecords[id];
       return !!rec && rec.standing === 'member';
     };
+    // Assigned record: everyone the sync has ranked before. Seeded
+    // from the last published ranks, so a staff removal made before
+    // this record existed is honored too. Marks collected during the
+    // run are written back once, at the end.
+    const assignedRecords = store.getSeniorityAssigned(guild.id);
+    const assignedMarks = {}; // userId -> rank short name
+    try {
+      const prev = JSON.parse(fs.readFileSync(SENIORITY_FILE, 'utf8'));
+      for (const [id, rec] of Object.entries(prev.ranks || {})) {
+        if (rec && rec.rank && !assignedRecords[id]) {
+          assignedRecords[id] = { rank: rec.rank, at: 0 };
+          assignedMarks[id] = rec.rank;
+        }
+      }
+    } catch (e) {
+      if (e.code !== 'ENOENT') console.error('[seniority] assigned-record seed read failed:', e.message);
+    }
     // Ladder order for held-vs-wanted comparisons: the tenure brackets
     // ascending by minMonths, with the hand-picked Ascendant above all.
     const ladderIds = [...ranks].sort((a, b) => a.minMonths - b.minMonths).map((r) => r.roleId);
@@ -187,7 +209,18 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       for (const id of ladderIds) {
         if (m.roles.cache.has(id)) heldId = id;
       }
-      if (heldId !== null && rankOrder.get(heldId) >= rankOrder.get(want.roleId)) continue;
+      if (heldId !== null) {
+        // Remember every rank holder the sync sees. If staff later
+        // remove the rank, this record is how the sync knows the
+        // empty slot is a staff decision, not a first assignment.
+        const heldNow = ranks.find((r) => r.roleId === heldId);
+        assignedMarks[m.id] = heldNow ? heldNow.name.split(' ')[0] : 'Ascendant';
+        if (rankOrder.get(heldId) >= rankOrder.get(want.roleId)) continue;
+      } else if (assignedRecords[m.id]) {
+        // Ranked before, holding nothing now: staff removed it.
+        // The sync never re-assigns over a manual removal.
+        continue;
+      }
       const has = m.roles.cache.has(want.roleId);
       const isRankUp = heldId !== null;
       const heldRank = heldId ? ranks.find((r) => r.roleId === heldId) : null;
@@ -203,6 +236,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (remove.length) await m.roles.remove(remove, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       if (!has) await m.roles.add(want.roleId, 'Seniority sync').catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       updatedCount++;
+      assignedMarks[m.id] = newRankName;
       // Queue the story — sent after all role changes to avoid interleaved rate limits
       if (isRankUp) rankUps.push({ member: m, rankName: want.name, oldRankName, newRankName });
       // First-ever assignment: no story, but staff still need the in-game CC
@@ -210,6 +244,16 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // on purpose for now (2026-11-06), while the onboarding flow is being
       // settled.
       else firstRanks.push({ member: m, newRankName });
+    }
+
+    // Persist the assigned record once per run: the publish seed,
+    // every rank holder observed, and this run's assignments.
+    if (!dryRun && Object.keys(assignedMarks).length) {
+      try {
+        store.markSeniorityAssigned(guild.id, assignedMarks);
+      } catch (e) {
+        console.error('[seniority] assigned-record write failed:', e.message);
+      }
     }
 
     // Publish the result for the website, so its roster ranks are the

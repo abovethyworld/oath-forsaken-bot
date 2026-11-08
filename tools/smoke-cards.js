@@ -1209,12 +1209,14 @@ async function t(name, fn, needFile = true) {
       recruitSrc4.indexOf('setMembershipStanding(') > recruitSrc4.indexOf("'New member tenure rank'"));
     ok('standing: sync strip path and grace window are gone',
       !senioritySrc4.includes('strip seniority') && !senioritySrc4.includes('GRACE_MS'));
+    ok('standing: sync keeps an assigned record and honors staff removals',
+      senioritySrc4.includes('getSeniorityAssigned') && senioritySrc4.includes('assignedRecords[m.id]'));
     const seedAt = indexSrc4.indexOf('await seedMembership(client)');
     const firstSyncAt = indexSrc4.indexOf('await syncSeniority(client)');
     ok('standing: startup seeds standing before the first sync', seedAt >= 0 && firstSyncAt > seedAt);
 
     // Snapshot every data file the fixtures touch.
-    const touched = ['wom-group.json', 'rsn-links.json', 'tenure.json', 'membership.json', 'seniority-holds.json'];
+    const touched = ['wom-group.json', 'rsn-links.json', 'tenure.json', 'membership.json', 'seniority-holds.json', 'seniority-assigned.json', 'seniority.json'];
     const saved = {};
     for (const name of touched) {
       const p = path.join(DATA, name);
@@ -1240,6 +1242,8 @@ async function t(name, fn, needFile = true) {
       memberFirst: '990000000000000108',
       recordMember: '990000000000000109',
       recordGuest: '990000000000000110',
+      memberRemoved: '990000000000000111',
+      memberSeeded: '990000000000000112',
     };
     try {
       writeFixture('wom-group.json', [
@@ -1301,7 +1305,16 @@ async function t(name, fn, needFile = true) {
         [GID]: {
           [U.recordMember]: { standing: 'member', at: 1, via: 'approval' },
           [U.recordGuest]: { standing: 'guest', at: 1, via: 'approval' },
+          [U.memberRemoved]: { standing: 'member', at: 1, via: 'approval' },
+          [U.memberSeeded]: { standing: 'member', at: 1, via: 'approval' },
         },
+      });
+      writeFixture('seniority-assigned.json', {
+        [GID]: { [U.memberRemoved]: { rank: 'Initiate', at: 1 } },
+      });
+      writeFixture('seniority.json', {
+        generatedAt: 'fixture',
+        ranks: { [U.memberSeeded]: { rank: 'Initiate', months: 0.1, stretchStart: null, bankedMs: 0 } },
       });
       writeFixture('tenure.json', {
         users: {
@@ -1335,6 +1348,8 @@ async function t(name, fn, needFile = true) {
         mkMember(U.memberFirst, []),
         mkMember(U.recordMember, [RIDS.initiate]),
         mkMember(U.recordGuest, [RIDS.acolyte]),
+        mkMember(U.memberRemoved, []),
+        mkMember(U.memberSeeded, []),
       ];
       const fakeGuild = {
         id: GID,
@@ -1365,6 +1380,10 @@ async function t(name, fn, needFile = true) {
         !entryFor(U.recordGuest), joined);
       ok('standing: a member with no rank gets the first assignment',
         entryFor(U.memberFirst) === `fake${U.memberFirst.slice(-3)}: None → Initiate (initial)`, joined);
+      ok('standing: a member whose rank staff removed is never re-assigned',
+        !entryFor(U.memberRemoved), joined);
+      ok('standing: a removal from before the assigned record is honored via the last publish',
+        !entryFor(U.memberSeeded), joined);
       // Reset the module caches so later checks bind to the real data.
       delete require.cache[tenurePath];
       delete require.cache[seniorityPath];
