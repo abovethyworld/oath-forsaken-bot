@@ -127,7 +127,7 @@ function setupButtons() {
       .setURL(guideUrl()),
     new ButtonBuilder()
       .setStyle(ButtonStyle.Link)
-      .setLabel('Safety and your code')
+      .setLabel('Safety')
       .setURL(guideUrl('safety'))
   );
 }
