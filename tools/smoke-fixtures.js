@@ -369,7 +369,7 @@ function main() {
       Object.assign(rpCache, built.rp);
       const score = 5 + ((acctIndex * 7) % 30);
       luckUnits[built.lower] = { name: 'Tanzanite fang', id: 12922, score, dryness: 100 - 2 * score };
-      luckOut[built.lower] = `Tanzanite fang (${100 - 2 * score}% luckier than you)`;
+      luckOut[built.lower] = `Tanzanite fang (${100 - 2 * score}% would have this by now)`;
       group.push({ rsn: built.rsn });
       fs.writeFileSync(
         path.join(DATA, 'plugin-sync', 'members', `${built.slug}.json`),

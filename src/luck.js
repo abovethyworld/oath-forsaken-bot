@@ -433,7 +433,7 @@ function luckForPage(counters, pageItems) {
     if (u.has) {
       if (!luckiest || u.luck > luckiest.pct) luckiest = { name: u.name, pct: u.luck };
     } else {
-      const text = `${u.name} (${Math.round(u.dryness * 100)}% luckier than you)`;
+      const text = `${u.name} (${Math.round(u.dryness * 100)}% would have this by now)`;
       if (!driest || u.dryness > driest.pct) driest = { pct: u.dryness, text };
     }
   }
