@@ -1403,6 +1403,35 @@ test('wom parseStats drops the -1 unranked sentinel from KC', () => {
   assert.strictEqual(stats.kc.wintertodt, 120);
 });
 
+test('wom parseStats retains EHB, EHP and lastChangedAt from the payload', () => {
+  const wom = require('../src/wom');
+  const skills = {};
+  for (const sk of ['attack','defence','strength','hitpoints','ranged','prayer','magic']) skills[sk] = { level: 99, experience: 13034431, ehp: 100.5 };
+  skills.fishing = { level: 80, experience: 1986068 };
+  const player = {
+    type: 'ironman',
+    lastChangedAt: '2026-11-08T04:05:22.000Z',
+    latestSnapshot: { data: {
+      skills,
+      bosses: { yama: { kills: 438, ehb: 91.25 }, the_fractured_archive: { kills: -1, ehb: 3 } },
+      activities: { wintertodt: { score: 120 } },
+      computed: { ehp: { value: 1234.5 }, ehb: { value: 456.75 } },
+    } },
+  };
+  const stats = wom.parseStats(player);
+  assert.strictEqual(stats.ehb.yama, 91.25, 'per-boss EHB kept beside KC');
+  assert.ok(!('the_fractured_archive' in stats.ehb), 'unranked boss has no EHB entry, same as KC');
+  assert.strictEqual(stats.skills.attack.ehp, 100.5, 'per-skill EHP kept beside XP');
+  assert.strictEqual(stats.skills.fishing.ehp, null, 'missing EHP reads null, never a fake number');
+  assert.strictEqual(stats.ehpTotal, 1234.5, 'computed EHP total kept');
+  assert.strictEqual(stats.ehbTotal, 456.75, 'computed EHB total kept');
+  assert.strictEqual(stats.lastChangedAt, '2026-11-08T04:05:22.000Z', 'lastChangedAt kept');
+  const bare = wom.parseStats({ type: 'regular', latestSnapshot: { data: { skills } } });
+  assert.deepStrictEqual(bare.ehb, {}, 'no boss EHB in payload -> empty map');
+  assert.strictEqual(bare.ehpTotal, null, 'no computed totals -> null');
+  assert.strictEqual(bare.lastChangedAt, null, 'no lastChangedAt -> null');
+});
+
 test('wom cacheLookup: notFound entries go stale on the short TTL', () => {
   const wom = require('../src/wom');
   const now = Date.now();
