@@ -168,8 +168,15 @@ function parseStats(playerJson) {
   if (!hasAny) return null;
   const bosses = (snap.data && snap.data.bosses) || snap.bosses || {};
   const kc = {};
+  const ehb = {};
   for (const [key, entry] of Object.entries(bosses)) {
-    if (entry && typeof entry.kills === 'number' && entry.kills >= 0) kc[key] = entry.kills;
+    if (entry && typeof entry.kills === 'number' && entry.kills >= 0) {
+      kc[key] = entry.kills;
+      // WOM sends each boss's EHB in the same entry. Keep it in a map
+      // parallel to kc (same kept keys) instead of dropping it: EHB
+      // boards and profile facts read it from here.
+      if (typeof entry.ehb === 'number' && entry.ehb >= 0) ehb[key] = entry.ehb;
+    }
   }
   // Minigame scores live under activities (score, not kills). WOM marks
   // unranked bosses -1 kills (verified live 2026-10-20), so both maps
@@ -196,15 +203,31 @@ function parseStats(playerJson) {
     allSkills[sk] = {
       level: entry.level,
       xp: typeof entry.experience === 'number' ? entry.experience : null,
+      // WOM sends each skill's EHP beside its XP. Keep it (null when
+      // absent, same convention as xp) for EHP-aware pages.
+      ehp: typeof entry.ehp === 'number' ? entry.ehp : null,
     };
   }
+  // Player-level totals and freshness, straight off the WOM player
+  // object: the computed EHP/EHB totals (snapshot computed block,
+  // falling back to the player's own totals) and lastChangedAt, the
+  // last time WOM saw the player's stats change. Kept so the site can
+  // show EHB/EHP totals and a real last-active time.
+  const computed = (snap.data && snap.data.computed) || snap.computed || {};
+  const computedVal = (group) => {
+    const e = computed[group];
+    return e && typeof e.value === 'number' ? e.value : null;
+  };
+  const ehpTotal = computedVal('ehp') ?? (typeof playerJson.ehp === 'number' ? playerJson.ehp : null);
+  const ehbTotal = computedVal('ehb') ?? (typeof playerJson.ehb === 'number' ? playerJson.ehb : null);
+  const lastChangedAt = typeof playerJson.lastChangedAt === 'string' ? playerJson.lastChangedAt : null;
   const accountType = typeof playerJson.type === 'string' ? playerJson.type : null;
   // Canonical spelling of the name as Wise Old Man holds it. The
   // application pre-link check (recruit.js) confirms names back to
   // the applicant exactly as written here.
   const username = typeof playerJson.username === 'string' ? playerJson.username : null;
   const displayName = typeof playerJson.displayName === 'string' ? playerJson.displayName : null;
-  return { combat: combatLevel(levels), ...levels, kc, accountType, skills: allSkills, username, displayName };
+  return { combat: combatLevel(levels), ...levels, kc, ehb, ehpTotal, ehbTotal, lastChangedAt, accountType, skills: allSkills, username, displayName };
 }
 
 async function fetchPlayerDetails(username) {
