@@ -2001,6 +2001,14 @@ async function t(name, fn, needFile = true) {
   ok('help: setup card links the DropTracker setup page',
     setupBtns.some((b) => b.label === 'Set up DropTracker' && b.style === 5),
     JSON.stringify(setupBtns));
+  ok('help: setup card carries the DropTracker steps from the guide page',
+    !!setupDesc
+      && setupDesc.includes('DropTracker is a separate RuneLite plugin.')
+      && setupDesc.includes('Install the plugin:')
+      && setupDesc.includes('5. In the DropTracker settings, open the Advanced section and turn on Use API.')
+      && setupDesc.includes('Run `/claim-rsn` with your in-game name.')
+      && setupDesc.includes('Drops post only for names on the clan\'s Wise Old Man group.'),
+    setupDesc ? setupDesc.slice(-220) : 'no reply');
   // The Link button reuses the #bot-guide post flow: buttons.js
   // routes the team: kind to handleTeamButton, so the team:rsn id
   // on the button IS the wiring.
