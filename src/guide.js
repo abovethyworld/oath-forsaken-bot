@@ -182,10 +182,44 @@ function staffHelpEmbed() {
     .setDescription(commandListParts(STAFF_GROUPS).join('\n'));
 }
 
+// The DropTracker block on the setup card: the setup page's own
+// lines, trimmed to card space (install, Use API, claim, and the
+// Wise Old Man roster gate as one line). Every line is taken from
+// guide-content.json verbatim or cut at a sentence boundary, so
+// the card and the page can never drift apart.
+function droptrackerParts() {
+  const page = pageBySlug('setup-droptracker');
+  if (!page) return [];
+  const parts = [];
+  for (const line of page.short || []) {
+    if (line.startsWith('DropTracker is a separate RuneLite plugin.')) {
+      parts.push(line);
+    } else if (line === 'Install the plugin:' || line === 'Claim your name:') {
+      parts.push(line);
+    } else if (/^\d+\.\s/.test(line)) {
+      // Card space: the Use API step keeps its instruction and
+      // drops the warning sentences; the page carries those.
+      if (line.includes('turn on Use API.')) {
+        parts.push(line.slice(0, line.indexOf('Use API.') + 'Use API.'.length));
+      } else {
+        parts.push(line);
+      }
+    }
+  }
+  const fix = (page.fullExtra || []).find((l) => l.includes('Drops post only for names'));
+  if (fix) {
+    const from = fix.indexOf('Drops post only');
+    const end = fix.indexOf('.', from);
+    if (from >= 0 && end > from) parts.push(fix.slice(from, end + 1));
+  }
+  return parts;
+}
+
 function setupEmbed() {
   const start = pageBySlug('getting-started');
   const safety = pageBySlug('safety');
   const parts = start ? [...(start.short || [])] : [];
+  parts.push(...droptrackerParts());
   const scamLine = safety
     ? (safety.short || []).find((l) => l.includes('Jagex login'))
     : null;
