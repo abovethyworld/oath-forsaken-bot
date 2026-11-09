@@ -44,9 +44,16 @@ function winnersOf(participations) {
 
 async function syncChampions() {
   try {
+    const recorded = loadChampions();
+    if (!fs.existsSync(CHAMPIONS_FILE)) {
+      // Create the store before the first fetch so the archive is a
+      // real file the site exporter (and a human checking) can find,
+      // even when this sweep's WOM calls fail; it only ever gains
+      // entries after a successful fetch below.
+      atomicWrite(CHAMPIONS_FILE, recorded);
+    }
     const comps = await getGroupCompetitions(config.womGroupId);
     if (!comps) return 0;
-    const recorded = loadChampions();
     const known = new Set(recorded.map((c) => c.id));
     const now = Date.now();
     let added = 0;
@@ -71,11 +78,6 @@ async function syncChampions() {
     }
     if (added) {
       recorded.sort((a, b) => new Date(b.endsAt) - new Date(a.endsAt));
-      atomicWrite(CHAMPIONS_FILE, recorded);
-    } else if (!fs.existsSync(CHAMPIONS_FILE)) {
-      // Create the store on the first clean sweep so the archive is a
-      // real file the site exporter (and a human checking) can find,
-      // not a file that only appears after the first comp ends.
       atomicWrite(CHAMPIONS_FILE, recorded);
     }
     return added;
