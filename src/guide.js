@@ -209,7 +209,11 @@ function setupButtons() {
     new ButtonBuilder()
       .setStyle(ButtonStyle.Link)
       .setLabel('Safety')
-      .setURL(guideUrl('safety'))
+      .setURL(guideUrl('safety')),
+    new ButtonBuilder()
+      .setStyle(ButtonStyle.Link)
+      .setLabel('Set up DropTracker')
+      .setURL(guideUrl('setup-droptracker'))
   );
 }
 

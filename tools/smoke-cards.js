@@ -1998,6 +1998,9 @@ async function t(name, fn, needFile = true) {
   ok('help: setup card links guide + safety page',
     setupBtns.filter((b) => b.label === 'Bot Guide' || b.label === 'Safety').length === 2,
     JSON.stringify(setupBtns));
+  ok('help: setup card links the DropTracker setup page',
+    setupBtns.some((b) => b.label === 'Set up DropTracker' && b.style === 5),
+    JSON.stringify(setupBtns));
   // The Link button reuses the #bot-guide post flow: buttons.js
   // routes the team: kind to handleTeamButton, so the team:rsn id
   // on the button IS the wiring.
