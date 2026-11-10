@@ -42,6 +42,7 @@ const DEFAULT_TUNING = {
   rateScale: { yama: 0.8, the_hueycoatl: 1 / 3 },
   rateScalePets: [30888, 30152],
   unscoredItems: [33382, 30637, 33133],
+  excludedCounters: [],
 };
 function loadTuning() {
   let parsed = null;
@@ -61,6 +62,7 @@ function loadTuning() {
     rateScale: { ...DEFAULT_TUNING.rateScale },
     rateScalePets: DEFAULT_TUNING.rateScalePets,
     unscoredItems: DEFAULT_TUNING.unscoredItems,
+    excludedCounters: DEFAULT_TUNING.excludedCounters,
   };
   if (parsed.rateScale !== undefined) {
     if (parsed.rateScale && typeof parsed.rateScale === 'object'
@@ -79,6 +81,12 @@ function loadTuning() {
         out[field] = parsed[field];
       } else bad(field);
     }
+  }
+  if (parsed.excludedCounters !== undefined) {
+    if (Array.isArray(parsed.excludedCounters)
+      && parsed.excludedCounters.every((v) => typeof v === 'string' && v.length > 0)) {
+      out.excludedCounters = parsed.excludedCounters;
+    } else bad('excludedCounters');
   }
   return out;
 }
@@ -109,11 +117,21 @@ const RATE_SCALE_PETS = new Set(TUNING.rateScalePets); // Yami, Huberte
 // after lifetime Sarachnis KC existed, the same disease
 // as the mole skin: its dryness is fake.
 const UNSCORED_ITEMS = new Set(TUNING.unscoredItems);
+// Counters dropped from scoring entirely, applied at
+// load so re-extracting the table cannot bring them
+// back. The multi wilderness bosses (Nov 10, 2026):
+// mass kills there hand everyone KC, so the solo drop
+// table overstates dryness for anyone who massed. Only
+// the singles variants (Artio, Calvar'ion, Spindel)
+// carry drop math.
+const EXCLUDED_COUNTERS = new Set(TUNING.excludedCounters);
 function scaledSources(sources, keepListed) {
-  return (sources || []).map((s) => {
-    const f = keepListed ? 1 : (RATE_SCALE[s.c] || 1);
-    return f === 1 ? s : { ...s, rate: s.rate * f };
-  });
+  return (sources || [])
+    .filter((s) => !EXCLUDED_COUNTERS.has(s.c))
+    .map((s) => {
+      const f = keepListed ? 1 : (RATE_SCALE[s.c] || 1);
+      return f === 1 ? s : { ...s, rate: s.rate * f };
+    });
 }
 const TABLE = {};
 for (const [id, t] of Object.entries(LUCK_DATA.items || {})) {
