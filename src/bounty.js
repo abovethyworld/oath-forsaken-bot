@@ -641,6 +641,7 @@ async function handleGrant(interaction, threadId) {
         winnerName: winner.displayName,
         rsn: resolveRsn(winner.id) || null,
         titleHolder: isFirstWinner,
+        poster: claim.bountyId || null,
         proof: bounty.proof ? `${bounty.proof.type}: ${bounty.proof.target}` : 'screenshot',
         at: Date.now(),
       });
