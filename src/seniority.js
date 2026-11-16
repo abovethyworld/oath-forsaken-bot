@@ -3,9 +3,9 @@
 // accrued time in the clan chat: Initiate (<1 mo) -> Acolyte (1-2) ->
 // Devout (3-5) -> Zealot (6-8) -> Heretic (9-11) -> Godslayer (1 yr+).
 // Membership and tenure follow the clan rules: standing is recorded
-// at approval (data/membership.json, ruling Nov 6, 2026) and the WOM
-// group list (src/membership.js) counts too; either one makes a
-// member. Accrued time comes from the tenure ledger
+// at approval (data/membership.json, ruling Nov 6, 2026). Approval
+// records are the membership source; the WOM group list is not a
+// membership gate. Accrued time comes from the tenure ledger
 // (src/tenure.js), which banks time across leaves, so time away never
 // counts. This sync only assigns and advances ranks. It never
 // removes a rank: a member holding a rank at or above what their
@@ -96,19 +96,28 @@ function storyKey(name) {
   return (name || '').toLowerCase().split(' ')[0]; // "Initiate (Under 1 month)" -> "initiate"
 }
 
-async function postRankUpStory(guild, member, rankName) {
+async function postRankUpStory(guild, member, rankName, isRecordedMemberFn) {
   try {
     const key = storyKey(rankName);
+    // Story gate: recorded member standing from an approval only
+    // (data/membership.json), the same source the ranked set uses.
+    // The sync passes its run predicate; standalone calls read the
+    // records directly.
+    const recordedMember = (id) => {
+      if (typeof isRecordedMemberFn === 'function') return isRecordedMemberFn(id);
+      const rec = store.getMembership(guild.id)[id];
+      return !!rec && rec.standing === 'member';
+    };
     if (key === 'initiate') {
       const channel0 = guild.channels.cache.get(GENERAL_CHANNEL_ID);
       if (!channel0) return;
-      if (!membership.isMember(member.id)) return; // only clan members get rank-up stories
+      if (!recordedMember(member.id)) return; // only recorded members get rank-up stories
       await channel0.send({ content: buildInitiateWelcome(member.id), allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       return;
     }
     const ann = RANK_ANNOUNCEMENTS[key];
     if (!ann) return;
-    if (!membership.isMember(member.id)) return; // only clan members get rank-up stories
+    if (!recordedMember(member.id)) return; // only recorded members get rank-up stories
     const channel = guild.channels.cache.get(GENERAL_CHANNEL_ID);
     if (!channel) return;
     const message = `${ann.header}\n${ann.divider}\n${ann.tagline(member.id)}\n\n${ann.story}`;
@@ -138,16 +147,6 @@ async function syncSeniority(client, { dryRun = false } = {}) {
     const rankIds = ranks.map((r) => r.roleId);
     const members = await getMembers(guild);
     if (!members) return changes;
-
-    // Fail closed: the WOM group list (the clan chat mirror) is one
-    // leg of the membership union. If it cannot be read there is no
-    // safe way to tell members from non-members, so abort before any
-    // role changes.
-    const memberIds = membership.memberIds();
-    if (memberIds === null) {
-      console.error('[seniority] WOM group list (data/wom-group.json) is unreadable. Aborting seniority sync.');
-      return changes;
-    }
 
     const now = Date.now();
     const rankUps = []; // stories to send after all role changes (batched, not interleaved)
@@ -193,9 +192,9 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // The permission-audit canary account must stay @everyone-only.
       const skipUsers = ['000000000000000000']; // audit canary
       if (skipUsers.includes(m.id)) continue;
-      // Membership is a union: the WOM group list (clan chat mirror)
-      // or a recorded member standing from an approval.
-      const isMember = memberIds.has(m.id) || isRecordedMember(m.id);
+      // Membership is recorded member standing from an approval only
+      // (data/membership.json). The WOM group list is not consulted.
+      const isMember = isRecordedMember(m.id);
       if (!isMember) continue;
       // Accrued time in the clan chat, from the tenure ledger. A member
       // with no ledger record yet has no accrued time.
@@ -265,7 +264,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
         const ladder = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
         const published = {};
         for (const m of members.values()) {
-          if (m.user.bot || (!memberIds.has(m.id) && !isRecordedMember(m.id))) continue;
+          if (m.user.bot || !isRecordedMember(m.id)) continue;
           let rank = null;
           for (const key of ladder) {
             if (RANK_IDS[key] && m.roles.cache.has(RANK_IDS[key])) {
@@ -289,7 +288,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
 
     // Second pass: stories + CC checklist entries, paced
     for (const { member, rankName, oldRankName, newRankName } of rankUps) {
-      await postRankUpStory(guild, member, rankName);
+      await postRankUpStory(guild, member, rankName, isRecordedMember);
       await addCcEntry(guild, member.id, oldRankName, newRankName).catch((e) => console.error("[seniority.js] Non-fatal error:", e.message));
       await new Promise((r) => setTimeout(r, 2000));
     }
