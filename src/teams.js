@@ -46,7 +46,7 @@ const BA_ROLE_EMOJI = { Attacker: '⚔️', Collector: '🥚', Defender: '🛡�
 // roles: exclusive claim slots (ToB, BA) or pick-style (Yama: each
 // player picks Mage or Melee, both can pick the same).
 // pre: button step shown before the step flow (mode toggles).
-const ACTIVITIES = {
+const ACTIVITIES_BASE = {
   toa: {
     name: 'Tombs of Amascut Normal', short: 'Tombs of Amascut Normal', category: 'raids',
     size: { min: 1, max: 8 }, fillPing: true, partyHub: true,
@@ -152,7 +152,7 @@ const CATEGORIES = [
 ];
 
 // Custom emojis matching the #roles panel buttons.
-const ACTIVITY_EMOJI = {
+const ACTIVITY_EMOJI_BASE = {
   toa: '<:toa:1567763663408996422>',
   toa_expert: '<:toa:1567763663408996422>',
   cox: '<:cox:1567764066254979153>',
@@ -174,6 +174,63 @@ const ACTIVITY_EMOJI = {
   nm: '<:nightmare:1567765760409997342>',
   wag: '<:wildyagility:1561954199212662804>',
 };
+
+// Data overrides for the activity tables above, so staff can add or
+// tweak a find-a-team activity without a developer. The tables in code
+// are the defaults; data/team-activities.json, when it exists, is
+// merged over them per key. Shape:
+//   { "activities": { "<key>": { name, short, category, size, ... } },
+//     "emoji": { "<key>": "<:name:id>" } }
+// An activities entry replaces matching fields of the default for that
+// key (or defines a new activity); an emoji entry replaces that key's
+// emoji. A missing or unreadable file means the defaults, unchanged.
+// The file is re-read whenever its mtime changes (same hot-read idea
+// as the bounty pool), checked on each use of the tables.
+const TEAM_ACTIVITIES_FILE = path.join(__dirname, '..', 'data', 'team-activities.json');
+const ACTIVITIES_DEFAULT = structuredClone(ACTIVITIES_BASE);
+const ACTIVITY_EMOJI_DEFAULT = { ...ACTIVITY_EMOJI_BASE };
+let activityOverridesMtime = null; // null = defaults in place, no file applied
+function applyActivityOverrides() {
+  let st = null;
+  try { st = fs.statSync(TEAM_ACTIVITIES_FILE); } catch { st = null; }
+  const stamp = st ? st.mtimeMs : null;
+  if (stamp === activityOverridesMtime) return;
+  let data = null;
+  if (st) {
+    try { data = JSON.parse(fs.readFileSync(TEAM_ACTIVITIES_FILE, 'utf8')); } catch { data = null; }
+    if (!data || typeof data !== 'object') data = null; // unreadable: defaults
+  }
+  activityOverridesMtime = stamp;
+  for (const k of Object.keys(ACTIVITIES_BASE)) delete ACTIVITIES_BASE[k];
+  for (const [k, v] of Object.entries(structuredClone(ACTIVITIES_DEFAULT))) ACTIVITIES_BASE[k] = v;
+  for (const k of Object.keys(ACTIVITY_EMOJI_BASE)) delete ACTIVITY_EMOJI_BASE[k];
+  Object.assign(ACTIVITY_EMOJI_BASE, ACTIVITY_EMOJI_DEFAULT);
+  if (!data) return;
+  const acts = data.activities && typeof data.activities === 'object' ? data.activities : {};
+  for (const [k, v] of Object.entries(acts)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) ACTIVITIES_BASE[k] = { ...(ACTIVITIES_BASE[k] || {}), ...v };
+  }
+  const emo = data.emoji && typeof data.emoji === 'object' ? data.emoji : {};
+  for (const [k, v] of Object.entries(emo)) {
+    if (typeof v === 'string') ACTIVITY_EMOJI_BASE[k] = v;
+  }
+  console.log(`Team activities overrides loaded: ${Object.keys(acts).length} activities, ${Object.keys(emo).length} emoji`);
+}
+// The live tables keep the old names; every read goes through a proxy
+// that refreshes the overrides first (one stat call) and then reads
+// the same underlying object, so call sites need no changes.
+function overrideView(target) {
+  const refresh = () => applyActivityOverrides();
+  return new Proxy(target, {
+    get(t, k, r) { refresh(); return Reflect.get(t, k, r); },
+    has(t, k) { refresh(); return Reflect.has(t, k); },
+    ownKeys(t) { refresh(); return Reflect.ownKeys(t); },
+    getOwnPropertyDescriptor(t, k) { refresh(); return Reflect.getOwnPropertyDescriptor(t, k); },
+  });
+}
+const ACTIVITIES = overrideView(ACTIVITIES_BASE);
+const ACTIVITY_EMOJI = overrideView(ACTIVITY_EMOJI_BASE);
+applyActivityOverrides();
 
 // For select menus: { id, name } pairs.
 const ACTIVITY_EMOJI_OBJ = {

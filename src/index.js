@@ -45,7 +45,7 @@ const { handleWebsiteControlsSelect } = require('./website-controls');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
-const { warmMemberStats } = require('./wom-warm');
+const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 
 // Command cooldowns: userId:commandName -> timestamp
@@ -200,6 +200,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => syncChampions(), 24 * 3600 * 1000);
   setInterval(() => syncCompetitions(), 24 * 3600 * 1000);
   setInterval(() => { warmMemberStats().catch((e) => console.error('WOM member warm failed:', e.message)); }, 24 * 3600 * 1000);
+  setInterval(() => { reportUncoveredMembers(client).catch((e) => console.error('WOM group staff report failed:', e.message)); }, 7 * 24 * 3600 * 1000);
   setInterval(() => warmProfiles(), 24 * 3600 * 1000);
   setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
   setInterval(() => syncDrift(client), 24 * 3600 * 1000);
