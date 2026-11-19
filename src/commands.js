@@ -10,7 +10,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const { ZAMORAK_RED } = require('./utils');
+const { ZAMORAK_RED, isStaff } = require('./utils');
 const tickets = require('./tickets');
 const calendar = require('./calendar');
 const polls = require('./polls');
@@ -229,6 +229,79 @@ async function clearStrikesCmd(interaction) {
   await interaction.reply({ content: `Cleared all strikes for ${user}.`, ephemeral: true });
 }
 
+// ─── /bot-status (staff) ────────────────────────────────────────────
+function ago(ms) {
+  const m = Math.max(0, Math.floor(ms / 60000));
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function span(ms) {
+  const m = Math.floor(ms / 60000);
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m % 60}m` : `${m}m`;
+}
+
+async function reachable(url) {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(3000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function botStatus(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'That command is for staff only.', ephemeral: true });
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true });
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const now = Date.now();
+  const version = require('../package.json').version;
+
+  const jobs = require('./job-status').readStatus();
+  const jobLines = Object.entries(jobs).map(([name, j]) => {
+    const ok = j.lastOk ? new Date(j.lastOk).getTime() : 0;
+    const fail = j.lastFail ? new Date(j.lastFail).getTime() : 0;
+    if (fail > ok) return `${name}: FAILED ${ago(now - fail)}: ${j.lastError || 'unknown error'}`;
+    return `${name}: ok ${ago(now - ok)}`;
+  });
+
+  const checks = await Promise.all([
+    ['Card API', 'https://oathforsaken.cc/api/cards'],
+    ['Wise Old Man', 'https://api.wiseoldman.net/v2'],
+    ['RuneProfile', 'https://api.runeprofile.com/v1'],
+  ].map(async ([label, url]) => `${label}: ${(await reachable(url)) ? 'reachable' : 'NOT reachable'}`));
+
+  const dataLines = ['membership.json', 'bounties.json', 'job-status.json'].map((f) => {
+    try {
+      const st = fs.statSync(path.join(__dirname, '..', 'data', f));
+      return `${f}: updated ${ago(now - st.mtimeMs)}`;
+    } catch {
+      return `${f}: no file yet`;
+    }
+  });
+
+  const jobText = jobLines.length ? jobLines.join('\n') : 'Jobs have not run yet since boot.';
+  const embed = new EmbedBuilder()
+    .setColor(ZAMORAK_RED)
+    .setTitle('Bot status')
+    .addFields(
+      { name: 'Running', value: `Up for ${span(process.uptime() * 1000)}\nVersion ${version}` },
+      { name: 'Jobs', value: jobText.length > 1000 ? `${jobText.slice(0, 997)}...` : jobText },
+      { name: 'Services', value: checks.join('\n') },
+      { name: 'Data files', value: dataLines.join('\n') },
+    );
+  await interaction.editReply({ embeds: [embed] });
+}
+
 const commands = [
   {
     data: new SlashCommandBuilder()
@@ -282,6 +355,13 @@ const commands = [
       .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
       .addUserOption((o) => o.setName('user').setDescription('Who to clear').setRequired(true)),
     run: clearStrikesCmd,
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('bot-status')
+      .setDescription('Show how the bot is doing (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    run: botStatus,
   },
   ...tickets.commands,
   ...calendar.commands,
