@@ -117,6 +117,24 @@ client.once(Events.ClientReady, async (c) => {
   console.log(`Registered ${commands.length} slash commands for guild ${config.guildId}.`);
   console.log('Bot is running. Leave this process on 24/7 (see README for hosting).');
 
+  // Job tracking: records last success/failure per job and tells staff
+  // about failures in the health channel.
+  const jobStatus = require('./job-status');
+  const { ensureHealthChannel, alertHealth } = require('./bot-health');
+  const failOpts = (name, label) => ({
+    label,
+    onFail: (msg) => alertHealth(client, `job:${name}`, `Job "${name}" failed: ${msg}`),
+  });
+  const run = (name, fn, label) => jobStatus.track(name, fn, failOpts(name, label));
+  const runSync = (name, fn, label) => jobStatus.trackSync(name, fn, failOpts(name, label));
+  (async () => {
+    const ch = await ensureHealthChannel(client);
+    if (ch) {
+      const when = new Date().toISOString().replace('T', ' ').slice(0, 16);
+      await alertHealth(client, 'boot', `The bot is up. Started ${when} UTC.`);
+    }
+  })().catch((e) => console.error('Health start-up note failed:', e.message));
+
   // Startup sweep: single shared guild fetch, then run all one-time jobs.
   // Previously 5 staggered jobs each fetched guild data independently.
   setTimeout(async () => {
@@ -186,34 +204,37 @@ client.once(Events.ClientReady, async (c) => {
 
       // Daily gains baseline for !gains (cache-only, no API calls).
       if (snapshotToday()) console.log('Gains: recorded the daily snapshot.');
+      jobStatus.recordOk('startup-sweep');
     } catch (err) {
       console.error('[startup] Sweep failed:', err.message);
+      jobStatus.recordFail('startup-sweep', err);
+      alertHealth(client, 'job:startup-sweep', `Job "startup-sweep" failed: ${err.message}`.slice(0, 300)).catch(() => {});
     }
   }, 30 * 1000);
 
   // Recurring loops (use cached data where possible)
-  setInterval(() => { try { mergeSiteLinkRequests(); } catch (e) { console.error('Link request merge failed:', e.message); } }, 60 * 1000);
-  setInterval(() => syncReminders(client), 5 * 60 * 1000);
-  setInterval(() => syncSeniority(client), 24 * 3600 * 1000);
-  setInterval(() => syncFriends(client), 24 * 3600 * 1000);
-  setInterval(() => syncWomGroup(), 24 * 3600 * 1000);
-  setInterval(() => syncChampions(), 24 * 3600 * 1000);
-  setInterval(() => syncCompetitions(), 24 * 3600 * 1000);
-  setInterval(() => { warmMemberStats().catch((e) => console.error('WOM member warm failed:', e.message)); }, 24 * 3600 * 1000);
-  setInterval(() => { reportUncoveredMembers(client).catch((e) => console.error('WOM group staff report failed:', e.message)); }, 7 * 24 * 3600 * 1000);
-  setInterval(() => warmProfiles(), 24 * 3600 * 1000);
-  setInterval(() => { try { snapshotToday(); } catch { /* gains baseline is best-effort */ } }, 6 * 3600 * 1000);
-  setInterval(() => syncDrift(client), 24 * 3600 * 1000);
-  setInterval(() => syncCalendar(client), 24 * 3600 * 1000);
-  setInterval(() => { refreshLaunchCountdown(client); }, 30 * 60 * 1000);
-  setInterval(() => sweepExpiredBounties(client), 6 * 3600 * 1000);
-  setInterval(() => { refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message)); }, 6 * 3600 * 1000);
-  refreshProfileLuck().catch((e) => console.error('Profile luck refresh failed:', e.message));
+  setInterval(() => runSync('site-link-merge', () => mergeSiteLinkRequests(), 'Link request merge failed'), 60 * 1000);
+  setInterval(() => run('reminders', () => syncReminders(client)), 5 * 60 * 1000);
+  setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
+  setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
+  setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);
+  setInterval(() => run('champions', () => syncChampions()), 24 * 3600 * 1000);
+  setInterval(() => run('competitions', () => syncCompetitions()), 24 * 3600 * 1000);
+  setInterval(() => run('wom-warm', () => warmMemberStats(), 'WOM member warm failed'), 24 * 3600 * 1000);
+  setInterval(() => run('wom-report', () => reportUncoveredMembers(client), 'WOM group staff report failed'), 7 * 24 * 3600 * 1000);
+  setInterval(() => run('profiles', () => warmProfiles()), 24 * 3600 * 1000);
+  setInterval(() => runSync('gains-snapshot', () => snapshotToday(), 'Gains snapshot failed'), 6 * 3600 * 1000);
+  setInterval(() => run('drift', () => syncDrift(client)), 24 * 3600 * 1000);
+  setInterval(() => run('calendar', () => syncCalendar(client)), 24 * 3600 * 1000);
+  setInterval(() => run('countdown', () => refreshLaunchCountdown(client)), 30 * 60 * 1000);
+  setInterval(() => run('bounties-sweep', () => sweepExpiredBounties(client)), 6 * 3600 * 1000);
+  setInterval(() => run('luck-refresh', () => refreshProfileLuck(), 'Profile luck refresh failed'), 6 * 3600 * 1000);
+  run('luck-refresh', () => refreshProfileLuck(), 'Profile luck refresh failed');
   // Daily WOM update + gains warm-up: first run a few minutes
   // after boot (also covers the post-restart empty cache), then
   // every 24h. One paced pass over the ranked players only.
-  setTimeout(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 180 * 1000);
-  setInterval(() => { syncWomGains().catch((e) => console.error('WOM gains sync failed:', e.message)); }, 24 * 3600 * 1000);
+  setTimeout(() => { run('wom-gains', () => syncWomGains(), 'WOM gains sync failed'); }, 180 * 1000);
+  setInterval(() => run('wom-gains', () => syncWomGains(), 'WOM gains sync failed'), 24 * 3600 * 1000);
   // Event-loop watchdog: a starved loop misses Discord's
   // 3-second interaction window (the /dry failure, Nov 2,
   // 2026). Log lag loudly so a slow builder is visible in
@@ -225,10 +246,10 @@ client.once(Events.ClientReady, async (c) => {
     if (lag > 3000) console.error(`[watchdog] Event loop lagged ${(lag / 1000).toFixed(1)}s`);
     lastTick = now;
   }, 30 * 1000);
-  setInterval(() => sweepExpiredTeams(client), 3600 * 1000);
-  setInterval(() => { reconcileVerifiedLinks().then(() => surfaceHeldPosts(client)).catch(() => {}); }, 3600 * 1000);
-  setInterval(() => { watchRenames(client).catch((e) => console.error('Rename watch failed:', e.message)); }, 24 * 3600 * 1000);
-  setInterval(() => { try { store.prunePolls(); store.pruneStrikes(); } catch (e) { console.error('Housekeeping prune failed:', e.message); } }, 24 * 3600 * 1000);
+  setInterval(() => run('teams-sweep', () => sweepExpiredTeams(client)), 3600 * 1000);
+  setInterval(() => run('links-reconcile', () => reconcileVerifiedLinks().then(() => surfaceHeldPosts(client))), 3600 * 1000);
+  setInterval(() => run('rename-watch', () => watchRenames(client), 'Rename watch failed'), 24 * 3600 * 1000);
+  setInterval(() => runSync('housekeeping', () => { store.prunePolls(); store.pruneStrikes(); }, 'Housekeeping prune failed'), 24 * 3600 * 1000);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
