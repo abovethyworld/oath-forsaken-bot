@@ -15,11 +15,13 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const store = require('./store');
+const { safeFetch } = require('./utils');
 const { getStats, getCachedStats } = require('./wom');
 const { loadLinks, entryRsns, loadGroupNames, normName } = require('./membership');
 
 const RANKS_FILE = path.join(__dirname, '..', 'data', 'rank-holders.json');
 const MAX_PER_RUN = 10;
+const REPORT_NAME_CAP = 25;
 
 function readJson(file) {
   try {
@@ -95,4 +97,26 @@ async function warmMemberStats() {
   return warmed;
 }
 
-module.exports = { warmMemberStats, uncoveredMemberRsns, memberStandingIds };
+// Weekly staff report: standing members whose linked RSNs are not on
+// the Wise Old Man group. Seniority time comes from the group's
+// membership data, so they earn none until they are added. Reuses
+// uncoveredMemberRsns (one group-list read); posts only when the list
+// is non-empty, to the CC checklist staff chat from config.
+async function reportUncoveredMembers(client) {
+  const names = uncoveredMemberRsns();
+  if (!names.length) return false;
+  const chatId = config.ccChecklist && config.ccChecklist.staffChatId;
+  if (!chatId) return false;
+  const channel = await safeFetch(client.channels.fetch(chatId), 'wom-warm staff report');
+  if (!channel || typeof channel.send !== 'function') return false;
+  const shown = names.slice(0, REPORT_NAME_CAP);
+  const more = names.length - shown.length;
+  const text = `**Approved members not on the Wise Old Man group (${names.length})**\n`
+    + 'These members earn no seniority time until they are added to the Wise Old Man group.\n\n'
+    + shown.join(', ')
+    + (more > 0 ? `\n...and ${more} more.` : '');
+  await channel.send({ content: text, allowedMentions: { parse: [] } });
+  return true;
+}
+
+module.exports = { warmMemberStats, uncoveredMemberRsns, memberStandingIds, reportUncoveredMembers };

@@ -1,7 +1,7 @@
 // !-prefixed show-off commands: !kc <activity> [name], !clog <activity|total> [name],
 // !profile [name], !leaderboard. Needs the Message Content privileged intent
 // (code + portal toggle).
-const { AttachmentBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, statsFetchedAt, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
 const { runRefresh, peekRefresh, refreshRemaining } = require('./refresh');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
@@ -773,7 +773,13 @@ async function kcPayload(activity, rsn, userId) {
     return withRefreshButton(withProfileButton(base, 'pvm', activity, rsn),
       `refresh:kc:${activity}:${encName(rsn)}`, userId);
   }
-  return CARD_DOWN;
+  return cardDownEmbed({
+    title: `${rsn}: ${entry.name}`,
+    lines: [
+      ...(body.entries || []).map((e) => `**${e.label}:** ${e.value}`),
+      ...(body.rank ? [`**${body.rankLabel || 'Clan rank'}:** #${body.rank} of ${body.rankOf}`] : []),
+    ],
+  });
 }
 
 // !dry <boss> [name]: one player's drop luck on one boss, from
@@ -878,7 +884,14 @@ async function dryPayload(activity, rsn, userId) {
     return withRefreshButton(withProfileButton(base, 'dry', activity, rsn),
       `refresh:dry:${activity}:${encName(rsn)}`, userId);
   }
-  return CARD_DOWN;
+  return cardDownEmbed({
+    title: `${rsn}: ${entry.name} luck`,
+    lines: [
+      `**Kill count:** ${Number(kc).toLocaleString('en-US')}`,
+      ...(report.word ? [`**Luck:** ${report.word}`] : []),
+      ...(report.missing || []).slice(0, 5).map((m) => `Missing: ${m.name}`),
+    ],
+  });
 }
 
 // !dry clues: one dry report across all six clue tiers. Each
@@ -1756,7 +1769,14 @@ async function clogPayload(key, rsn, userId) {
       rank, oneAway: oneAway.slice(0, 8),
     });
     if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'clog.png' })] }, 'clogs', 'total', rsn);
-    return CARD_DOWN;
+    return cardDownEmbed({
+      title: `${rsn}: collection log`,
+      lines: [
+        `**Total:** ${Number(res.obtained).toLocaleString('en-US')} / ${Number(res.total).toLocaleString('en-US')}`
+          + (res.total > 0 ? ` (${((res.obtained / res.total) * 100).toFixed(1)}%)` : ''),
+        ...(rank ? [`**Clan rank:** #${rank}`] : []),
+      ],
+    });
   }
   const page = clogPageForCommand(key);
   if (!page) {
@@ -1824,7 +1844,13 @@ async function clogPayload(key, rsn, userId) {
     })),
   });
   if (card) return withProfileButton({ files: [new AttachmentBuilder(card, { name: 'clog.png' })] }, 'clogs', key, rsn);
-  return CARD_DOWN;
+  return cardDownEmbed({
+    title: `${rsn}: ${page[1]}`,
+    lines: [
+      `**Obtained:** ${res.obtained} / ${res.total}`
+        + (res.total > 0 ? ` (${((res.obtained / res.total) * 100).toFixed(1)}%)` : ''),
+    ],
+  });
 }
 
 async function handleClogCommand(message, args) {
@@ -1878,6 +1904,26 @@ async function fetchCard(path, body) {
 // Card commands have one visual style: the card service. When it is
 // down the command says so; there is no old-style fallback card.
 const CARD_DOWN = { content: 'The card service is down right now. Try again in a bit.' };
+
+// Shared fallback for the /kc, /dry and /clog paths: when the card
+// fetch fails, reply with a plain embed carrying the headline numbers
+// the command already has in hand. Never throws; when there is nothing
+// to show (or anything goes wrong building it) it returns CARD_DOWN,
+// the message those paths gave before. fields: { title, lines: [str] }.
+function cardDownEmbed(fields) {
+  try {
+    const lines = ((fields && fields.lines) || []).filter((l) => typeof l === 'string' && l.trim());
+    if (!fields || !fields.title || !lines.length) return CARD_DOWN;
+    const embed = new EmbedBuilder()
+      .setColor(0x6b0e0e)
+      .setTitle(String(fields.title).slice(0, 256))
+      .setDescription(lines.join('\n').slice(0, 4000))
+      .setFooter({ text: 'The card service is down right now, so this is the plain version.' });
+    return { embeds: [embed] };
+  } catch {
+    return CARD_DOWN;
+  }
+}
 
 // The website builds a share card for every tracked member: the same
 // numbers as the RuneProfile card below, in house style, with clan
