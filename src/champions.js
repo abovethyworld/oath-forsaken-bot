@@ -121,7 +121,61 @@ function resultsOf(full) {
   }));
 }
 
-async function syncChampions() {
+// Winner roles: config.winnerRoles (SOTW/BOTW/ROTW) are granted to the
+// first place finisher of the latest finished comp of that kind, and
+// removed from anyone else holding them. Needs the client; without it,
+// or without config, this skips quietly. Never throws.
+const WINNER_KINDS = {
+  SOTW: /sotw|skill of the week/i,
+  BOTW: /botw|boss of the week/i,
+  ROTW: /rotw|raid of the week/i,
+};
+
+async function syncWinnerRoles(client, recorded) {
+  try {
+    if (!client || !Array.isArray(config.winnerRoles) || !config.winnerRoles.length) return;
+    const guild = client.guilds.cache.get(config.guildId);
+    if (!guild) return;
+    const { getMembers } = require('./guild-cache');
+    const { loadLinks, entryRsns, normName } = require('./membership');
+    const { alertHealth } = require('./bot-health');
+    const members = await getMembers(guild);
+    if (!members) return;
+    const owners = new Map();
+    for (const [userId, entry] of Object.entries(loadLinks())) {
+      for (const rsn of entryRsns(entry)) if (!owners.has(normName(rsn))) owners.set(normName(rsn), userId);
+    }
+    for (const wr of config.winnerRoles) {
+      const kind = String(wr.name || '').split(' ')[0].toUpperCase();
+      const re = WINNER_KINDS[kind];
+      const role = wr.roleId && guild.roles.cache.get(wr.roleId);
+      if (!re || !role) continue;
+      const latest = recorded
+        .filter((c) => re.test(c.title || '') && c.winners && c.winners[0])
+        .sort((a, b) => new Date(b.endsAt) - new Date(a.endsAt))[0];
+      if (!latest) continue;
+      const winnerId = owners.get(normName(latest.winners[0].rsn));
+      for (const m of members.values()) {
+        const has = m.roles.cache.has(role.id);
+        const want = m.id === winnerId;
+        if (has === want) continue;
+        try {
+          if (want) await m.roles.add(role.id, 'Competition winner');
+          else await m.roles.remove(role.id, 'No longer the latest winner');
+          const line = want ? `${role.name} given to <@${m.id}>.` : `${role.name} removed from <@${m.id}>.`;
+          console.log(`Champions: ${line}`);
+          await alertHealth(client, `winner-role-${kind}`, line);
+        } catch (err) {
+          console.error(`Champions: winner role change failed for ${m.id}:`, err.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Champions: winner roles skipped:', err.message);
+  }
+}
+
+async function syncChampions(client) {
   try {
     const recorded = loadChampions();
     const results = loadResults();
@@ -192,6 +246,7 @@ async function syncChampions() {
       results.sort((a, b) => new Date(b.endsAt) - new Date(a.endsAt));
       atomicWrite(RESULTS_FILE, results);
     }
+    await syncWinnerRoles(client, recorded);
     return added;
   } catch (err) {
     console.error('Champions sync failed:', err.message);

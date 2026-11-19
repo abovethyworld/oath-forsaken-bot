@@ -190,7 +190,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // Only members get seniority roles. Everyone else is skipped,
       // with no role changes either way.
       // The permission-audit canary account must stay @everyone-only.
-      const skipUsers = ['000000000000000000']; // audit canary
+      const skipUsers = [require('./config').botIds?.auditCanaryUserId || '000000000000000000']; // audit canary
       if (skipUsers.includes(m.id)) continue;
       // Membership is recorded member standing from an approval only
       // (data/membership.json). The WOM group list is not consulted.

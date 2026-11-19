@@ -5,7 +5,10 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  ModalBuilder,
   PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle,
   SlashCommandBuilder,
 } = require('discord.js');
 const config = require('./config');
@@ -229,6 +232,66 @@ async function clearStrikesCmd(interaction) {
   await interaction.reply({ content: `Cleared all strikes for ${user}.`, ephemeral: true });
 }
 
+// ─── /panel-text (staff) ────────────────────────────────────────────
+const panelText = require('./panel-text').createPanelText();
+
+async function panelTextCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'This command is for staff.', ephemeral: true });
+    return;
+  }
+  const sub = interaction.options.getSubcommand();
+  if (sub === 'list') {
+    const r = panelText.registry();
+    const text = `**Panels**\n${r.panels.map((k) => `\`${k}\``).join(', ')}\n\n**Guide**\n${r.guide.map((k) => `\`${k}\``).join(', ')}`;
+    await interaction.reply({ content: text.slice(0, 1990), ephemeral: true });
+    return;
+  }
+  const key = interaction.options.getString('key', true).trim();
+  const known = panelText.registry();
+  if (!known.panels.includes(key) && !known.guide.includes(key)) {
+    await interaction.reply({ content: panelText.validate(key, 'x'), ephemeral: true });
+    return;
+  }
+  if (sub === 'get') {
+    const cur = panelText.get(key, config);
+    const tag = panelText.isOverridden(key) ? 'Changed text' : 'Original text';
+    await interaction.reply({ content: `**${key}** (${tag})\n${cur}`.slice(0, 1990), ephemeral: true });
+    return;
+  }
+  if (sub === 'clear') {
+    const res = panelText.clear(key, config);
+    await interaction.reply({ content: res.ok ? `Cleared. ${key} is back to the original text.` : res.message, ephemeral: true });
+    return;
+  }
+  if (sub === 'set') {
+    const modalId = `paneltext:${interaction.id}`;
+    const input = new TextInputBuilder()
+      .setCustomId('text')
+      .setLabel('New text')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(panelText.MAX_LEN)
+      .setValue(panelText.get(key, config).slice(0, panelText.MAX_LEN));
+    const modal = new ModalBuilder()
+      .setCustomId(modalId)
+      .setTitle('Change text')
+      .addComponents(new ActionRowBuilder().addComponents(input));
+    await interaction.showModal(modal);
+    const sub2 = await interaction
+      .awaitModalSubmit({ time: 10 * 60 * 1000, filter: (i) => i.customId === modalId && i.user.id === interaction.user.id })
+      .catch(() => null);
+    if (!sub2) return;
+    const res = panelText.set(key, sub2.fields.getTextInputValue('text'), config);
+    const msg = res.ok
+      ? (key.startsWith('guide.')
+        ? 'Saved. The new wording shows on the next /help.'
+        : 'Saved. Panels pick it up on their next post or re-post with the /setup commands.')
+      : res.message;
+    await sub2.reply({ content: msg, ephemeral: true });
+  }
+}
+
 // ─── /bot-status (staff) ────────────────────────────────────────────
 function ago(ms) {
   const m = Math.max(0, Math.floor(ms / 60000));
@@ -362,6 +425,20 @@ const commands = [
       .setDescription('Show how the bot is doing (Staff only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
     run: botStatus,
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('panel-text')
+      .setDescription('Change panel and guide wording (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+      .addSubcommand((c) => c.setName('list').setDescription('Show the texts you can change'))
+      .addSubcommand((c) => c.setName('get').setDescription('Show the current text')
+        .addStringOption((o) => o.setName('key').setDescription('Which text').setRequired(true)))
+      .addSubcommand((c) => c.setName('set').setDescription('Change a text')
+        .addStringOption((o) => o.setName('key').setDescription('Which text').setRequired(true)))
+      .addSubcommand((c) => c.setName('clear').setDescription('Go back to the original text')
+        .addStringOption((o) => o.setName('key').setDescription('Which text').setRequired(true))),
+    run: panelTextCommand,
   },
   ...tickets.commands,
   ...calendar.commands,

@@ -2266,13 +2266,24 @@ function lbVariantInfo(entry) {
 // ladder-data.json: that file only holds players the cache has
 // complete records for, which runs smaller than the roster.
 function lbExtras(dataDir) {
-  try {
-    const j = JSON.parse(fs.readFileSync(path.join(dataDir, 'lb-extras.json'), 'utf8'));
-    return {
-      members: Array.isArray(j.members) ? j.members : [],
-      friends: Array.isArray(j.friends) ? j.friends : [],
-    };
-  } catch { return { members: [], friends: [] }; }
+  const out = { members: [], friends: [] };
+  const rd = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dataDir, f), 'utf8')); } catch { return null; } };
+  const j = rd('lb-extras.json');
+  if (j) {
+    if (Array.isArray(j.members)) out.members.push(...j.members);
+    if (Array.isArray(j.friends)) out.friends.push(...j.friends);
+  }
+  // Derived: RSNs linked to members with recorded standing (the same
+  // sources wom-warm uses), so the hand file is only an extra.
+  const { entryRsns } = require('./membership');
+  const links = rd('rsn-links.json') || {};
+  const recs = rd('membership.json') || {};
+  for (const guild of Object.values(recs)) {
+    for (const [userId, rec] of Object.entries(guild && typeof guild === 'object' ? guild : {})) {
+      if (rec && rec.standing === 'member') out.members.push(...entryRsns(links[userId]));
+    }
+  }
+  return out;
 }
 async function rankedNames() {
   const names = [];

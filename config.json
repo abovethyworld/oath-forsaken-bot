@@ -822,6 +822,12 @@
   "categories": {
     "staff": "1558456075248996454"
   },
+  "botIds": {
+    "wipeChannelId": "1561979844470775839",
+    "countdownViewRoleIds": ["1558621489283211316", "1558540434652008569", "1558540424048803860", "1558540445611728997"],
+    "countdownStaffRoleIds": ["1558578603359207555", "1558578608233119765"],
+    "auditCanaryUserId": "000000000000000000"
+  },
   "winnerRoles": [
     {
       "name": "SOTW Winner",
