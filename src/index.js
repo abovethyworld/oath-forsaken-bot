@@ -228,6 +228,8 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('calendar', () => syncCalendar(client)), 24 * 3600 * 1000);
   setInterval(() => run('countdown', () => refreshLaunchCountdown(client)), 30 * 60 * 1000);
   setInterval(() => run('bounties-sweep', () => sweepExpiredBounties(client)), 6 * 3600 * 1000);
+  setTimeout(() => { run('bounty-sync', () => require('./bounty-sync').syncBountyPool(client)); }, 5 * 60 * 1000);
+  setInterval(() => run('bounty-sync', () => require('./bounty-sync').syncBountyPool(client)), 24 * 3600 * 1000);
   setInterval(() => run('luck-refresh', () => refreshProfileLuck(), 'Profile luck refresh failed'), 6 * 3600 * 1000);
   run('luck-refresh', () => refreshProfileLuck(), 'Profile luck refresh failed');
   // Daily WOM update + gains warm-up: first run a few minutes

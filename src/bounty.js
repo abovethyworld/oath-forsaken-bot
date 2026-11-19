@@ -930,6 +930,17 @@ async function handleBountyButton(interaction) {
   if (action === 'lock') return handleLock(interaction, id);
 }
 
+async function poolSyncCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  const r = await require('./bounty-sync').syncBountyPool(interaction.client);
+  const content = r.ok ? `Pool synced: ${r.count} contracts.` : `Sync failed: ${r.error}. The current pool is unchanged.`;
+  await interaction.editReply({ content }).catch(() => {});
+}
+
 const commands = [
   {
     data: new SlashCommandBuilder()
@@ -963,9 +974,11 @@ const commands = [
           )
           .addStringOption((o) => o.setName('proof_target').setDescription('Item, boss, or skill the proof is about'))
           .addIntegerOption((o) => o.setName('proof_amount').setDescription('How many (KC or XP targets)').setMinValue(1))
-      ),
+      )
+      .addSubcommand((s) => s.setName('pool-sync').setDescription('Re-read the bounty sheet into the pool (staff)')),
     run: async (interaction) => {
       if (interaction.options.getSubcommand() === 'post') return postCommand(interaction);
+      if (interaction.options.getSubcommand() === 'pool-sync') return poolSyncCommand(interaction);
     },
   },
 ];
