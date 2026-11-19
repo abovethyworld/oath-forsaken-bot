@@ -141,12 +141,11 @@ async function createTicket(interaction, ticketType) {
       .setEmoji('🔒')
   );
   await thread.send({
-    // Only tag Staff on tickets — quiet until launch (no notify, just the visible mention).
-    // Flip allowedMentions to include roles for legit pings at launch.
+    // Staff are tagged on new tickets and the role ping notifies for real (live since launch).
     content: `${interaction.user} <@&${config.tickets.staffRoleIds[0]}>`.trim(),
     embeds: [embed],
     components: [closeRow],
-    allowedMentions: { users: [interaction.user.id] },
+    allowedMentions: { users: [interaction.user.id], roles: [config.tickets.staffRoleIds[0]] },
   });
 
   await interaction.editReply(`Ticket created: ${thread}`);

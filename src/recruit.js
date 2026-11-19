@@ -614,11 +614,10 @@ async function finalizeApplication(interaction, p) {
     .catch(() => null);
 
   if (thread) {
-    // Staff ping on new applications — quiet until launch.
-    // The mention renders but doesn't notify; flip allowedMentions to ping for real at launch.
+    // Staff ping on new applications: the role mention notifies for real (live since launch).
     await thread.send({
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
-      allowedMentions: { users: [interaction.user.id] },
+      allowedMentions: { users: [interaction.user.id], roles: [config.tickets.staffRoleIds[0]] },
     }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     await interaction.update({ content: 'Application sent. Staff will review it.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Mark this application as submitted so it isn't reused
