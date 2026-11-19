@@ -10,6 +10,17 @@ const CHANNEL_NAME = '𝐁𝐨𝐭 𝐇𝐞𝐚𝐥𝐭𝐡';
 const THROTTLE_MS = 60 * 60 * 1000;
 
 const lastSent = new Map();
+
+// Short uptime string: "3d 4h", "5h 12m", "42m" (under a minute reads "0m").
+function formatUptime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 let pending = null;
 
 function readSaved() {
@@ -73,7 +84,8 @@ async function alertHealth(client, key, text) {
     lastSent.set(key, now);
     const channel = await ensureHealthChannel(client);
     if (!channel) return false;
-    await channel.send({ content: String(text).slice(0, 1900) });
+    const suffix = `\nUptime: ${formatUptime(process.uptime())}`;
+    await channel.send({ content: String(text).slice(0, 1900) + suffix });
     return true;
   } catch (e) {
     console.error('Health alert failed:', e.message);
