@@ -63,13 +63,16 @@ async function authedCalendar() {
   return google.calendar({ version: 'v3', auth: client });
 }
 
-// start/end: JS Dates. Returns the Google event link, or null if not configured.
+// start/end: JS Dates. Returns { ok: true, link } on success, or
+// { ok: false, error } when not configured or the insert fails, so the
+// caller can tell the creator the Google copy did not happen.
+// Target calendar: GCAL_CALENDAR_ID env when set, else the calendarId passed in.
 async function createEvent({ summary, description, start, end, timeZone, calendarId }) {
   const calendar = await authedCalendar();
-  if (!calendar) return null;
+  if (!calendar) return { ok: false, error: 'Google Calendar is not linked' };
   try {
     const res = await calendar.events.insert({
-      calendarId: calendarId || 'primary',
+      calendarId: process.env.GCAL_CALENDAR_ID || calendarId || 'primary',
       requestBody: {
         summary,
         description: description || '',
@@ -77,10 +80,10 @@ async function createEvent({ summary, description, start, end, timeZone, calenda
         end: { dateTime: end.toISOString(), timeZone },
       },
     });
-    return res.data.htmlLink || null;
+    return { ok: true, link: res.data.htmlLink || null };
   } catch (err) {
     console.error('[gcal.js] createEvent insert failed:', err.message);
-    return null;
+    return { ok: false, error: err.message };
   }
 }
 

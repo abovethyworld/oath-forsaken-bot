@@ -18,6 +18,17 @@ const SYNC_DIR = path.join(__dirname, '..', 'data', 'plugin-sync');
 const CODES_FILE = path.join(SYNC_DIR, 'codes.json');
 const MEMBERS_DIR = path.join(SYNC_DIR, 'members');
 const HELD_FILE = path.join(SYNC_DIR, 'held.jsonl');
+const FLAGS_FILE = path.join(__dirname, '..', 'data', 'bot-flags.json');
+// Hot-read flags: read fresh at each use so a data-dir edit lands without a
+// rebuild. Missing or unreadable file means defaults.
+function loadFlags() {
+  const flags = { pluginLive: false };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(FLAGS_FILE, 'utf8'));
+    if (parsed && parsed.pluginLive === true) flags.pluginLive = true;
+  } catch {}
+  return flags;
+}
 const HELD_STATE_FILE = path.join(__dirname, '..', 'data', 'held-state.json');
 
 function loadCodes() {
@@ -182,7 +193,9 @@ async function connect(interaction) {
   const entry = getRsnEntry(interaction.user.id);
   await interaction.reply({
     content:
-      'The clan plugin is not live yet. This code will work when it launches.\n\n' +
+      (loadFlags().pluginLive
+        ? 'The clan plugin is live.\n\n'
+        : 'The clan plugin is not live yet. This code will work when it launches.\n\n') +
       `Your plugin connect code:\n\`${code}\`\n` +
       'Paste it into the Connect Code setting in the Oath Forsaken RuneLite plugin. ' +
       'One code covers every account you play. The plugin reports the account you are ' +

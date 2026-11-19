@@ -67,6 +67,24 @@ const client = new Client({
   ],
 });
 
+// Freeze watchdog: if the gateway has been logged in but not ready for 10
+// continuous minutes, exit so systemd restarts the bot. The first ready gets
+// 10 minutes from process start; every ready/resume resets the clock.
+const NOT_READY_LIMIT_MS = 10 * 60 * 1000;
+let lastReadyAt = Date.now();
+const markReady = () => { lastReadyAt = Date.now(); };
+client.on(Events.ClientReady, markReady);
+client.on(Events.ShardReady, markReady);
+client.on(Events.ShardResume, markReady);
+setInterval(() => {
+  if (client.isReady()) { markReady(); return; }
+  const down = Date.now() - lastReadyAt;
+  if (down >= NOT_READY_LIMIT_MS) {
+    console.error(`[watchdog] gateway not ready for ${Math.round(down / 60000)} min; exiting for restart`);
+    process.exit(1);
+  }
+}, 30 * 1000).unref();
+
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
   c.user.setActivity('Serving Chaos', { type: 4 }); // custom status, Zamorak theme

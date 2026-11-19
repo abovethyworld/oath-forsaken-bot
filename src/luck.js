@@ -42,7 +42,7 @@ const DEFAULT_TUNING = {
   rateScale: { yama: 0.8, the_hueycoatl: 1 / 3 },
   rateScalePets: [30888, 30152],
   unscoredItems: [33382, 30637, 33133],
-  excludedCounters: [],
+  excludedCounters: ['callisto', 'vetion', 'venenatis'],
 };
 function loadTuning() {
   let parsed = null;

@@ -173,9 +173,10 @@ async function handleEventButton(interaction) {
     await postRoster(ch, name, event.id).catch((e) => console.error('[calendar.js] Roster post failed:', e.message));
   }
 
-  // Mirror to Google Calendar if linked (fire and forget)
+  // Mirror to Google Calendar if linked. Only claim "Mirrored" when it worked;
+  // on failure tell the creator (the Discord event itself still stands).
   if (gcal.isConfigured()) {
-    gcal
+    const mirror = await gcal
       .createEvent({
         summary: `[Oath Forsaken] ${name}`,
         description,
@@ -184,8 +185,13 @@ async function handleEventButton(interaction) {
         timeZone: config.calendar.timezone,
         calendarId: (config.gcal && config.gcal.calendarId) || 'primary',
       })
-      .then(() => console.log(`Mirrored "${name}" to Google Calendar`))
-      .catch((err) => console.error('Google Calendar mirror failed:', err.message));
+      .catch((err) => ({ ok: false, error: err.message }));
+    if (mirror && mirror.ok) {
+      console.log(`Mirrored "${name}" to Google Calendar`);
+    } else {
+      console.error('Google Calendar mirror failed:', mirror && mirror.error);
+      await interaction.followUp({ content: `The Discord event is created, but the Google Calendar copy failed. Add **${name}** to Google Calendar by hand if you need it there.`, ephemeral: true }).catch(() => {});
+    }
   }
 }
 
