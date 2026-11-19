@@ -183,7 +183,7 @@ client.once(Events.ClientReady, async (c) => {
       await syncFriends(client);
 
       // Archive any finished WOM competitions for the hall of champions.
-      const newChamps = await syncChampions();
+      const newChamps = await syncChampions(client);
       if (newChamps) console.log(`Champions: archived ${newChamps} finished competition(s).`);
 
       // Publish running and upcoming WOM competitions for the website.
@@ -218,7 +218,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
   setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
   setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);
-  setInterval(() => run('champions', () => syncChampions()), 24 * 3600 * 1000);
+  setInterval(() => run('champions', () => syncChampions(client)), 24 * 3600 * 1000);
   setInterval(() => run('competitions', () => syncCompetitions()), 24 * 3600 * 1000);
   setInterval(() => run('wom-warm', () => warmMemberStats(), 'WOM member warm failed'), 24 * 3600 * 1000);
   setInterval(() => run('wom-report', () => reportUncoveredMembers(client), 'WOM group staff report failed'), 7 * 24 * 3600 * 1000);

@@ -96,4 +96,16 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+// Officer-edited panel wording (data/panel-text.json) overlays the baked
+// config. Re-read when the file changes, so edits land without a restart.
+try {
+  const panelText = require('./panel-text').createPanelText();
+  panelText.refresh(config);
+  setInterval(() => {
+    try { panelText.refresh(config); } catch (e) { console.error('[panel-text] refresh failed:', e.message); }
+  }, 10000).unref();
+} catch (e) {
+  console.error('[panel-text] overrides not applied:', e.message);
+}
+
 module.exports = config;
