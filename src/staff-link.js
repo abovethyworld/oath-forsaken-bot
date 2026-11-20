@@ -227,7 +227,7 @@ async function handleStaffLinkModal(interaction) {
     return;
   }
   console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) linked ${check.rsn} to ${targetId}`);
-  const log = interaction.guild.channels.cache.get(config.channels.modLog);
+  const log = interaction.guild.channels.cache.get(config.channels.joinsLeaves);
   if (log) {
     await log
       .send({ content: `Staff link: <@${interaction.user.id}> linked **${check.rsn}** to <@${targetId}>.` })
