@@ -21,7 +21,6 @@ const { Client, Events, GatewayIntentBits, REST, Routes } = require('discord.js'
 const config = require('./config'); // validates config.json on load
 const { commands, handleCommand } = require('./commands');
 const { routeButton } = require('./buttons');
-const { handleWelcome } = require('./welcome');
 const { syncReminders } = require('./calendar');
 const { syncSeniority, seedMembership } = require('./seniority');
 const { syncCalendar } = require('./event-calendar');
@@ -452,7 +451,6 @@ client.on(Events.GuildMemberAdd, async (member) => {
   } catch (e) {
     console.error('Under-30 join flag failed:', e.message);
   }
-  await handleWelcome(member);
 });
 
 // Member leave logging handled by Sapphire (2026-10-11)
