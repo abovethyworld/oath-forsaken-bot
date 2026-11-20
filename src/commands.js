@@ -234,6 +234,7 @@ async function clearStrikesCmd(interaction) {
 
 // ─── /panel-text (staff) ────────────────────────────────────────────
 const panelText = require('./panel-text').createPanelText();
+const { compRosterCommand } = require('./comp-roster');
 
 async function panelTextCommand(interaction) {
   if (!isStaff(interaction)) {
@@ -439,6 +440,13 @@ const commands = [
       .addSubcommand((c) => c.setName('clear').setDescription('Go back to the original text')
         .addStringOption((o) => o.setName('key').setDescription('Which text').setRequired(true))),
     run: panelTextCommand,
+  },
+  {
+    data: new SlashCommandBuilder()
+      .setName('comp-roster')
+      .setDescription('Get the competition roster file (Staff only)')
+      .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+    run: compRosterCommand,
   },
   ...tickets.commands,
   ...calendar.commands,
