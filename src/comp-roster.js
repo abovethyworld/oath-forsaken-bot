@@ -22,8 +22,15 @@ const MEMBERSHIP_FILE = path.join(DATA_DIR, 'membership.json');
 const LINKS_FILE = path.join(DATA_DIR, 'rsn-links.json');
 const GROUP_FILE = path.join(DATA_DIR, 'wom-group.json');
 const FRIENDS_FILE = path.join(DATA_DIR, 'friends.json');
+const OVERRIDES_FILE = path.join(DATA_DIR, 'comp-roster-overrides.json');
 
 const JOB = 'comp-roster';
+
+// Staff type overrides, data/comp-roster-overrides.json:
+// { "<rsn>": "<wise old man type>" }. Wise Old Man cannot see group
+// ironmen (their accounts read as regular), so a group ironman's type
+// is recorded here by staff, the same fix the website exporter carries
+// for its badges. An override wins over the Wise Old Man type.
 
 // Wise Old Man account type -> roster label and whether the account
 // may be entered in a competition.
@@ -112,6 +119,7 @@ function buildRows(input) {
     else if (info.iron) list = 'Comp keep list';
     else list = 'Untick from comps';
     const notes = [];
+    if (info && info.override) notes.push('Type marked by staff: Wise Old Man cannot see group ironmen');
     if (inGroup && !info) notes.push('Wise Old Man has no type for this account yet');
     if (inGroup && !s.ownerId) notes.push('In the group, not linked to a Discord account');
     if (s.friend || friends.has(key)) notes.push('Friend of the Clan');
@@ -182,11 +190,21 @@ async function refreshCompRoster(guild) {
         for (const rsn of entryRsns(entry)) names.add(rsn);
       }
       for (const rsn of friendRsns) names.add(rsn);
+      const overrides = readJson(OVERRIDES_FILE, {});
+      const overrideByName = new Map();
+      for (const [rsn, type] of Object.entries(overrides)) {
+        if (TYPE_INFO[type]) overrideByName.set(normName(rsn), { ...TYPE_INFO[type], override: true });
+      }
       const typeByName = new Map();
       for (const rsn of names) {
+        const key = normName(rsn);
+        if (overrideByName.has(key)) {
+          typeByName.set(key, overrideByName.get(key));
+          continue;
+        }
         const stats = await getStats(rsn).catch(() => null);
         const info = stats && !stats.notFound ? TYPE_INFO[stats.accountType] : null;
-        typeByName.set(normName(rsn), info || null);
+        typeByName.set(key, info || null);
       }
 
       // Player labels from the guild when one is at hand; the files
