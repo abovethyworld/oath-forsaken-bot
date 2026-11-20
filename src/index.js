@@ -39,6 +39,7 @@ const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTea
 const { reconcileVerifiedLinks, surfaceHeldPosts } = require('./plugin-connect');
 const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
+const { refreshCompRoster } = require('./comp-roster');
 const { mergeSiteLinkRequests } = require('./link-requests');
 const { handleStaffLinkSelect, handleStaffLinkModal } = require('./staff-link');
 const { handleWebsiteControlsSelect } = require('./website-controls');
@@ -152,6 +153,10 @@ client.once(Events.ClientReady, async (c) => {
       // reconciles against it, and the seniority sync reads both.
       await syncWomGroup();
 
+      // Comp roster: rebuild once at boot so the files on disk match
+      // current membership; approvals keep it fresh from here.
+      await refreshCompRoster(guild).catch(() => {});
+
       // Merge any RSN link requests the website dropped while the
       // bot was down (the minute loop below takes it from here).
       mergeSiteLinkRequests();
@@ -218,6 +223,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
   setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
   setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);
+  setInterval(() => run('comp-roster', () => refreshCompRoster(client.guilds.cache.get(config.guildId))), 24 * 3600 * 1000);
   setInterval(() => run('champions', () => syncChampions(client)), 24 * 3600 * 1000);
   setInterval(() => run('competitions', () => syncCompetitions()), 24 * 3600 * 1000);
   setInterval(() => run('wom-warm', () => warmMemberStats(), 'WOM member warm failed'), 24 * 3600 * 1000);

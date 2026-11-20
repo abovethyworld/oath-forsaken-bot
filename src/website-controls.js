@@ -188,6 +188,12 @@ async function handleWebsiteControlsButton(interaction) {
     await interaction.reply({ content: 'The record could not be saved. Nothing changed.', ephemeral: true });
     return;
   }
+  // Standing changed: the comp roster follows membership.
+  try {
+    require('./comp-roster').scheduleRefresh(interaction.guild);
+  } catch (e) {
+    console.error(`${TAG} comp roster refresh failed:`, e.message);
+  }
   if (choice === 'clear') {
     console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) cleared the standing record for ${targetId}`);
     await postModLog(interaction, `Website controls: <@${interaction.user.id}> cleared the standing record for <@${targetId}>.`);

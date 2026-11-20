@@ -884,6 +884,13 @@ async function handleDecision(interaction) {
         await thread.send(`Link failed for <@${userId}>. Name given: ${f.rsn}. Reason: ${f.reason}. Approval still went through.`).catch((e) => console.error('[recruit-prelink] staff notice failed:', e.message));
       }
     }
+    // Comp roster follows membership (ruling Nov 20, 2026): a new
+    // member's names belong on it as soon as they are approved.
+    try {
+      require('./comp-roster').scheduleRefresh(interaction.guild);
+    } catch (e) {
+      console.error('[recruit.js] Comp roster refresh failed:', e.message);
+    }
 
     // Welcome DM on approval
     await target.send(approvalDmText(prelink)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
