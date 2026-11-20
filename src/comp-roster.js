@@ -23,6 +23,7 @@ const LINKS_FILE = path.join(DATA_DIR, 'rsn-links.json');
 const GROUP_FILE = path.join(DATA_DIR, 'wom-group.json');
 const FRIENDS_FILE = path.join(DATA_DIR, 'friends.json');
 const OVERRIDES_FILE = path.join(DATA_DIR, 'comp-roster-overrides.json');
+const BADGES_FILE = path.join(DATA_DIR, 'badges.json');
 
 const JOB = 'comp-roster';
 
@@ -31,6 +32,21 @@ const JOB = 'comp-roster';
 // ironmen (their accounts read as regular), so a group ironman's type
 // is recorded here by staff, the same fix the website exporter carries
 // for its badges. An override wins over the Wise Old Man type.
+
+// The badge an applicant picked for a name at application time
+// (data/badges.json, written by the application flow). Wise Old Man
+// cannot see group ironmen, but the applicant declared the type when
+// they came in, so a badge beats the Wise Old Man type. Only a staff
+// override beats a badge.
+const BADGE_INFO = {
+  main: { label: 'Main', iron: false },
+  ironman: { label: 'Ironman', iron: true },
+  hc: { label: 'Hardcore ironman', iron: true },
+  ult: { label: 'Ultimate ironman', iron: true },
+  gim: { label: 'Group ironman', iron: true },
+  ugim: { label: 'Group ironman (unranked)', iron: true },
+  hcgim: { label: 'Hardcore group ironman', iron: true },
+};
 
 // Wise Old Man account type -> roster label and whether the account
 // may be entered in a competition.
@@ -120,6 +136,7 @@ function buildRows(input) {
     else list = 'Untick from comps';
     const notes = [];
     if (info && info.override) notes.push('Type marked by staff: Wise Old Man cannot see group ironmen');
+    if (info && info.badge) notes.push('Type from their application pick');
     if (inGroup && !info) notes.push('Wise Old Man has no type for this account yet');
     if (inGroup && !s.ownerId) notes.push('In the group, not linked to a Discord account');
     if (s.friend || friends.has(key)) notes.push('Friend of the Clan');
@@ -195,11 +212,24 @@ async function refreshCompRoster(guild) {
       for (const [rsn, type] of Object.entries(overrides)) {
         if (TYPE_INFO[type]) overrideByName.set(normName(rsn), { ...TYPE_INFO[type], override: true });
       }
+      const badges = readJson(BADGES_FILE, {});
+      const badgeByName = new Map();
+      for (const rec of Object.values(badges.users || {})) {
+        for (const [key, badge] of Object.entries((rec && rec.accounts) || {})) {
+          if (!key.startsWith('r:')) continue;
+          const info = BADGE_INFO[badge];
+          if (info) badgeByName.set(normName(key.slice(2)), { ...info, badge: true });
+        }
+      }
       const typeByName = new Map();
       for (const rsn of names) {
         const key = normName(rsn);
         if (overrideByName.has(key)) {
           typeByName.set(key, overrideByName.get(key));
+          continue;
+        }
+        if (badgeByName.has(key)) {
+          typeByName.set(key, badgeByName.get(key));
           continue;
         }
         const stats = await getStats(rsn).catch(() => null);
