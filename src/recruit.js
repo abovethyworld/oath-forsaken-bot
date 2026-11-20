@@ -892,8 +892,9 @@ async function handleDecision(interaction) {
       console.error('[recruit.js] Comp roster refresh failed:', e.message);
     }
 
-    // Welcome DM on approval
-    await target.send(approvalDmText(prelink)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    // No approval DM (2026-11-20): the welcome in #general is the
+    // greeting members get. approvalDmText stays for the smoke suite
+    // but is not sent.
 
     // Public welcome in #general - plain text (finalized 2026-10-13)
     // Guest gets the guest welcome; iron/main get the Initiate announcement.
