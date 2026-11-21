@@ -369,12 +369,20 @@ function bridgeRow(target, key, rsn) {
       .setStyle(ButtonStyle.Danger));
 }
 
+// Dead-press answer for buttons and menus whose encoded state can no
+// longer be read (cards posted before a format change). One shared
+// note so the press never just does nothing (ruling 2026-11-21).
+const STALE_CARD_NOTE = 'That card is too old to update. Run the command again for a fresh one.';
+async function staleCardNote(interaction) {
+  await interaction.reply({ content: STALE_CARD_NOTE, ephemeral: true }).catch(() => {});
+}
+
 async function handleBridgeButton(interaction) {
   const parts = String(interaction.customId || '').split(':');
   const target = parts[1];
   const key = parts[2];
   const rsn = String(parts.slice(3).join(':') || '').replace(/_/g, ' ');
-  if (!rsn) return;
+  if (!rsn) return staleCardNote(interaction);
   let payload = null;
   if (target === 'kc') payload = await kcPayload(key, rsn, interaction.user.id);
   else if (target === 'dry') payload = await dryPayload(key, rsn, interaction.user.id);
@@ -447,7 +455,7 @@ async function handleRefreshButton(interaction, deps = {}) {
     isHub = true;
     if (rsn) rebuild = () => hubRender(st, uid);
   }
-  if (!rsn || !rebuild) return;
+  if (!rsn || !rebuild) return staleCardNote(interaction);
   const lockedLine = (m) => `That name was just refreshed. It is locked for about ${m} more minute${m === 1 ? '' : 's'}.`;
   // Pre-flight: refused taps end here, answered instantly.
   const say = (content) => interaction.reply({ content, ephemeral: true }).catch(() => {});
@@ -515,7 +523,7 @@ async function handleLbBackButton(interaction) {
     const pair = decodePair(parts[3]);
     if (pair) payload = await compareSkillsPayload(pair.a, pair.b, interaction.user.id, pair.owner, { skill: parts[2] });
   }
-  if (!payload) return;
+  if (!payload) return staleCardNote(interaction);
   await interaction.update({
     content: payload.content || '',
     files: payload.files || [],
@@ -1168,7 +1176,10 @@ async function dryListPayload(rsn, userId, view = 'uniques', cat = 'all') {
 }
 
 async function drySwapUpdate(interaction, payload) {
-  if (!payload) return;
+  if (!payload) {
+    await interaction.followUp({ content: STALE_CARD_NOTE, ephemeral: true }).catch(() => {});
+    return;
+  }
   const msg = { content: payload.content || '', components: payload.components || [] };
   if (payload.files) { msg.files = payload.files; msg.attachments = []; }
   else { msg.files = []; msg.attachments = []; }
@@ -1179,7 +1190,7 @@ async function handleDryCatButton(interaction) {
   const parts = String(interaction.customId || '').split(':');
   const cat = parts[1];
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
-  if (!rsn || !DRY_LIST_CATS.includes(cat)) return;
+  if (!rsn || !DRY_LIST_CATS.includes(cat)) return staleCardNote(interaction);
   await interaction.deferUpdate().catch(() => {});
   await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, 'full', cat));
 }
@@ -1188,7 +1199,7 @@ async function handleDryViewButton(interaction) {
   const parts = String(interaction.customId || '').split(':');
   const view = parts[1];
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
-  if (!rsn || !DRY_VIEWS.includes(view)) return;
+  if (!rsn || !DRY_VIEWS.includes(view)) return staleCardNote(interaction);
   await interaction.deferUpdate().catch(() => {});
   await drySwapUpdate(interaction, await dryListPayload(rsn, interaction.user.id, view, 'all'));
 }
@@ -1198,12 +1209,15 @@ async function handleDryPickSelect(interaction) {
   const cat = parts[1];
   const rsn = String(parts.slice(2).join(':') || '').replace(/_/g, ' ');
   const value = String((interaction.values || [])[0] || '');
-  if (!rsn || !value) return;
+  if (!rsn || !value) return staleCardNote(interaction);
   await interaction.deferUpdate().catch(() => {});
   let payload = null;
   if (value.startsWith('b:')) payload = await dryPayload(value.slice(2), rsn, interaction.user.id);
   else if (value.startsWith('c:')) payload = await dryCluePayload(value.slice(2), rsn, interaction.user.id);
-  if (!payload) return;
+  if (!payload) {
+    await interaction.followUp({ content: STALE_CARD_NOTE, ephemeral: true }).catch(() => {});
+    return;
+  }
   if (payload.files) {
     // The return row goes back to the list the picker sat
     // on: a Full clog category, or the view itself.
@@ -5495,14 +5509,14 @@ async function handleHubButton(interaction) {
   if (kind === 'tab') {
     const st = hubDecode(parts.slice(3).join(':'));
     const tab = parts[2];
-    if (!st.rsn || !HUB_TABS.includes(tab)) return;
+    if (!st.rsn || !HUB_TABS.includes(tab)) return staleCardNote(interaction);
     await hubUpdate(interaction, { tab, rsn: st.rsn, sub: '', ui: '', owner: st.owner, mode: '' });
     return;
   }
   // Two-segment kinds carry an argument before the state.
   const argKinds = new Set(['alt', 'var', 'gain', 'clogcat', 'drycat', 'dryview']);
   const st = hubDecode((argKinds.has(kind) ? parts.slice(3) : parts.slice(2)).join(':'));
-  if (!st.rsn) return;
+  if (!st.rsn) return staleCardNote(interaction);
   switch (kind) {
     case 'lb': await hubLbBranch(interaction, st); return;
     case 'cmp': await hubCmpBranch(interaction, st); return;
@@ -5602,7 +5616,7 @@ async function handleHubSelect(interaction) {
   const kind = parts[1];
   const value = String((interaction.values || [])[0] || '');
   const st = hubDecode(parts.slice(2).join(':'));
-  if (!st.rsn || !value) return;
+  if (!st.rsn || !value) return staleCardNote(interaction);
   await interaction.deferUpdate().catch(() => {});
   if (kind === 'skillpick') {
     if (!SKILL_ORDER.includes(value)) return;
@@ -5686,11 +5700,11 @@ async function handleHubBackButton(interaction) {
 // same hub in the channel as the presser's own card.
 async function handleHubMineButton(interaction) {
   const st = hubDecode(String(interaction.customId || '').slice('hubmine:'.length));
-  if (!st.rsn) return;
+  if (!st.rsn) return staleCardNote(interaction);
   const payload = await hubPayload(st.rsn, interaction.user.id, {
     tab: st.tab, sub: st.sub, ui: st.tab === 'gains' ? st.ui : '',
   });
-  if (!payload) return;
+  if (!payload) return staleCardNote(interaction);
   const sent = interaction.channel && payload.files
     ? await interaction.channel.send(hubMsg(payload)).catch(() => null) : null;
   if (sent) {
@@ -5709,7 +5723,7 @@ async function handleProfileButton(interaction) {
   const tab = parts[1];
   const rsn = String(parts[parts.length - 1] || '').replace(/_/g, ' ');
   const sub = parts.slice(2, -1).join(':');
-  if (!rsn || !HUB_TABS.includes(tab)) return;
+  if (!rsn || !HUB_TABS.includes(tab)) return staleCardNote(interaction);
   const init = { tab, sub: '', ui: '' };
   if (tab === 'skills') init.sub = sub !== '-' && SKILL_ORDER.includes(sub) ? sub : '';
   else if (tab === 'pvm') init.sub = sub !== '-' ? sub : '';
@@ -5717,7 +5731,7 @@ async function handleProfileButton(interaction) {
   else if (tab === 'dry') init.sub = !sub || sub === '-' ? 'list' : sub;
   else if (tab === 'gains') init.ui = gainsPeriod(sub);
   const payload = await hubPayload(rsn, interaction.user.id, init);
-  if (!payload) return;
+  if (!payload) return staleCardNote(interaction);
   if (payload.files) {
     await interaction.update(hubMsg(payload)).catch(() => {});
   } else {
@@ -5774,7 +5788,7 @@ async function handleLbProfileSelect(interaction) {
   const tab = parts[1];
   const sub = parts.slice(2).join(':');
   const rsn = String((interaction.values || [])[0] || '');
-  if (!rsn || !HUB_TABS.includes(tab)) return;
+  if (!rsn || !HUB_TABS.includes(tab)) return staleCardNote(interaction);
   await interaction.deferUpdate().catch(() => {});
   const init = { tab, sub: '', ui: '' };
   if (tab === 'skills') init.sub = sub !== '-' ? sub : '';
@@ -5782,7 +5796,10 @@ async function handleLbProfileSelect(interaction) {
   else if (tab === 'clogs') init.sub = sub || 'total';
   else if (tab === 'dry') init.sub = 'list';
   const payload = await hubPayload(rsn, interaction.user.id, init);
-  if (!payload) return;
+  if (!payload) {
+    await interaction.followUp({ content: STALE_CARD_NOTE, ephemeral: true }).catch(() => {});
+    return;
+  }
   await interaction.editReply(hubMsg(payload)).catch(() => {});
 }
 
