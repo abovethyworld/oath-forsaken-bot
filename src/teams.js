@@ -1475,7 +1475,40 @@ async function handleClearAllTeams(interaction) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
     return;
   }
-  await interaction.deferReply({ ephemeral: true }).catch(() => {});
+  // Ask first (ruling 2026-11-21): one tap used to wipe every team post.
+  // Same confirm shape as the CC checklist's Clear All.
+  const count = Object.keys(loadState().teams || {}).length;
+  if (count === 0) {
+    await interaction.reply({ content: 'No teams to clear.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const confirmRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('team:clearallconfirm')
+      .setLabel(`Yes, clear all ${count}`)
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('team:clearallcancel')
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await interaction.reply({
+    content: `Clear all ${count} team${count === 1 ? '' : 's'}? This deletes every team post and cannot be undone.`,
+    components: [confirmRow],
+    ephemeral: true,
+  }).catch(() => {});
+}
+
+async function handleClearAllCancel(interaction) {
+  await interaction.update({ content: 'Cancelled.', components: [] }).catch(() => {});
+}
+
+async function handleClearAllTeamsConfirm(interaction) {
+  if (!hasTeamStaffRole(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  await interaction.update({ content: 'Clearing...', components: [] }).catch(() => {});
   const res = await mutateTeams((state) => {
     const ids = Object.values(state.teams || {}).map((t) => ({
       messageId: t.messageId,
@@ -3746,6 +3779,8 @@ async function handleTeamButton(interaction) {
   if (action === 'settings') return handleSettingsButton(interaction);
   if (action === 'myteams') return handleMyTeamsButton(interaction);
   if (action === 'clearall') return handleClearAllTeams(interaction);
+  if (action === 'clearallconfirm') return handleClearAllTeamsConfirm(interaction);
+  if (action === 'clearallcancel') return handleClearAllCancel(interaction);
   if (action === 'rsnswitch') return handleRsnSwitchButton(interaction);
   if (action === 'rsnset') return handleRsnSet(interaction, parts[2]);
   if (action === 'rsnadd') return handleRsnAddButton(interaction);
