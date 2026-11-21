@@ -83,6 +83,10 @@ const ACTIVITIES_BASE = {
       '5s': ['Mage', 'North FZ', 'RDPS', 'MDPS 1', 'MDPS 2'],
     },
   },
+  tfa: {
+    name: 'The Fractured Archive', short: 'TFA', category: 'raids',
+    size: { min: 2, max: 8 }, fillPing: true, partyHub: true,
+  },
   wintertodt: {
     name: 'Wintertodt', category: 'skilling',
     size: null, fillPing: false, partyHub: false,
@@ -159,6 +163,7 @@ const ACTIVITY_EMOJI_BASE = {
   cox_cm: '<:cox:1567764066254979153>',
   tob: '<:tob:1567764206756036628>',
   tob_hard: '<:tob:1567764206756036628>',
+  tfa: '<:fracturedarchive:1567763522455212142>',
   wintertodt: '<:wintertodt:1567765048074444940>',
   gotr: '<:gotr:1561953776414359563>',
   tempoross: '<:tempoross:1567764908203049022>',
@@ -540,6 +545,7 @@ const SPEC_DISPLAY = {
   cox_cm: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'zgs'],
   tob: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crystalhalberd'],
   tob_hard: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crystalhalberd'],
+  tfa: ['bgs', 'dwh', 'eldermaul', 'tonalztics', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'crimsonkisten', 'dinhs'],
   yama: ['bgs', 'dwh', 'eldermaul', 'accursed', 'soulflame', 'zcb', 'voidwaker', 'dragonclaws', 'burningclaws', 'sgs', 'emberlight', 'eyeofayak'],
   nex: ['zcb', 'voidwaker', 'burningclaws'],
   huey: ['dragonclaws', 'burningclaws', 'crimsonkisten'],
@@ -694,6 +700,7 @@ const KC_METRIC_OVERRIDE = {
   nm: 'nightmare',
   huey: 'the_hueycoatl',
   royals: 'the_royal_titans',
+  tfa: 'the_fractured_archive',
 };
 // KC columns for the board, left to right. Dual columns show normal + hard
 // (raids), nm + phosani (nightmare), or solo + group (wildy bosses).
