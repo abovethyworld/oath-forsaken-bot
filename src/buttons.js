@@ -1,6 +1,6 @@
 // Handles clicks on role-toggle buttons posted by /setup-roles.
 // Button custom IDs look like: "role:<roleId>" or "ticket:<action>"
-const { handleTicketButton } = require('./tickets');
+const { handleTicketButton, handleMemberConfirm } = require('./tickets');
 const { handleApplyButton } = require('./recruit');
 const { handlePollButton } = require('./polls');
 const { handleCcButton } = require('./cc-checklist');
@@ -30,6 +30,7 @@ async function routeButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
   if (kind === 'help') return handleHelpButton(interaction);
   if (kind === 'ticket') return handleTicketButton(interaction);
+  if (kind === 'member') return handleMemberConfirm(interaction);
   if (kind === 'stafflink') return handleStaffLinkButton(interaction);
   if (kind === 'webctl') return handleWebsiteControlsButton(interaction);
   if (kind === 'apply') return handleApplyButton(interaction);

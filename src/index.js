@@ -47,6 +47,7 @@ const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
 const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
+const { keepThreadAwake } = require('./thread-keepawake');
 
 // Command cooldowns: userId:commandName -> timestamp
 const cooldowns = new Map();
@@ -206,6 +207,10 @@ client.once(Events.ClientReady, async (c) => {
       // top up any missed daily banner refresh.
       await ensureLaunchCountdown(client);
 
+      // About the Forsaken thread: un-archive it if it slept, so the
+      // Apply-Here pointer's link keeps landing on a listed thread.
+      await keepThreadAwake(client);
+
       // Daily gains baseline for !gains (cache-only, no API calls).
       if (snapshotToday()) console.log('Gains: recorded the daily snapshot.');
       jobStatus.recordOk('startup-sweep');
@@ -232,6 +237,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('drift', () => syncDrift(client)), 24 * 3600 * 1000);
   setInterval(() => run('calendar', () => syncCalendar(client)), 24 * 3600 * 1000);
   setInterval(() => run('countdown', () => refreshLaunchCountdown(client)), 30 * 60 * 1000);
+  setInterval(() => run('thread-keepawake', () => keepThreadAwake(client)), 24 * 3600 * 1000);
   setInterval(() => run('bounties-sweep', () => sweepExpiredBounties(client)), 6 * 3600 * 1000);
   setTimeout(() => { run('bounty-sync', () => require('./bounty-sync').syncBountyPool(client)); }, 5 * 60 * 1000);
   setInterval(() => run('bounty-sync', () => require('./bounty-sync').syncBountyPool(client)), 24 * 3600 * 1000);
