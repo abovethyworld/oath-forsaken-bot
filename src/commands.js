@@ -245,8 +245,60 @@ async function clearStrikesCmd(interaction) {
     return;
   }
   const user = interaction.options.getUser('user');
-  store.clearStrikes(interaction.guildId, user.id);
-  await interaction.reply({ content: `Cleared all strikes for ${user}.`, ephemeral: true });
+  const count = store.getStrikes(interaction.guildId, user.id).length;
+  if (count === 0) {
+    await interaction.reply({ content: `${user} has no strikes recorded.`, ephemeral: true });
+    return;
+  }
+  // Confirm first, and the clear leaves a mod log line - wiping a
+  // record should itself be on the record (ruling 2026-11-21).
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`strikes:clearconfirm:${user.id}`)
+      .setLabel('Clear strikes')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`strikes:clearcancel:${user.id}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await interaction.reply({
+    content: `Clear all ${count} strike${count === 1 ? '' : 's'} for ${user}? This cannot be undone.`,
+    components: [row],
+    ephemeral: true,
+  });
+}
+
+async function handleStrikesButton(interaction) {
+  const parts = interaction.customId.split(':');
+  if (parts[0] !== 'strikes') return false;
+  const action = parts[1];
+  const userId = parts[2];
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+    await interaction.reply({ content: 'You do not have permission to use this.', ephemeral: true }).catch(() => {});
+    return true;
+  }
+  if (action === 'clearcancel') {
+    await interaction.update({ content: 'Kept the strikes. Nothing was cleared.', components: [] });
+    return true;
+  }
+  if (action === 'clearconfirm') {
+    const count = store.getStrikes(interaction.guildId, userId).length;
+    store.clearStrikes(interaction.guildId, userId);
+    const target = await interaction.client.users.fetch(userId).catch(() => null);
+    const log = interaction.guild.channels.cache.get(config.channels.modLog);
+    if (log) {
+      const embed = new EmbedBuilder()
+        .setTitle(`Strikes cleared: ${target ? target.tag : userId}`)
+        .setDescription(`**Cleared:** ${count} strike${count === 1 ? '' : 's'}\n**Cleared by:** ${interaction.user.tag}`)
+        .setColor(0xffa500)
+        .setTimestamp();
+      await log.send({ embeds: [embed] }).catch((e) => console.error('[commands.js] Non-fatal error:', e.message));
+    }
+    await interaction.update({ content: `Cleared all strikes for <@${userId}>.`, components: [] });
+    return true;
+  }
+  return true;
 }
 
 // ─── /panel-text (staff) ────────────────────────────────────────────
@@ -490,4 +542,4 @@ async function handleCommand(interaction) {
   await cmd.run(interaction);
 }
 
-module.exports = { commands, handleCommand };
+module.exports = { commands, handleCommand, handleStrikesButton };
