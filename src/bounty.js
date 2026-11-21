@@ -908,6 +908,25 @@ async function sweepExpiredBounties(client) {
     let changed = false;
     for (const [id, b] of Object.entries(state.bounties)) {
       if (!b.active) continue;
+      // Repair a stranded claim button: a poster goes up with the
+      // placeholder id 'bounty:claim:pending' and is patched with the
+      // real id right after. If that edit failed, the button is dead
+      // and a press reads as "no longer active" (ruling 2026-11-21).
+      try {
+        const chan = await client.channels.fetch(b.channelId).catch(() => null);
+        if (chan && chan.isTextBased()) {
+          const msg = await chan.messages.fetch(id).catch(() => null);
+          const firstBtn = msg?.components?.[0]?.components?.[0];
+          if (msg && firstBtn && firstBtn.customId === 'bounty:claim:pending') {
+            const row = ActionRowBuilder.from(msg.components[0]);
+            row.components[0] = ButtonBuilder.from(firstBtn).setCustomId(`bounty:claim:${id}`);
+            await msg.edit({ components: [row, ...msg.components.slice(1)] }).catch(() => {});
+            console.log(`Bounty button repaired for ${id}.`);
+          }
+        }
+      } catch (err) {
+        console.warn('Bounty button repair failed:', err.message);
+      }
       const expiresAt = b.expiresAt || (b.createdAt || 0) + (b.days || 14) * DAY_MS;
 
       if (expiresAt > now) {
