@@ -14,6 +14,7 @@ const path = require('path');
 const config = require('./config');
 const jobStatus = require('./job-status');
 const { getStats } = require('./wom');
+const { isStaff } = require('./utils');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CSV_FILE = path.join(DATA_DIR, 'comp-roster.csv');
@@ -291,6 +292,10 @@ function scheduleRefresh(guild) {
 
 // /comp-roster: rebuild, then hand staff the current files.
 async function compRosterCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   let counts;
   try {

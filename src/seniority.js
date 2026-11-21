@@ -31,7 +31,7 @@ const config = require('./config');
 const store = require('./store');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getMembers } = require('./guild-cache');
-const { MONTH_MS, buildInitiateWelcome } = require('./utils');
+const { MONTH_MS, buildInitiateWelcome, isStaff } = require('./utils');
 const membership = require('./membership');
 const tenure = require('./tenure');
 
@@ -334,6 +334,10 @@ async function seedMembership(client) {
 }
 
 async function syncCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
   const dryRun = interaction.options.getBoolean('dryrun') || false;
   await interaction.deferReply({ ephemeral: true });
   const changes = await syncSeniority(interaction.client, { dryRun });
@@ -365,6 +369,10 @@ const commands = [
       .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
       .addBooleanOption((o) => o.setName('hold').setDescription('Hold their rank (true) or release (false)').setRequired(true)),
     run: async (interaction) => {
+      if (!isStaff(interaction)) {
+        await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+        return;
+      }
       const user = interaction.options.getUser('user');
       const hold = interaction.options.getBoolean('hold');
       store.setSeniorityHold(interaction.guildId, user.id, hold);

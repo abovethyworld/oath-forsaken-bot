@@ -15,7 +15,7 @@ const path = require('node:path');
 const config = require('./config');
 const { atomicWrite } = require('./store');
 
-const { ZAMORAK_RED, safeFetch, clampDesc } = require('./utils');
+const { ZAMORAK_RED, safeFetch, clampDesc, isStaff } = require('./utils');
 const EVENT_CALENDAR_CHANNEL_ID = config.eventCalendar?.channelId; // #event-calendar
 const BOT_COMMANDS_CHANNEL_ID = config.eventCalendar?.botCommandsChannelId; // #bot-commands
 const CALENDAR_ID = process.env.GCAL_CALENDAR_ID || '';
@@ -244,6 +244,10 @@ async function syncCalendar(client, channelId = EVENT_CALENDAR_CHANNEL_ID) {
 }
 
 async function syncCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   await syncCalendar(interaction.client);
   await interaction.editReply('Calendar synced.');

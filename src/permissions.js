@@ -9,6 +9,7 @@
 // This module always resolves per-channel. Never check base role perms alone.
 const { PermissionFlagsBits, SlashCommandBuilder, ChannelType } = require('discord.js');
 const config = require('./config');
+const { isStaff } = require('./utils');
 
 const VIEW = PermissionFlagsBits.ViewChannel;
 
@@ -107,6 +108,10 @@ async function syncDrift(client, { silent = false } = {}) {
 }
 
 async function checkCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const drifted = await syncDrift(interaction.client, { silent: true });
   if (drifted === null) {

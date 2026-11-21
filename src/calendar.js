@@ -18,6 +18,7 @@ const {
 const config = require('./config');
 const store = require('./store');
 const gcal = require('./gcal');
+const { isStaff } = require('./utils');
 
 // Pending event confirmations: pendingId -> { data, expires }. Prevents
 // timezone surprises — the creator sees the auto-converting time before it goes live.
@@ -41,6 +42,10 @@ function parseStart(dateStr, timeStr) {
 }
 
 async function createEvent(interaction) {
+  if (!isStaff(interaction) && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageEvents)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
   const name = interaction.options.getString('name');
   // Discord scheduled event name limit is 100 chars — fail friendly
   if (name.length > 100) {
