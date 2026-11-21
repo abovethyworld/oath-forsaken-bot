@@ -57,7 +57,7 @@
           "style": "Danger"
         }
       ],
-      "banner": "https://lh3.googleusercontent.com/d/1w9Ob7X1O76CdWodSrLCs_U8-0ZhFDdhO"
+      "banner": ""
     },
     {
       "title": "PREFERRED GAME SERVER",
@@ -107,13 +107,13 @@
           "style": "Danger"
         }
       ],
-      "banner": "https://lh3.googleusercontent.com/d/1G_HSGorfzH_VoOSTmbKVzL7XM55YGWQX"
+      "banner": ""
     },
     {
       "title": "\u26e7 Clan Roles \u26e7",
       "color": 7015950,
       "description": "Tap each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.\n\ud83d\udcdc <@&1566342297082269787> - Get pinged when a new bounty is posted.",
-      "banner": "https://lh3.googleusercontent.com/d/16vydXtdTcjnau6S1l0564WrCw9HYckk2",
+      "banner": "",
       "buttons": [
         {
           "label": "CC Events",
@@ -166,7 +166,7 @@
       "title": "\u26e7 PvM Roles \u26e7",
       "color": 7015950,
       "description": "Tap each PvM role you want.\n\nThese roles get pinged when people form bossing teams in <#1558428263322357811>.",
-      "banner": "https://lh3.googleusercontent.com/d/1ImVfnZbTmZn1RcNmS2JOA3DQ2U-SHt6G",
+      "banner": "",
       "buttons": [
         {
           "label": "The Fractured Archive",
@@ -291,7 +291,7 @@
       "title": "\u26e7 Skilling Roles \u26e7",
       "color": 7015950,
       "description": "Pick the skilling activities you do. You'll get pinged when people are putting together a group in <#1558428263322357811>.",
-      "banner": "https://lh3.googleusercontent.com/d/1pNLTIUHNbHOZaA6RbTrfMKaBKKXgXoQS",
+      "banner": "",
       "buttons": [
         {
           "label": "Zalcano",
@@ -373,11 +373,11 @@
           "style": "Danger"
         }
       ],
-      "banner": "https://lh3.googleusercontent.com/d/1yyjsWVLCjdcTzV3lj5yVWcm6djtx2iqu"
+      "banner": ""
     }
   ],
   "rules": {
-    "banner": "https://lh3.googleusercontent.com/d/1TI29g6w1TEaU2NLdfmN4-GkdGIbsFL6R",
+    "banner": "",
     "color": 7015950,
     "footer": "Our staff team enforces these rules to keep Oath Forsaken a great place to be. Questions? Open a ticket in <#1558399103757717518>.\nSee <#1558481986706870445> for rank information and <#1558399101454786670> to set up your notifications.",
     "intro": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\n**New here?**\n1. Pick your application in <#1558905814482423818>\n2. Once approved, you'll unlock the rest of the server. Grab your roles in <#1558399101454786670>\n\n**TL;DR:** Be respectful. Ironman-centric clan. FFA loot.\n\nIf you are in this server you agree to the rules below.",
@@ -803,7 +803,7 @@
   "rankInfo": {
     "title": "CLAN RANKS",
     "color": 16766720,
-    "banner": "https://lh3.googleusercontent.com/d/1XXmEscIyNFbBVwuEQhObJBoSiV83Q6NQ",
+    "banner": "",
     "intro": "",
     "sections": [
       {
