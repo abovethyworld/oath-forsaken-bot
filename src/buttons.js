@@ -5,7 +5,6 @@ const { handleApplyButton } = require('./recruit');
 const { handlePollButton } = require('./polls');
 const { handleCcButton } = require('./cc-checklist');
 const { handleRosterButton } = require('./roster');
-const { handleEventButton } = require('./calendar');
 const { handleSuggestButton } = require('./suggestions');
 const { handleBountyButton } = require('./bounty');
 const { handleTeamButton } = require('./teams');
@@ -39,7 +38,6 @@ async function routeButton(interaction) {
   if (kind === 'cc') return handleCcButton(interaction);
   if (kind === 'strikes') return handleStrikesButton(interaction);
   if (kind === 'roster') return handleRosterButton(interaction);
-  if (kind === 'event') return handleEventButton(interaction);
   if (kind === 'suggest') return handleSuggestButton(interaction);
   if (kind === 'bounty') return handleBountyButton(interaction);
   if (kind === 'team') return handleTeamButton(interaction);

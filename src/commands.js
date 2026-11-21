@@ -15,7 +15,6 @@ const config = require('./config');
 const store = require('./store');
 const { ZAMORAK_RED, isStaff } = require('./utils');
 const tickets = require('./tickets');
-const calendar = require('./calendar');
 const polls = require('./polls');
 const eventCalendar = require('./event-calendar');
 const seniority = require('./seniority');
@@ -518,7 +517,6 @@ const commands = [
     run: compRosterCommand,
   },
   ...tickets.commands,
-  ...calendar.commands,
   ...polls.commands,
   ...eventCalendar.commands,
   ...seniority.commands,

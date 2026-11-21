@@ -21,7 +21,6 @@ const { Client, Events, GatewayIntentBits, REST, Routes } = require('discord.js'
 const config = require('./config'); // validates config.json on load
 const { commands, handleCommand } = require('./commands');
 const { routeButton } = require('./buttons');
-const { syncReminders } = require('./calendar');
 const { syncSeniority, seedMembership } = require('./seniority');
 const { syncCalendar } = require('./event-calendar');
 const { backfill, recordJoin } = require('./join-dates');
@@ -189,7 +188,6 @@ client.once(Events.ClientReady, async (c) => {
       await syncSeniority(client);
 
       // Other one-time checks (don't need member list)
-      await syncReminders(client);
       await syncDrift(client);
       await syncCalendar(client);
       await sweepExpiredBounties(client);
@@ -243,7 +241,6 @@ client.once(Events.ClientReady, async (c) => {
 
   // Recurring loops (use cached data where possible)
   setInterval(() => runSync('site-link-merge', () => mergeSiteLinkRequests(), 'Link request merge failed'), 60 * 1000);
-  setInterval(() => run('reminders', () => syncReminders(client)), 5 * 60 * 1000);
   setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
   setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
   setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);

@@ -111,7 +111,6 @@ const STAFF_GROUPS = [
     ['link-rsn-panel', 'Posts the staff Link an RSN panel in its thread.'],
   ]],
   ['Events', [
-    ['event-cancel', 'Cancels a clan event.'],
     ['roster', 'Posts a signup roster for an event.'],
     ['calendar-sync', 'Refreshes the event calendar post now.'],
   ]],
