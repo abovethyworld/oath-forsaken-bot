@@ -192,6 +192,23 @@ async function warnUser(interaction) {
     await log.send({ embeds: [embed] }).catch((e) => console.error("[commands.js] Non-fatal error:", e.message));
   }
 
+  if (count === 3) {
+    const strikes = store.getStrikes(interaction.guildId, user.id);
+    const list = strikes.map((s, i) => `${i + 1}. ${s.reason}`).join('\n');
+    const appealEmail = process.env.APPEAL_EMAIL;
+    const closing = appealEmail
+      ? `Staff review the ban before it lands, and bans are final. Think it was a mistake? Email ${appealEmail} and staff will look at it.`
+      : 'Staff review the ban before it lands, and bans are final.';
+    const dm = [
+      "You've reached 3 strikes in Oath Forsaken.",
+      '',
+      list,
+      '',
+      closing,
+    ].join('\n');
+    await user.send(dm).catch((e) => console.error('[commands.js] Non-fatal error:', e.message));
+  }
+
   if (count >= 3) {
     await interaction.followUp({
       content: `🚨 ${user} has reached 3 strikes. Review them for a ban under the strike system.`,
