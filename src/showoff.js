@@ -79,7 +79,7 @@ function fmtKc(n) {
 // name for a one-off lookup stays supported, but the reply does not push
 // it: an unlinked user typing a showoff command wants their own stats.
 function unlinkedPayload() {
-  return { content: 'No RSN linked yet. Tap below to link yours.', components: rsnLinkRow() };
+  return { content: 'No RSN linked yet. Press below to link yours.', components: rsnLinkRow() };
 }
 
 // Name: explicit arg wins, else the author's linked RSN.

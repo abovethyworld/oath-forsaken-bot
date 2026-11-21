@@ -45,8 +45,8 @@ async function setupTickets(interaction) {
       `**🏆 Claim Reward**\n` +
       `⛧ Won an event? Claim your reward here.\n\n` +
       `**⬆️ Become a Member**\n` +
-      `⛧ Click the button and pick your account type to become an official member.\n\n` +
-      `Click a button below to get started.`
+      `⛧ Press the button and pick your account type to become an official member.\n\n` +
+      `Press a button below to get started.`
     )
     .setColor(ZAMORAK_RED);
 
@@ -300,7 +300,7 @@ async function handleMemberConfirm(interaction) {
   const staged = pendingMemberPicks.get(userId);
   if (!staged || Date.now() - staged.at > MEMBER_PICK_TTL_MS) {
     pendingMemberPicks.delete(userId);
-    await interaction.update({ content: 'That pick timed out. Tap Become a Member and pick again.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    await interaction.update({ content: 'That pick timed out. Press Become a Member and pick again.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;
   }
   pendingMemberPicks.delete(userId);

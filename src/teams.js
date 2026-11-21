@@ -1300,11 +1300,11 @@ function teamPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Find a Team ⛧')
         .setDescription(
-          'Tap Create Team, pick an activity, set it up, post it. Teams show up in <#1561600601861783562>.\n\n' +
+          'Press Create Team, pick an activity, set it up, post it. Teams show up in <#1561600601861783562>.\n\n' +
           '⛧ Link RSN ⛧\n' +
           'Link your RSN once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
-          'Tap the spec weapons you own, so you can show what you have.\n\n' +
+          'Press the spec weapons you own, so you can show what you have.\n\n' +
           '⛧ Settings ⛧\n' +
           'Your defaults: Region, Party Hub, FC, World, Board Style.\n\n' +
           '⛧ My Teams ⛧\n' +
@@ -1396,7 +1396,7 @@ function rsnSwitchPayload(userId) {
   rows.push(row);
   return {
     content: entry.rsns.length
-      ? 'Tap a name to show it on team boards.'
+      ? 'Press a name to show it on team boards.'
       : 'No names linked yet. Link one to show your stats on team boards.',
     components: rows,
     ephemeral: true,
@@ -1581,7 +1581,7 @@ function badgePickerText(rsn) {
   return (
     `Account type for **${rsn}**.\n` +
     'AUTO reads the account on Wise Old Man and picks its type for you. ' +
-    'Tap one below to set it by hand. (Group iron modes can\'t be detected automatically.)'
+    'Press one below to set it by hand. (Group iron modes can\'t be detected automatically.)'
   );
 }
 
