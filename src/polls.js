@@ -162,6 +162,15 @@ async function handleGate(interaction, pollId, action) {
       embeds: [],
       components: [],
     });
+    // Tell the author - they were told it posts if approved, so a
+    // denial should not be silence (approved DM, ruling 2026-11-21).
+    // A failed DM (closed DMs, left the server) is not an error.
+    if (poll.authorId) {
+      const author = await interaction.client.users.fetch(poll.authorId).catch(() => null);
+      if (author) {
+        await author.send(`Your poll "${poll.question}" was not posted. Staff reviewed it and passed this time.`).catch(() => {});
+      }
+    }
   }
 }
 
