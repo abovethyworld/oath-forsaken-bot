@@ -3,7 +3,7 @@
 // (code + portal toggle).
 const { AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, statsFetchedAt, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
-const { runRefresh, peekRefresh, refreshRemaining } = require('./refresh');
+const { runRefresh, peekRefresh } = require('./refresh');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -722,13 +722,14 @@ function updatedLineFor(rsn) {
 
 // Refresh button on the number cards, joining the button rows
 // the way the Profile button does. The label carries the
-// remaining count of the member whose action rendered the
-// card; a tap always charges the tapper (refresh.js rules).
+// The label carries no count: a tap charges the tapper, not the
+// member whose action rendered the card, so a count here would
+// quote the wrong person's allowance (ruling 2026-11-21).
 function withRefreshButton(payload, refreshId, userId) {
   if (!payload || !payload.files) return payload;
   const btn = new ButtonBuilder()
     .setCustomId(refreshId)
-    .setLabel(`Refresh · ${refreshRemaining(userId)} left`)
+    .setLabel('Refresh')
     .setStyle(ButtonStyle.Secondary);
   const comps = [...(payload.components || [])];
   const compType = (c) => (c && typeof c.type === 'number' ? c.type
@@ -4932,7 +4933,7 @@ function hubBranchRow(st, userId) {
     new ButtonBuilder().setCustomId(`hub:lb:${enc}`).setLabel('Leaderboard').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`hub:cmp:${enc}`).setLabel('Compare').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`hub:chg:${enc}`).setLabel('Change player').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId(`refresh:hub:${enc}`).setLabel(`Refresh · ${refreshRemaining(userId || st.owner)} left`).setStyle(ButtonStyle.Secondary));
+    new ButtonBuilder().setCustomId(`refresh:hub:${enc}`).setLabel('Refresh').setStyle(ButtonStyle.Secondary));
 }
 
 // The return-button label names the card it returns to (Nov 2
