@@ -714,6 +714,10 @@ async function handleDenyReasonSubmit(interaction) {
     await target.send(`Your **${t.label || type}** application to **${guild.name}** was denied.\n\nReason: ${reason}`).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
 
+  // Same reapply rule as a plain deny (ruling 2026-11-21): clear the
+  // application record so the submitted flag does not strand them.
+  store.removeApplication(guild.id, userId);
+
   await interaction.editReply(`Denied <@${userId}> with reason.`);
   } finally {
     decisionLocks.delete(lockKey);
@@ -962,6 +966,14 @@ async function handleDecision(interaction) {
     decidedBy: interaction.user.id,
     submittedAt: appData?.submittedAt || null,
   });
+
+  // A denied applicant can apply again (ruling 2026-11-21): clear the
+  // application record so the submitted flag does not strand them on
+  // "You already have an application in." Approvals keep the record;
+  // the member role blocks re-applying anyway.
+  if (decision === 'deny') {
+    store.removeApplication(guild.id, userId);
+  }
   } finally {
     decisionLocks.delete(lockKey);
   }
