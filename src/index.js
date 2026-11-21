@@ -329,9 +329,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else if (interaction.isButton()) {
       // Button cooldown: 2s per user (prevents button spam).
       // Team finder is a guided wizard with rapid taps — skip the cooldown there.
+      // Say so instead of dropping the tap silently (ruling 2026-11-21),
+      // same note the command cooldown gives.
       const btnKey = `${interaction.user.id}:button`;
       const btnNow = Date.now();
-      if (!interaction.customId.startsWith('team:') && btnNow - (cooldowns.get(btnKey) || 0) < 2000) return;
+      if (!interaction.customId.startsWith('team:') && btnNow - (cooldowns.get(btnKey) || 0) < 2000) {
+        await interaction.reply({
+          content: 'Slow down a moment.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
       cooldowns.set(btnKey, btnNow);
       await routeButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
