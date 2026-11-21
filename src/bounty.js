@@ -567,31 +567,101 @@ async function handleClaim(interaction, bountyId) {
   });
 }
 
-async function handleGrant(interaction, threadId) {
+// Grant asks first (ruling 2026-11-21): one tap used to move the title,
+// write the winners log, and close the contract with no check.
+async function handleGrantAsk(interaction, threadId) {
   if (!isStaff(interaction)) {
     await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const state = loadState();
+  const claim = state.claims[threadId];
+  if (!claim || claim.status !== 'pending') {
+    await interaction.reply({ content: 'Nothing to grant here.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const bounty = state.bounties[claim.bountyId];
+  if (!bounty || !bounty.active) {
+    await interaction.reply({ content: 'This bounty is no longer active.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const winners = (bounty.winnerIds || (bounty.winnerId ? [bounty.winnerId] : [])).length;
+  const firstWinner = winners === 0;
+  const closes = winners + 1 >= bountyCap(bounty);
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`bounty:grantconfirm:${threadId}`)
+      .setLabel('Yes, grant it')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`bounty:grantcancel:${threadId}`)
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary)
+  );
+  await interaction.reply({
+    content:
+      `Grant **${bounty.target}** to <@${claim.claimerId}>?` +
+      (firstWinner ? ' They take the title.' : '') +
+      (closes ? ' This fills the last winner slot and closes the contract.' : '') +
+      ' The win is written to the winners log. This cannot be undone.',
+    components: [row],
+    ephemeral: true,
+    allowedMentions: { parse: [] },
+  }).catch(() => {});
+}
+
+async function handleGrantCancel(interaction) {
+  await interaction.update({ content: 'Cancelled.', components: [] }).catch(() => {});
+}
+
+async function handleGrantConfirm(interaction, threadId) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  // Defer the confirm prompt; handleGrant's replies then land as edits
+  // to it (see the deferred guards inside handleGrant).
+  await interaction.deferUpdate().catch(() => {});
+  return handleGrant(interaction, threadId);
+}
+
+// Ephemeral answer that works whether or not the interaction was
+// already deferred by the grant confirm step.
+async function sayEphemeral(interaction, content) {
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content }).catch(() => {});
+  } else {
+    await interaction.reply({ content, ephemeral: true }).catch(() => {});
+  }
+}
+
+async function handleGrant(interaction, threadId) {
+  if (!isStaff(interaction)) {
+    await sayEphemeral(interaction, 'Staff only.');
     return;
   }
   return mutateBounty(async () => {
     const state = loadState();
     const claim = state.claims[threadId];
     if (!claim || claim.status !== 'pending') {
-      await interaction.reply({ content: 'Nothing to grant here.', ephemeral: true }).catch(() => {});
+      await sayEphemeral(interaction, 'Nothing to grant here.');
       return;
     }
     const bounty = state.bounties[claim.bountyId];
     if (!bounty || !bounty.active) {
-      await interaction.reply({ content: 'This bounty is no longer active.', ephemeral: true }).catch(() => {});
+      await sayEphemeral(interaction, 'This bounty is no longer active.');
       return;
     }
     const guild = interaction.guild;
     const lane = bountyLane(bounty);
     const role = laneRole(guild, lane);
     if (!role) {
-      await interaction.reply({ content: `${lane} title role is not set up.`, ephemeral: true }).catch(() => {});
+      await sayEphemeral(interaction, `${lane} title role is not set up.`);
       return;
     }
-    await interaction.deferReply({ ephemeral: true });
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ ephemeral: true });
+    }
 
     const winner = await guild.members.fetch(claim.claimerId).catch(() => null);
     if (!winner) {
@@ -925,7 +995,9 @@ async function handleBountyButton(interaction) {
   const [, action, id] = interaction.customId.split(':');
   if (action === 'claim') return handleClaim(interaction, id);
   if (action === 'done') return handleDone(interaction, id);
-  if (action === 'grant') return handleGrant(interaction, id);
+  if (action === 'grant') return handleGrantAsk(interaction, id);
+  if (action === 'grantconfirm') return handleGrantConfirm(interaction, id);
+  if (action === 'grantcancel') return handleGrantCancel(interaction);
   if (action === 'reject') return handleReject(interaction, id);
   if (action === 'lock') return handleLock(interaction, id);
 }
