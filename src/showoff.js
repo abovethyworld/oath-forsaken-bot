@@ -4,6 +4,7 @@
 const { AttachmentBuilder, EmbedBuilder, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getStats, getCachedStats, statsFetchedAt, combatLevel, kcStandings, mergedPlayers, getPlayerGains, getGainsTotals, updatePlayer, searchPlayers, GAINS_PERIODS } = require('./wom');
 const { runRefresh, peekRefresh } = require('./refresh');
+const { loadFlags } = require('./plugin-connect');
 const { getClogPageWithItems, getClogPages, getClogTotal, getClogSummary, getProfile, getCachedClogTotal, getCachedClogPage, getCachedClogPageItems, seedCollectionLog, hasCachedClogPages } = require('./runeprofile');
 const { ACTIVITIES, kcColumnsForTeam, getRsn, clogPageForActivity, loadRsnLinks, rsnLinkRow, getRsnEntry, getStatedBadge, badgeForAccount, BADGE_WORDS } = require('./teams');
 const { decodePng } = require('./party-board');
@@ -2883,6 +2884,12 @@ function pbTime(entry) {
 // them; !pb <boss> [name] shows one boss. Nothing is fetched live:
 // the record is a local file the plugin API writes.
 async function pbPayload(activity, rsn, userId) {
+  // Hidden until the clan plugin is live (ruling 2026-11-21): PBs come
+  // from the plugin's sync, so before launch every lookup is a dead
+  // end. The flag is hot-read, so flipping it lights this up as-is.
+  if (!loadFlags().pluginLive) {
+    return { content: 'Personal bests come from the clan plugin, which is not live yet.' };
+  }
   const gate = ownAccountGate(userId, rsn);
   if (gate) return gate;
   await ensureSynced(rsn);

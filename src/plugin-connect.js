@@ -284,4 +284,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, clearRecordOwner, slugOf, readRecord, recordPath };
+module.exports = { commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, clearRecordOwner, slugOf, readRecord, recordPath, loadFlags };
