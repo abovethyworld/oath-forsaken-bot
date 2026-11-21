@@ -14,7 +14,10 @@ const { atomicWrite } = require('./store');
 
 const TOKENS_FILE = path.join(__dirname, '..', 'data', 'gcal-tokens.json');
 const REDIRECT_URI = 'http://localhost:53682/callback';
-const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/drive.file',
+];
 
 function oauthClient() {
   if (!process.env.GCAL_CLIENT_ID || !process.env.GCAL_CLIENT_SECRET) return null;
