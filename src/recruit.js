@@ -268,8 +268,7 @@ async function postApplicationPanel(channel) {
       `To join **${guild.name}**, pick the application that fits you.\n\n` +
         `**Ironman** - you play an ironman.\n` +
         `**Main** - you play a main.\n` +
-        `**Guest** - you're just visiting or here for a friend.\n\n` +
-        `Staff review every application.`
+        `**Guest** - you're just visiting or here for a friend.`
     )
     .setColor(ZAMORAK_RED);
 
