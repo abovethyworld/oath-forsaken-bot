@@ -255,7 +255,83 @@ async function handleMemberSelect(interaction) {
     return;
   }
   const guild = interaction.guild;
+
+  // RSN confirm (ruling Nov 20, 2026): the guest application already
+  // collected their RSN and staff approved it, so show the name on
+  // file and let them confirm it is still theirs before anything
+  // changes. No name on file (staff handed them the Guest role
+  // directly) skips the step and promotes the way it always has.
+  const answers = store.getApplicationAnswers(guild.id, member.id);
+  const rsnOnFile = answers && answers.rsn ? String(answers.rsn).trim() : '';
+  if (rsnOnFile) {
+    pendingMemberPicks.set(member.id, { choice, at: Date.now() });
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('member:confirm').setLabel('Yes, that is my name').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('member:wrongname').setLabel('Not my name').setStyle(ButtonStyle.Secondary),
+    );
+    await interaction.update({
+      content: `Joining as ${t.label}. Your RSN on file is **${rsnOnFile}**. Is that still your name?`,
+      components: [row],
+    }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+
   await interaction.deferReply({ ephemeral: true });
+  await executePromotion(interaction, choice);
+}
+
+// Staged Become a Member picks waiting on the RSN confirm tap.
+// userId -> { choice, at }
+const pendingMemberPicks = new Map();
+const MEMBER_PICK_TTL_MS = 10 * 60 * 1000;
+
+async function handleMemberConfirm(interaction) {
+  const action = interaction.customId.split(':')[1];
+  const userId = interaction.user.id;
+  if (action === 'wrongname') {
+    pendingMemberPicks.delete(userId);
+    await interaction.update({
+      content: `No problem, nothing changed. Update your name with the Link RSN steps in <#${config.channels?.botGuide || '1561976856780210186'}>, or ask staff to fix it, then tap Become a Member again.`,
+      components: [],
+    }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+  if (action !== 'confirm') return;
+  const staged = pendingMemberPicks.get(userId);
+  if (!staged || Date.now() - staged.at > MEMBER_PICK_TTL_MS) {
+    pendingMemberPicks.delete(userId);
+    await interaction.update({ content: 'That pick timed out. Tap Become a Member and pick again.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+  pendingMemberPicks.delete(userId);
+  // Re-verify before executing: roles may have changed since the pick.
+  const types = config.recruit?.types || {};
+  const member = interaction.member;
+  const memberRoleIds = [types.iron?.roleId, types.main?.roleId].filter(Boolean);
+  if (member.roles.cache.some((r) => memberRoleIds.includes(r.id))) {
+    await interaction.update({ content: 'You are already a member of the clan.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+  if (types.guest?.roleId && !member.roles.cache.has(types.guest.roleId)) {
+    await interaction.update({ content: 'This is for guests looking to join. Apply first if you have not.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+  const t = types[staged.choice];
+  if (!t || !t.roleId || !interaction.guild.roles.cache.get(t.roleId)) {
+    await interaction.update({ content: 'Something went wrong. Try again.', components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+    return;
+  }
+  await interaction.deferUpdate();
+  await executePromotion(interaction, staged.choice);
+}
+
+// The promotion itself. The interaction is already deferred (reply or
+// update) by whichever path got here.
+async function executePromotion(interaction, choice) {
+  const types = config.recruit?.types || {};
+  const t = types[choice];
+  const member = interaction.member;
+  const guild = interaction.guild;
 
   // Swap Guest for the member role + Initiate
   if (types.guest?.roleId && member.roles.cache.has(types.guest.roleId)) {
@@ -265,6 +341,23 @@ async function handleMemberSelect(interaction) {
   const entry = (config.seniorityRanks || []).find((r) => r.minMonths === 0);
   if (entry) await member.roles.add(entry.roleId, 'New member tenure rank').catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
 
+  // Record the promotion as membership (ruling Nov 20, 2026): an
+  // approval writes this record, and the seniority sync, the website
+  // roster, and the staff reports read it. Without it a promoted
+  // member still read as a guest everywhere outside Discord. No
+  // badge is recorded from the pick - the comp roster keeps typing
+  // them from Wise Old Man, same as before.
+  try {
+    store.setMembershipStanding(guild.id, member.id, 'member', 'promotion');
+  } catch (e) {
+    console.error('[tickets.js] Membership record failed:', e.message);
+  }
+  try {
+    require('./comp-roster').scheduleRefresh(guild);
+  } catch (e) {
+    console.error('[tickets.js] Comp roster refresh failed:', e.message);
+  }
+
   // Initiate welcome in #general, same as an approval
   const generalChan = guild.channels.cache.get(config.recruit?.generalChannelId || config.channels?.general);
   if (generalChan) {
@@ -272,7 +365,7 @@ async function handleMemberSelect(interaction) {
     await generalChan.send({ content: welcomeMsg, allowedMentions: { parse: ['users'] } }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
   }
 
-  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.` }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
+  await interaction.editReply({ content: `Welcome aboard! You joined as ${t.label}. Staff will meet you in-game to add you to the clan chat.`, components: [] }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
 }
 
 const commands = [
@@ -285,4 +378,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleTicketButton, handleMemberSelect };
+module.exports = { commands, handleTicketButton, handleMemberSelect, handleMemberConfirm };
