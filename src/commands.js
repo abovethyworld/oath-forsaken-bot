@@ -191,6 +191,14 @@ async function warnUser(interaction) {
     await log.send({ embeds: [embed] }).catch((e) => console.error("[commands.js] Non-fatal error:", e.message));
   }
 
+  if (count < 3) {
+    // Tell the member at every strike, not just the third - a warning
+    // they never hear about cannot change anything (approved DM,
+    // ruling 2026-11-21). A failed DM is not an error.
+    await user.send(`You've been warned in Oath Forsaken. That's strike ${count} of 3.\nReason: ${reason}`)
+      .catch((e) => console.error('[commands.js] Non-fatal error:', e.message));
+  }
+
   if (count === 3) {
     const strikes = store.getStrikes(interaction.guildId, user.id);
     const list = strikes.map((s, i) => `${i + 1}. ${s.reason}`).join('\n');
