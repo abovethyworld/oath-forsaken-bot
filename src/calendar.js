@@ -1,24 +1,19 @@
-// Clan calendar built on Discord's NATIVE scheduled events — members get the real
-// Events tab UI with RSVP/Interested buttons, and Discord notifies them.
-// /event-create makes the event + announces it; a background loop (started in
-// index.js) sends reminder pings before each event starts.
-const { DateTime } = require('luxon');
+// Clan events: /event-create was removed 2026-11-21 (events live on
+// Google Calendar and Sesh handles RSVPs). What remains here reads any
+// Discord scheduled events still on the server: /events lists them,
+// /event-cancel cancels them, and a background loop (started in
+// index.js) sends reminder pings before each one starts.
 const crypto = require('node:crypto');
 const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ChannelType,
   EmbedBuilder,
-  GuildScheduledEventEntityType,
-  GuildScheduledEventPrivacyLevel,
   PermissionFlagsBits,
   SlashCommandBuilder,
 } = require('discord.js');
 const config = require('./config');
 const store = require('./store');
-const gcal = require('./gcal');
-const { isStaff } = require('./utils');
 
 // Pending event confirmations: pendingId -> { data, expires }. Prevents
 // timezone surprises — the creator sees the auto-converting time before it goes live.
@@ -35,71 +30,6 @@ function cleanupPending() {
 // Shared event cache (declared early — used by handleEventButton above getEvents)
 let eventsCache = { data: null, at: 0 };
 
-function parseStart(dateStr, timeStr) {
-  const tz = (config.calendar && config.calendar.timezone) || 'UTC';
-  const dt = DateTime.fromFormat(`${dateStr} ${timeStr}`, 'yyyy-MM-dd HH:mm', { zone: tz });
-  return dt.isValid ? dt : null;
-}
-
-async function createEvent(interaction) {
-  if (!isStaff(interaction) && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageEvents)) {
-    await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
-    return;
-  }
-  const name = interaction.options.getString('name');
-  // Discord scheduled event name limit is 100 chars — fail friendly
-  if (name.length > 100) {
-    await interaction.reply({ content: 'Keep the event name under 100 characters.', ephemeral: true });
-    return;
-  }
-  const date = interaction.options.getString('date');
-  const time = interaction.options.getString('time');
-  const description = interaction.options.getString('description') || '';
-  const voice = interaction.options.getChannel('voice');
-  const durationHours = interaction.options.getInteger('duration') || 2;
-  const withRoster = interaction.options.getBoolean('roster') || false;
-
-  const dt = parseStart(date, time);
-  if (!dt) {
-    await interaction.reply({
-      content: `Couldn't read that date/time. Use **YYYY-MM-DD** and **HH:MM** (24-hour) in ${(config.calendar && config.calendar.timezone) || 'UTC'}, for example \`2026-10-17\` \`19:00\`.`,
-      ephemeral: true,
-    });
-    return;
-  }
-  if (dt <= DateTime.now()) {
-    await interaction.reply({ content: 'That time is in the past.', ephemeral: true });
-    return;
-  }
-
-  // Confirmation step: show the parsed time as a Discord timestamp (auto-converts
-  // to each viewer's timezone) plus the explicit timezone it was read in, so the
-  // creator can catch a timezone mistake before the event goes live.
-  cleanupPending();
-  const pendingId = crypto.randomBytes(6).toString('hex');
-  pendingEvents.set(pendingId, {
-    expires: Date.now() + PENDING_TTL,
-    creatorId: interaction.user.id,
-    data: { name, date, time, description, voiceId: voice ? voice.id : null, durationHours, withRoster },
-  });
-  const unix = Math.floor(dt.toSeconds());
-  const tz = (config.calendar && config.calendar.timezone) || 'UTC';
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(`event:confirm:${pendingId}`).setLabel('Create Event').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(`event:cancel:${pendingId}`).setLabel('Cancel').setStyle(ButtonStyle.Secondary)
-  );
-  await interaction.reply({
-    content:
-      `About to create **${name}**\n\n` +
-      `I read \`${date} ${time}\` as **${dt.toFormat('cccc, MMM d')} at ${dt.toFormat('h:mm a')}** (${tz}).\n` +
-      `In your timezone that shows as <t:${unix}:F>.\n\n` +
-      `If that looks wrong, hit Cancel and try again with the ${tz} time.`,
-    components: [row],
-    ephemeral: true,
-  });
-  return;
-}
-
 async function handleEventButton(interaction) {
   // customId: event:confirm:<pendingId>, event:confirmcancel:<pendingId>, or event:cancel:<pendingId>
   const parts = interaction.customId.split(':');
@@ -111,7 +41,7 @@ async function handleEventButton(interaction) {
   const pending = pendingEvents.get(pendingId);
   if (!pending || Date.now() > pending.expires) {
     pendingEvents.delete(pendingId);
-    await interaction.reply({ content: 'This confirmation expired. Run `/event-create` again.', ephemeral: true }).catch(() => {});
+    await interaction.reply({ content: 'This confirmation expired.', ephemeral: true }).catch(() => {});
     return;
   }
   if (pending.creatorId !== interaction.user.id) {
@@ -121,83 +51,13 @@ async function handleEventButton(interaction) {
   pendingEvents.delete(pendingId);
 
   if (action === 'cancel') {
-    // The same button serves both flows: creation confirm ("Cancel") and the
-    // cancel-event confirm ("Keep it"), whose pending entry holds a cancelEventId.
-    const content = pending.data?.cancelEventId ? 'Event kept.' : 'Event creation cancelled.';
-    await interaction.update({ content, components: [] }).catch(() => {});
+    // The cancel-event confirm's "Keep it" button.
+    await interaction.update({ content: 'Event kept.', components: [] }).catch(() => {});
     return;
   }
 
-  // Confirmed — create the event
-  const { name, description, voiceId, durationHours, withRoster } = pending.data;
-  const dt = parseStart(pending.data.date, pending.data.time);
-  if (!dt || dt <= DateTime.now()) {
-    await interaction.update({ content: 'That time has passed while you were confirming. Run `/event-create` again.', components: [] }).catch(() => {});
-    return;
-  }
-
-  await interaction.update({ content: 'Creating event...', components: [] }).catch(() => {});
-
-  const voice = voiceId ? interaction.guild.channels.cache.get(voiceId) : null;
-  const isVoice = voice && voice.type === ChannelType.GuildVoice;
-  let event;
-  try {
-    event = await interaction.guild.scheduledEvents.create({
-      name,
-      scheduledStartTime: dt.toJSDate(),
-      scheduledEndTime: dt.plus({ hours: durationHours }).toJSDate(),
-      privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
-      entityType: isVoice ? GuildScheduledEventEntityType.Voice : GuildScheduledEventEntityType.External,
-      ...(isVoice ? { channel: voice.id } : { entityMetadata: { location: 'In-game (Gielinor)' } }),
-      description: description.slice(0, 1000),
-      reason: `Event created by ${interaction.user.tag}`,
-    });
-  } catch (err) {
-    await interaction.followUp({ content: 'Could not create the event. The bot needs the **Manage Events** permission.', ephemeral: true }).catch(() => {});
-    return;
-  }
-
-  const unix2 = Math.floor(dt.toSeconds());
-  const ch = interaction.guild.channels.cache.get(config.calendar.eventsChannelId);
-  const ping = config.calendar.pingRoleId ? `<@&${config.calendar.pingRoleId}>` : '';
-  if (ch) {
-    const where = isVoice ? `<#${voice.id}>` : 'In-game (Gielinor)';
-    const embed = new EmbedBuilder()
-      .setTitle(`📅 ${name}`)
-      .setDescription(`${description}\n\nStarts <t:${unix2}:F> (<t:${unix2}:R>)\n**Where:** ${where}`)
-      .setColor(0x6b0e0e);
-    await ch.send({ content: `${ping} New clan event!`.trim() || null, embeds: [embed], allowedMentions: { roles: config.calendar.pingRoleId ? [config.calendar.pingRoleId] : [] } }).catch((e) => console.error("[calendar.js] Non-fatal error:", e.message));
-  }
-
-  await interaction.followUp({ content: `Event created: **${name}**, <t:${unix2}:F>\nMembers can RSVP from the server's Events tab.`, ephemeral: true }).catch(() => {});
-  eventsCache = { data: null, at: 0 }; // invalidate — new event exists
-
-  // Optional signup roster in the events channel
-  if (withRoster && ch) {
-    const { postRoster } = require('./roster');
-    await postRoster(ch, name, event.id).catch((e) => console.error('[calendar.js] Roster post failed:', e.message));
-  }
-
-  // Mirror to Google Calendar if linked. Only claim "Mirrored" when it worked;
-  // on failure tell the creator (the Discord event itself still stands).
-  if (gcal.isConfigured()) {
-    const mirror = await gcal
-      .createEvent({
-        summary: `[Oath Forsaken] ${name}`,
-        description,
-        start: dt.toJSDate(),
-        end: dt.plus({ hours: durationHours }).toJSDate(),
-        timeZone: config.calendar.timezone,
-        calendarId: (config.gcal && config.gcal.calendarId) || 'primary',
-      })
-      .catch((err) => ({ ok: false, error: err.message }));
-    if (mirror && mirror.ok) {
-      console.log(`Mirrored "${name}" to Google Calendar`);
-    } else {
-      console.error('Google Calendar mirror failed:', mirror && mirror.error);
-      await interaction.followUp({ content: `The Discord event is created, but the Google Calendar copy failed. Add **${name}** to Google Calendar by hand if you need it there.`, ephemeral: true }).catch(() => {});
-    }
-  }
+  // Any other action was the removed creation confirm.
+  await interaction.update({ content: 'This confirmation has expired.', components: [] }).catch(() => {});
 }
 
 async function listEvents(interaction) {
@@ -211,7 +71,7 @@ async function listEvents(interaction) {
     .sort((a, b) => a.scheduledStartTimestamp - b.scheduledStartTimestamp)
     .slice(0, 10);
   if (upcoming.length === 0) {
-    await interaction.reply({ content: 'No upcoming events. Create one with `/event-create`.', ephemeral: true });
+    await interaction.reply({ content: 'No upcoming events.', ephemeral: true });
     return;
   }
   const lines = upcoming.map((e) => {
@@ -341,26 +201,6 @@ async function syncReminders(client) {
 }
 
 const commands = [
-  {
-    data: new SlashCommandBuilder()
-      .setName('event-create')
-      .setDescription('Create a clan event (Manage Events only)')
-      .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
-      .addStringOption((o) => o.setName('name').setDescription('Event name, e.g. "Friday ToA learner raid"').setRequired(true))
-      .addStringOption((o) => o.setName('date').setDescription('YYYY-MM-DD').setRequired(true))
-      .addStringOption((o) => o.setName('time').setDescription('HH:MM, 24-hour').setRequired(true))
-      .addStringOption((o) => o.setName('description').setDescription('What to bring, requirements, etc.'))
-      .addChannelOption((o) =>
-        o.setName('voice').setDescription('Voice channel to attach (optional)').addChannelTypes(ChannelType.GuildVoice)
-      )
-      .addIntegerOption((o) =>
-        o.setName('duration').setDescription('Duration in hours (default 2)').setMinValue(1).setMaxValue(12)
-      )
-      .addBooleanOption((o) =>
-        o.setName('roster').setDescription('Also post a signup roster (default false)')
-      ),
-    run: createEvent,
-  },
   {
     data: new SlashCommandBuilder().setName('events').setDescription('List upcoming clan events'),
     run: listEvents,
