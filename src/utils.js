@@ -48,6 +48,11 @@ function getPingRole(guild) {
 // recruit.js, and tickets.js.
 function buildInitiateWelcome(userId, linkedNames) {
   const introduceId = config.channels?.introduceYourself;
+  const introGuideId = config.channels?.introduceGuideMessage;
+  // Link straight to the pinned intro guide post when its ID is configured.
+  const introLink = introGuideId
+    ? `https://discord.com/channels/${config.guildId}/${introduceId}/${introGuideId}`
+    : null;
   const rolesId = config.channels?.roles;
   const botGuideId = config.channels?.botGuide;
   const staffId = config.tickets?.staffRoleIds?.[0];
@@ -63,7 +68,9 @@ function buildInitiateWelcome(userId, linkedNames) {
     `⛧ ━━━━━━━━━━━━━━━━━━━━━━━━ ⛧\n` +
     `<@${userId}> has joined Oath Forsaken.\n\n` +
     `Welcome to Oath Forsaken! Glad you're here. Take a look around and make yourself at home.\n\n` +
-    `• **Drop an intro** in <#${introduceId}> so we can get to meet you\n` +
+    (introLink
+      ? `• [**Drop an intro**](${introLink}) so we can get to meet you\n`
+      : `• **Drop an intro** in <#${introduceId}> so we can get to meet you\n`) +
     `• **Pick what you would like to be pinged for** in <#${rolesId}>\n` +
     `${linkBullet}\n` +
     `• **Ping <@&${staffId}>** when you're ready for a clan chat invite`
@@ -75,6 +82,10 @@ function buildInitiateWelcome(userId, linkedNames) {
 function buildGuestWelcome(userId, linkedNames) {
   const guestId = config.recruit?.guestRoleId;
   const introduceId = config.channels?.introduceYourself;
+  const introGuideId = config.channels?.introduceGuideMessage;
+  const introLink = introGuideId
+    ? `https://discord.com/channels/${config.guildId}/${introduceId}/${introGuideId}`
+    : null;
   const rolesId = config.channels?.roles;
   const contactId = config.recruit?.contactStaffChannelId;
   // The guest post carries no link bullet today; pre-linked guests
@@ -88,7 +99,9 @@ function buildGuestWelcome(userId, linkedNames) {
     `⛧ ━━━━━━━━━━━━━━━━ ⛧\n` +
     `<@${userId}>\n\n` +
     `The door's open. Come see what the forsaken built.\n\n` +
-    `• **Drop an intro** in <#${introduceId}>\n` +
+    (introLink
+      ? `• [**Drop an intro**](${introLink})\n`
+      : `• **Drop an intro** in <#${introduceId}>\n`) +
     `• **Pick what you would like to be pinged for** in <#${rolesId}>\n` +
     `${linkedLine}` +
     `• Join the clan chat as a guest any time: type **OathForsaken** in the guest tab\n` +
