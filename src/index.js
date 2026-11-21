@@ -88,7 +88,26 @@ setInterval(() => {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-  c.user.setActivity('Serving Chaos', { type: 4 }); // custom status, Zamorak theme
+  // Custom status bubble: the Elder's own raid lines, rotating every 20 min.
+  const BUBBLE_LINES = [
+    'Patience. These things cannot be rushed.',
+    'We have company!',
+    'Silence!',
+    "We'll need... a ritual!",
+    'The power of Zamorak protects us!',
+    'This power will be ours!',
+    'You incompetent fools!',
+    'We cannot fail!',
+    'I can see that...',
+    'Judging your drops',
+  ];
+  let bubbleIdx = 0;
+  const setBubble = () => {
+    try { c.user.setActivity(BUBBLE_LINES[bubbleIdx % BUBBLE_LINES.length], { type: 4 }); } catch {}
+    bubbleIdx++;
+  };
+  setBubble();
+  setInterval(setBubble, 20 * 60 * 1000).unref();
 
   // Heartbeat for Docker HEALTHCHECK. Only written while the gateway is
   // connected: a dead WebSocket with a live event loop used to keep the
