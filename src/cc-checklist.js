@@ -35,6 +35,12 @@ function rankDisplay(rankName) {
 }
 const DATA_FILE = path.join(__dirname, '..', 'data', 'cc-checklist.json');
 
+// Last cleared entries, kept in memory for the Undo button on the
+// "Cleared" reply (ruling 2026-11-21). Keyed by entry id; gone on a
+// bot restart, which is fine - the reply carrying the button is gone
+// from view by then in practice.
+const lastCleared = new Map();
+
 function entryId(e) {
   return `${e.userId}:${e.newRank}:${e.at}`;
 }
@@ -292,6 +298,42 @@ async function handleCcButton(interaction) {
     return true;
   }
 
+  if (action === 'undoclear') {
+    const stash = lastCleared.get(parts.slice(2).join(':'));
+    if (!stash) {
+      await interaction.update({ content: 'That undo has expired.', components: [] });
+      return true;
+    }
+    lastCleared.delete(stash.entry.id);
+    // Don't restore a duplicate if the same update came back meanwhile.
+    if (!data.entries.some((e) => e.id === stash.entry.id)) {
+      data.entries.splice(Math.min(stash.index, data.entries.length), 0, stash.entry);
+      save(data);
+      await refreshChecklist(interaction.guild);
+      // The original ping was deleted on clear; post a fresh one and
+      // link it so a later clear cleans it up the same way.
+      try {
+        const channel = interaction.guild.channels.cache.get(CC_THREAD_ID);
+        if (channel) {
+          const pingMsg = await channel.send({
+            content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${stash.entry.userId}> — ${rankDisplay(stash.entry.oldRank)} → **${rankDisplay(stash.entry.newRank)}**`,
+            allowedMentions: { parse: ['roles'] },
+          }).catch(() => null);
+          if (pingMsg) {
+            const d2 = load();
+            const e2 = d2.entries.find((e) => e.id === stash.entry.id);
+            if (e2) {
+              e2.pingMsgId = pingMsg.id;
+              save(d2);
+            }
+          }
+        }
+      } catch {}
+    }
+    await interaction.update({ content: `Restored <@${stash.entry.userId}> to the list.`, components: [] });
+    return true;
+  }
+
   const wantedId = parts.slice(2).join(':');
   const idx = data.entries.findIndex((e) => e.id === wantedId);
   if (idx < 0) {
@@ -316,7 +358,16 @@ async function handleCcButton(interaction) {
         }
       } catch {}
     }
-    await interaction.reply({ content: `Cleared <@${removed.userId}>.`, ephemeral: true });
+    // Stash for Undo; keep only the newest few.
+    lastCleared.set(removed.id, { entry: removed, index: idx });
+    while (lastCleared.size > 10) lastCleared.delete(lastCleared.keys().next().value);
+    const undoRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`cc:undoclear:${removed.id}`)
+        .setLabel('Undo')
+        .setStyle(ButtonStyle.Secondary)
+    );
+    await interaction.reply({ content: `Cleared <@${removed.userId}>.`, components: [undoRow], ephemeral: true });
   } else if (action === 'hold') {
     data.entries[idx].held = !data.entries[idx].held;
     save(data);
