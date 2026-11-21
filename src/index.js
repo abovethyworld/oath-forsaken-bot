@@ -88,7 +88,27 @@ setInterval(() => {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-  c.user.setActivity('Serving Chaos', { type: 4 }); // custom status, Zamorak theme
+  // Custom status bubble: the Elder on his Discord duties, rotating every 20 min.
+  // Lines approved 2026-11-20.
+  const BUBBLE_LINES = [
+    'We have company. Try not to embarrass me.',
+    'Another applicant. Do not make me regret this.',
+    'Yes, yes. A drop. I saw it the first time.',
+    'Your in-game name. Slowly, so I write it once.',
+    'I promote the competent. It is a short list.',
+    'One more word and it is a strike. I keep count.',
+    'A question. Wonderful. Make it a good one.',
+    'A competition. Finally, something worth my time.',
+    'When I say the ritual begins, it begins. Be there.',
+    'Understaffed and overasked. As always.',
+  ];
+  let bubbleIdx = 0;
+  const setBubble = () => {
+    try { c.user.setActivity(BUBBLE_LINES[bubbleIdx % BUBBLE_LINES.length], { type: 4 }); } catch {}
+    bubbleIdx++;
+  };
+  setBubble();
+  setInterval(setBubble, 20 * 60 * 1000).unref();
 
   // Heartbeat for Docker HEALTHCHECK. Only written while the gateway is
   // connected: a dead WebSocket with a live event loop used to keep the
