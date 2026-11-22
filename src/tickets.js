@@ -39,13 +39,13 @@ async function setupTickets(interaction) {
     .setTitle('⛧ Contact Staff ⛧')
     .setDescription(
       `**⚠️ Report**\n` +
-      `⛧ Got something for staff to look into.\n\n` +
+      `⛧ See something wrong in the server? Tell staff here.\n\n` +
       `**💬 Inquiry**\n` +
-      `⛧ Got a question.\n\n` +
+      `⛧ Got a question? Ask it here.\n\n` +
       `**🏆 Claim Reward**\n` +
       `⛧ Won an event? Claim your reward here.\n\n` +
       `**⬆️ Become a Member**\n` +
-      `⛧ Press the button and pick your account type to become an official member.\n\n` +
+      `⛧ Currently a guest? Press the button and pick your account type to become a member.\n\n` +
       `Press a button below to get started.`
     )
     .setColor(ZAMORAK_RED);
