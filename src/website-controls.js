@@ -48,7 +48,7 @@ function saveState(state) {
 function panelPayload() {
   const embed = new EmbedBuilder()
     .setTitle('Website controls')
-    .setDescription("Staff only. This record is what the website roster and the rank sync read a member's standing from. Approval writes the record on its own. Use this panel to fix the record by hand.")
+    .setDescription("Staff only. The website roster and rank sync read a member's standing from this record. Approving an application writes it. Use this panel only to fix it by hand.")
     .setColor(ZAMORAK_RED);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
