@@ -109,8 +109,7 @@ function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL
   const embed = new EmbedBuilder()
     .setTitle('⛧ Event Calendar ⛧')
     .setColor(ZAMORAK_RED)
-    .setDescription('*Upcoming Events over the next 2 weeks*')
-    .setFooter({ text: 'Oath Forsaken Event Calendar' })
+    .setDescription('*Next two weeks. Times show in your own timezone.*')
     .setTimestamp();
 
   if (thumbnailUrl) embed.setThumbnail(thumbnailUrl);
@@ -125,7 +124,7 @@ function buildEmbed(events, thumbnailUrl = THUMBNAIL_URL, bannerUrl = BANNER_URL
   // whole payload past that, which silently stops the sync. Budget the
   // sections: add them one at a time and stop once the next one would push
   // the assembled description (header + separators + sections) over the cap.
-  const header = '*Upcoming Events over the next 2 weeks*';
+  const header = '*Next two weeks. Times show in your own timezone.*';
   const separator = '\n\n⛧ ━━━━━━━━━━━━━━━━ ⛧\n\n';
   const DESCRIPTION_MAX = 4096;
   const sections = [];
