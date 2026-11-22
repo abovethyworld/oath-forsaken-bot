@@ -33,6 +33,13 @@ function rankEmoji(rankName) {
 function rankDisplay(rankName) {
   return `${rankEmoji(rankName)} ${rankName}`;
 }
+
+function oldRankDisplay(rankName) {
+  // Brand-new members have no old rank; the stored marker is 'None'.
+  // Show 'New' instead (ruling 2026-11-21).
+  if (!rankName || rankName === 'None') return 'New';
+  return rankDisplay(rankName);
+}
 const DATA_FILE = path.join(__dirname, '..', 'data', 'cc-checklist.json');
 
 // Last cleared entries, kept in memory for the Undo button on the
@@ -81,7 +88,7 @@ function buildEmbed(entries, page) {
   const lines = pageEntries.map((e, i) => {
     const num = start + i + 1;
     const holdTag = e.held ? ' \u23f8\ufe0f **HELD**' : '';
-    return `**${num}.** <@${e.userId}> \u2014 ${rankDisplay(e.oldRank)} \u2192 **${rankDisplay(e.newRank)}**${holdTag}\n\u26e7 <t:${e.at}:R>`;
+    return `**${num}.** <@${e.userId}> - ${oldRankDisplay(e.oldRank)} \u2192 **${rankDisplay(e.newRank)}**${holdTag}\n\u26e7 <t:${e.at}:R>`;
   });
 
   let desc = lines.join('\n\n');
@@ -205,7 +212,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
     const channel = guild.channels.cache.get(CC_THREAD_ID);
     if (channel) {
       const pingMsg = await channel.send({
-        content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${userId}> — ${rankDisplay(oldRank)} → **${rankDisplay(newRank)}**`,
+        content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${userId}> - ${oldRankDisplay(oldRank)} → **${rankDisplay(newRank)}**`,
         allowedMentions: { parse: ['roles'] },
       }).catch((e) => { console.error('[cc-checklist] Ping send failed:', e.message); return null; });
       if (pingMsg) {
@@ -316,7 +323,7 @@ async function handleCcButton(interaction) {
         const channel = interaction.guild.channels.cache.get(CC_THREAD_ID);
         if (channel) {
           const pingMsg = await channel.send({
-            content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${stash.entry.userId}> — ${rankDisplay(stash.entry.oldRank)} → **${rankDisplay(stash.entry.newRank)}**`,
+            content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${stash.entry.userId}> - ${oldRankDisplay(stash.entry.oldRank)} → **${rankDisplay(stash.entry.newRank)}**`,
             allowedMentions: { parse: ['roles'] },
           }).catch(() => null);
           if (pingMsg) {
