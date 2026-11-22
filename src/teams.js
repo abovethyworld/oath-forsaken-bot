@@ -1311,11 +1311,11 @@ function teamPanelPayload() {
           '⛧ Link RSN ⛧\n' +
           'Link your RSN once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
-          'Press the spec weapons you own, so you can show what you have.\n\n' +
+          'Press the spec weapons you own, so teams can see what you bring.\n\n' +
           '⛧ Settings ⛧\n' +
           'Your defaults: Region, Party Hub, FC, World, Board Style.\n\n' +
           '⛧ My Teams ⛧\n' +
-          'See your open teams and jump back to them. They post in <#1561600601861783562>.'
+          'See your open teams and jump back to them.'
         ),
     ],
     components: [
