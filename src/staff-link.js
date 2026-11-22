@@ -57,7 +57,7 @@ function saveState(state) {
 function panelPayload() {
   const embed = new EmbedBuilder()
     .setTitle('Link an RSN')
-    .setDescription("Staff only. Link a RuneScape name to a member's Discord for them. Their active name stays as it is.")
+    .setDescription("Staff only. Link a RuneScape name to a member's Discord for them. Their active RSN does not change.")
     .setColor(ZAMORAK_RED);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
