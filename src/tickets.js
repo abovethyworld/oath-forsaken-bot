@@ -19,7 +19,7 @@ const { postOrEdit } = require('./panel-store');
 // Per-button ticket themes (every ticket themed to the button clicked)
 const TICKET_TYPES = {
   report: { label: 'Report', emoji: '⚠️', intro: 'Tell staff what happened. Include names, dates, and any proof.' },
-  inquiry: { label: 'Inquiry', emoji: '💬', intro: 'Ask your question below and staff will get back to you.' },
+  inquiry: { label: 'Inquiry', emoji: '💬', intro: 'Ask your question below.' },
   claim: { label: 'Reward Claim', emoji: '🏆', intro: 'Tell staff what you won and which event it was from.' },
 };
 
