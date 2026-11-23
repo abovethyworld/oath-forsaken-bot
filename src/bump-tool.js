@@ -9,7 +9,12 @@
 // - At 9am, 2pm and 8pm New York time it posts the bump text into
 //   the thread with an "I bumped" button and pings the owner.
 // - Tapping "I bumped" records the bump, updates the panel, and
-//   answers with when the next bump is due.
+//   answers with when the next bump is due. Two hours later the
+//   tool pings again with the bump text, because that is when the
+//   next bump becomes legal. Due pings only fire between 8am and
+//   midnight New York time; one that comes due overnight fires at
+//   8am. A slot post after a logged bump covers that bump's due
+//   ping, so he is never pinged twice for the same window.
 //
 // A slot only posts if the check runs within 30 minutes after it,
 // so a bot restart late in the day never fires a stale bump into
@@ -72,7 +77,7 @@ function panelContent(state) {
   const lines = [
     '**Bump tool**',
     `Forum thread: ${s.forumThreadUrl}`,
-    'Bumps land here at 9am, 2pm and 8pm ET. Tap **I bumped** after you post one, here or on a slot message.',
+    'Bumps land here at 9am, 2pm and 8pm ET. Tap **I bumped** after you post one and it pings you again 2 hours later, when the next bump is due.',
   ];
   if (state.lastBumpedAt) {
     const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
@@ -166,9 +171,31 @@ async function checkBumpTool(client) {
     });
     await thread.send(text);
     state.lastPostedSlot = slotKey;
+    // A slot post after a logged bump covers that bump's due ping.
+    if (state.lastBumpedAt) state.duePingFor = state.lastBumpedAt;
     saveState(state);
     console.log(`Bump tool: posted the ${time} slot.`);
     return;
+  }
+
+  // Due ping: 2 hours after a logged bump, ping again with the text.
+  if (state.lastBumpedAt && state.duePingFor !== state.lastBumpedAt) {
+    const due = DateTime.fromISO(state.lastBumpedAt).setZone(ZONE).plus({ hours: BUMP_GAP_HOURS });
+    const hour = now.hour;
+    if (now >= due && hour >= 8 && hour < 24) {
+      const thread = await fetchThread(client);
+      if (!thread) return;
+      const pingId = process.env.BUMP_TOOL_PING_USER_ID;
+      const ping = pingId ? `<@${pingId}> ` : '';
+      await thread.send({
+        content: `${ping}**Bump time.** Two hours since your last bump, so the next one is open. If the thread has had any message in the last 2 hours, hold off - the forum clock runs from the last message.`,
+        components: [bumpButton()],
+      });
+      await thread.send(text);
+      state.duePingFor = state.lastBumpedAt;
+      saveState(state);
+      console.log('Bump tool: posted the 2-hour due ping.');
+    }
   }
 }
 
@@ -187,7 +214,7 @@ async function handleBumpButton(interaction) {
     await interaction.deferUpdate().catch(() => {});
     return;
   }
-  await interaction.reply({ content: `Logged. Next bump due <t:${due}:R>.`, ephemeral: true });
+  await interaction.reply({ content: `Logged. Next bump due <t:${due}:R> - I will ping you here then.`, ephemeral: true });
 }
 
 module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton };
