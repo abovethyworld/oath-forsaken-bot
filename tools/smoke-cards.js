@@ -1067,6 +1067,14 @@ async function t(name, fn, needFile = true) {
       R.linkStateFieldText('failsafe', 0) === 'Fail safe: name not on Wise Old Man after two tries - let through unchecked');
     ok('prelink: fail safe stores no badge',
       R.recordBadgeFor({ linkState: 'failsafe', type: 'iron', badgePicked: true, badge: 'ironman' }) === null);
+    ok('prelink: fail safe gate stops the first failed check',
+      R.noteRsnCheck('smoke-gate-user', 0) === 'stop');
+    ok('prelink: fail safe gate lets the second failed check through',
+      R.noteRsnCheck('smoke-gate-user', 0) === 'through');
+    ok('prelink: fail safe gate restarts its count after tripping',
+      R.noteRsnCheck('smoke-gate-user', 0) === 'stop');
+    ok('prelink: a found name clears the fail count',
+      R.noteRsnCheck('smoke-gate-user', 3) === 'confirm' && R.noteRsnCheck('smoke-gate-user', 0) === 'stop');
     const cInv = await R.checkApplicationRsns(['bad!name'], stub);
     ok('prelink: shape-bad name drops as invalid', cInv.found.length === 0 && cInv.dropped[0].reason === 'invalid');
     const nfInv = R.notFoundPayload('bad!name', 'iron', cInv.dropped);

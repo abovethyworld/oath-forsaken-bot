@@ -137,6 +137,32 @@ function linkStateFieldText(linkState, droppedCount) {
   return 'Links on approval';
 }
 
+// The fail-safe gate. Failed checks are counted per user in their
+// own map, not on the pending record, so starting the application
+// over from the panel does not reset the count (a restart of the
+// bot still does - the count is in memory, like the pending record
+// itself). A check that finds a name clears the count. Returns
+// 'confirm' when a name was found, 'stop' for the first all-fail
+// check (the Fix name screen), and 'through' for the second (the
+// fail safe lets the application go to staff).
+const rsnFailCounts = new Map();
+const RSN_FAIL_TTL_MS = 24 * 60 * 60 * 1000;
+function noteRsnCheck(userId, foundCount) {
+  if (foundCount > 0) {
+    rsnFailCounts.delete(userId);
+    return 'confirm';
+  }
+  const now = Date.now();
+  const cur = rsnFailCounts.get(userId);
+  const count = cur && now - cur.at < RSN_FAIL_TTL_MS ? cur.count + 1 : 1;
+  if (count >= 2) {
+    rsnFailCounts.delete(userId);
+    return 'through';
+  }
+  rsnFailCounts.set(userId, { count, at: now });
+  return 'stop';
+}
+
 // The staff ping for a young account at join (index.js GuildMemberAdd
 // posts it to the staff log). Returns null when the account is at or
 // past the 30 day mark. Pure and exported for the smoke checks.
@@ -384,12 +410,14 @@ async function handleModalSubmit(interaction) {
   });
   const pending = getPending(interaction.user.id);
   if (!check.found.length) {
-    pending.rsnFailCount = (pending.rsnFailCount || 0) + 1;
-    setPending(interaction.user.id, pending);
-    if (pending.rsnFailCount >= 2) return letThroughFailsafe(interaction, pending);
+    // An empty parse (the field held only separators) is not a
+    // failed match and never trips the fail safe.
+    const gate = names.length ? noteRsnCheck(interaction.user.id, 0) : 'stop';
+    if (gate === 'through') return await letThroughFailsafe(interaction, pending);
     await interaction.editReply(notFoundPayload(answers.rsn, type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
+  noteRsnCheck(interaction.user.id, check.found.length);
   await interaction.editReply(confirmPayload(pending)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   } finally {
     submitLocks.delete(submitKey);
@@ -424,18 +452,19 @@ async function handleFixModalSubmit(interaction) {
     return;
   }
 
-  const check = await checkApplicationRsns(parseRsnList(newRsn));
+  const newNames = parseRsnList(newRsn);
+  const check = await checkApplicationRsns(newNames);
   p.found = check.found;
   p.dropped = check.dropped;
   p.linkState = linkStateOf(check);
   setPending(interaction.user.id, p);
   if (!check.found.length) {
-    p.rsnFailCount = (p.rsnFailCount || 0) + 1;
-    setPending(interaction.user.id, p);
-    if (p.rsnFailCount >= 2) return letThroughFailsafe(interaction, p);
+    const gate = newNames.length ? noteRsnCheck(interaction.user.id, 0) : 'stop';
+    if (gate === 'through') return await letThroughFailsafe(interaction, p);
     await interaction.editReply(notFoundPayload(newRsn, p.type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
+  noteRsnCheck(interaction.user.id, check.found.length);
   await interaction.editReply(confirmPayload(p)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   } finally {
     submitLocks.delete(submitKey);
@@ -538,11 +567,16 @@ async function letThroughFailsafe(interaction, p) {
   p.record = record;
   store.setApplicationAnswers(interaction.guildId, interaction.user.id, record);
   pendingApps.delete(interaction.user.id);
+  // The applicant is only told it went to staff once the thread
+  // exists; if finalize could not open it, they hear that instead.
+  const sent = await finalizeApplication(interaction, p);
   await interaction.editReply({
-    content: `That name still is not on Wise Old Man, so your application has gone to staff with the name as typed: **${typed.join(', ')}**. They will sort the name with you.`,
+    content: sent
+      ? `That name still is not on Wise Old Man, so your application has gone to staff with the name as typed: **${typed.join(', ')}**. They will sort the name with you.`
+      : 'Your application could not be sent. Tell staff.',
     components: [],
   }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
-  return finalizeApplication(interaction, p);
+  return sent;
 }
 
 // Fix name: reopen the RSN-only modal with the typed value in place.
@@ -604,7 +638,7 @@ async function finalizeApplication(interaction, p) {
   const forum = guild.channels.cache.get(rc.applicationsChannelId);
   if (!forum || forum.type !== ChannelType.GuildForum) {
     await interaction.update({ content: 'Applications forum is not set up. Tell staff.', components: [] }).catch(() => {});
-    return;
+    return false;
   }
 
   const ageDays = accountAgeDays(interaction.user);
@@ -662,11 +696,15 @@ async function finalizeApplication(interaction, p) {
     // His user ID lives in the FAILSAFE_PING_USER_ID env var, never
     // in code or config (same pattern as the audit canary).
     const failsafeUserId = process.env.FAILSAFE_PING_USER_ID;
-    if (p.linkState === 'failsafe' && failsafeUserId) {
-      await thread.send({
-        content: `<@${failsafeUserId}> Fail safe on this one: **${String(p.answers.rsn || '').slice(0, 100)}** is not on Wise Old Man after two tries, so the application came through unchecked. The name needs sorting with them.`,
-        allowedMentions: { users: [failsafeUserId] },
-      }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    if (p.linkState === 'failsafe') {
+      if (failsafeUserId) {
+        await thread.send({
+          content: `<@${failsafeUserId}> Fail safe on this one: **${String(p.answers.rsn || '').slice(0, 100)}** is not on Wise Old Man after two tries, so the application came through unchecked. The name needs sorting with them.`,
+          allowedMentions: { users: [failsafeUserId] },
+        }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+      } else {
+        console.warn('[recruit] fail safe application finalized but FAILSAFE_PING_USER_ID is not set; the owner was not pinged');
+      }
     }
     await interaction.update({ content: 'Application sent. Staff will review it.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Mark this application as submitted so it isn't reused
@@ -674,6 +712,7 @@ async function finalizeApplication(interaction, p) {
   } else {
     await interaction.update({ content: 'Could not open your application thread. Tell staff.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   }
+  return !!thread;
 }
 
 // isStaff imported from utils.js
@@ -1181,6 +1220,7 @@ module.exports = {
   checkApplicationRsns,
   linkStateOf,
   linkStateFieldText,
+  noteRsnCheck,
   confirmPayload,
   notFoundPayload,
   modePickPayload,
