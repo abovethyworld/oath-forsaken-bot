@@ -138,6 +138,8 @@ async function ensureBumpTool(client) {
     saveState(state);
     console.log('Bump tool: panel posted and pinned.');
   }
+  // Keep the panel text current across restarts (status line, times).
+  await refreshPanel(client, state);
 }
 
 // Called on an interval. Posts at most one due slot per call.
