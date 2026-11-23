@@ -36,14 +36,17 @@ function settings() {
 
 function loadState() {
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    let parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    // Early builds double-encoded the file; unwrap if it happens.
+    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
   }
 }
 
 function saveState(state) {
-  atomicWrite(STATE_FILE, JSON.stringify(state, null, 2));
+  atomicWrite(STATE_FILE, state);
 }
 
 function readText() {
@@ -75,9 +78,13 @@ function panelContent(state) {
     const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
     const due = last + BUMP_GAP_HOURS * 3600;
     lines.push(`Last bump: <t:${last}:f>`);
-    lines.push(`Next bump due: <t:${due}:R>`);
+    if (Math.floor(DateTime.now().toSeconds()) >= due) {
+      lines.push('Status: **Bump available now**');
+    } else {
+      lines.push(`Status: Next bump due <t:${due}:R>`);
+    }
   } else {
-    lines.push('No bump logged yet.');
+    lines.push('No bump logged yet. Status: **Bump available now**');
   }
   return lines.join('\n');
 }
@@ -96,11 +103,24 @@ async function refreshPanel(client, state) {
   if (msg) await msg.edit({ content: panelContent(state), components: [bumpButton()] }).catch(() => {});
 }
 
-// First run: explain the thread once and pin the panel.
+// First run: explain the thread once and pin the panel. If the
+// state file was lost, adopt the messages already in the thread
+// instead of posting duplicates.
 async function ensureBumpTool(client) {
   const thread = await fetchThread(client);
   if (!thread) return;
   const state = loadState();
+  if (!state.introPosted || !state.panelMessageId) {
+    const recent = await thread.messages.fetch({ limit: 10 }).catch(() => null);
+    if (recent) {
+      for (const msg of recent.values()) {
+        if (!msg.author.bot) continue;
+        if (!state.introPosted && msg.content.startsWith('**Bump tool.**')) state.introPosted = true;
+        if (!state.panelMessageId && msg.content.startsWith('**Bump tool**')) state.panelMessageId = msg.id;
+      }
+      saveState(state);
+    }
+  }
   if (!state.introPosted) {
     await thread.send([
       '**Bump tool.** At 9am, 2pm and 8pm ET the bump text lands here, ready to copy into the recruitment thread.',
