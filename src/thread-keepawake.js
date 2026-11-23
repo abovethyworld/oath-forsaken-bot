@@ -3,7 +3,7 @@
 // which buries the thread the Apply-Here pointer links new joiners
 // to. A daily un-archive keeps it listed. It never posts anything,
 // so members never see it move.
-const ABOUT_THREAD_ID = '1573455016943943813';
+const ABOUT_THREAD_ID = require('./config').channels?.aboutThreadId;
 
 async function keepThreadAwake(client) {
   const ch = await client.channels.fetch(ABOUT_THREAD_ID).catch(() => null);

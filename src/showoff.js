@@ -18,6 +18,7 @@ const countersFor = (stats, rsn) => ({
   ...pluginCountersFor(rsn),
 });
 const { bountyAutocompleteChoices } = require('./bounty');
+const config = require('./config');
 const fs = require('fs');
 const path = require('path');
 
@@ -664,7 +665,7 @@ function ownAccountGate(userId, rsn) {
       .setCustomId('team:badge')
       .setLabel('Account Type')
       .setStyle(ButtonStyle.Danger)
-      .setEmoji({ name: 'accounttype', id: '1561578543501025313' })
+      .setEmoji({ name: 'accounttype', id: config.teams?.emojis?.accounttype })
   );
   if (entry.rsns.length > 1) {
     row.addComponents(

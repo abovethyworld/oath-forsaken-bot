@@ -26,16 +26,10 @@ const MAX_RENDERED_DAYS = 18; // renders exist for day-01 .. day-18 and today
 // these four roles can view #general, everyone else is denied at
 // @everyone. Staff send access mirrors the read-only panel channels.
 const BOT_IDS = require('./config').botIds || {};
-const VIEW_ROLE_IDS = BOT_IDS.countdownViewRoleIds || [
-  '1558621489283211316', // Friend of the Clan
-  '1558540434652008569', // Unbound
-  '1558540424048803860', // Iron Sworn
-  '1558540445611728997', // Guest
-];
-const STAFF_SEND_ROLE_IDS = BOT_IDS.countdownStaffRoleIds || [
-  '1558578603359207555', // Lord of Chaos
-  '1558578608233119765', // Warmonger
-];
+// View roles: Friend of the Clan, Unbound, Iron Sworn, Guest.
+// Staff send roles: Lord of Chaos, Warmonger.
+const VIEW_ROLE_IDS = BOT_IDS.countdownViewRoleIds || [];
+const STAFF_SEND_ROLE_IDS = BOT_IDS.countdownStaffRoleIds || [];
 
 function launchInstant() {
   return DateTime.fromISO(`${LAUNCH_DATE}T${LAUNCH_TIME}`, { zone: ZONE });

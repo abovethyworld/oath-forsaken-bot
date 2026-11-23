@@ -9,7 +9,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { isStaff } = require('./utils');
 
 // Public #bot-commands: the channel this panel wipes.
-const TARGET_CHANNEL_ID = require('./config').botIds?.wipeChannelId || '1561979844470775839';
+const TARGET_CHANNEL_ID = require('./config').botIds?.wipeChannelId;
 
 const FOURTEEN_DAYS = 14 * 24 * 60 * 60 * 1000;
 const wiping = new Set();

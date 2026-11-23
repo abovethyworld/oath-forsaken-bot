@@ -291,7 +291,7 @@ async function handleMemberConfirm(interaction) {
   if (action === 'wrongname') {
     pendingMemberPicks.delete(userId);
     await interaction.update({
-      content: `No problem, nothing changed. Update your name with the Link RSN steps in <#${config.channels?.botGuide || '1561976856780210186'}>, or ask staff to fix it, then tap Become a Member again.`,
+      content: `No problem, nothing changed. Update your name with the Link RSN steps in <#${config.channels?.botGuide}>, or ask staff to fix it, then tap Become a Member again.`,
       components: [],
     }).catch((e) => console.error("[tickets.js] Non-fatal error:", e.message));
     return;

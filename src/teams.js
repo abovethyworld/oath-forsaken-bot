@@ -28,12 +28,7 @@ const STATE_FILE = path.join(__dirname, '..', 'data', 'teams.json');
 
 // Server emoji IDs used across the panel and listings. Centralized so an
 // emoji rotation only needs one edit.
-const EMOJI = {
-  myspecs: '1561409712426328297',
-  fcchat: '1561625124388474900',
-  partyhub: '1561624781533745202',
-  accounttype: '1561578543501025313',
-};
+const EMOJI = (config.teams && config.teams.emojis) || {};
 const emojiTag = (name) => `<:${name}:${EMOJI[name]}>`;
 const EXPIRE_MS = 24 * 3600 * 1000; // unfilled teams and closed listings die after 24h
 
@@ -155,30 +150,35 @@ const CATEGORIES = [
   { id: 'bosses', label: 'Group Bosses', emoji: '💀' },
 ];
 
-// Custom emojis matching the #roles panel buttons.
-const ACTIVITY_EMOJI_BASE = {
-  toa: '<:toa:1567763663408996422>',
-  toa_expert: '<:toa:1567763663408996422>',
-  cox: '<:cox:1567764066254979153>',
-  cox_cm: '<:cox:1567764066254979153>',
-  tob: '<:tob:1567764206756036628>',
-  tob_hard: '<:tob:1567764206756036628>',
-  tfa: '<:fracturedarchive:1567763522455212142>',
-  wintertodt: '<:wintertodt:1567765048074444940>',
-  gotr: '<:gotr:1561953776414359563>',
-  tempoross: '<:tempoross:1567764908203049022>',
-  zalcano: '<:zalcano:1567764767123181760>',
-  ba: '<:barbarianassault:1558470749919125557>',
-  nex: '<:nex:1567765610861961248>',
-  yama: '<:yama:1567764626085642311>',
-  huey: '<:hueycoatl:1567764346350862376>',
-  royals: '<:royaltitans:1567764485672935516>',
-  venenatis: '<:venenatis:1567765188919173211>',
-  callisto: '<:callisto:1567765329654841376>',
-  vetion: '<:vetion:1567765470105440256>',
-  nm: '<:nightmare:1567765760409997342>',
-  wag: '<:wildyagility:1561954199212662804>',
+// Custom emojis matching the #roles panel buttons. The emoji IDs live
+// in config (teams.activityEmojis); the emoji name per activity is fixed.
+const ACTIVITY_EMOJI_IDS = (config.teams && config.teams.activityEmojis) || {};
+const ACTIVITY_EMOJI_NAMES = {
+  toa: 'toa', toa_expert: 'toa',
+  cox: 'cox', cox_cm: 'cox',
+  tob: 'tob', tob_hard: 'tob',
+  tfa: 'fracturedarchive',
+  wintertodt: 'wintertodt',
+  gotr: 'gotr',
+  tempoross: 'tempoross',
+  zalcano: 'zalcano',
+  ba: 'barbarianassault',
+  nex: 'nex',
+  yama: 'yama',
+  huey: 'hueycoatl',
+  royals: 'royaltitans',
+  venenatis: 'venenatis',
+  callisto: 'callisto',
+  vetion: 'vetion',
+  nm: 'nightmare',
+  wag: 'wildyagility',
 };
+// Variant activities share the base activity's emoji.
+const ACTIVITY_EMOJI_BASE_KEY = { toa_expert: 'toa', cox_cm: 'cox', tob_hard: 'tob' };
+const activityEmojiId = (key) => ACTIVITY_EMOJI_IDS[ACTIVITY_EMOJI_BASE_KEY[key] || key];
+const ACTIVITY_EMOJI_BASE = Object.fromEntries(
+  Object.entries(ACTIVITY_EMOJI_NAMES).map(([key, name]) => [key, `<:${name}:${activityEmojiId(key)}>`])
+);
 
 // Data overrides for the activity tables above, so staff can add or
 // tweak a find-a-team activity without a developer. The tables in code
@@ -237,29 +237,13 @@ const ACTIVITIES = overrideView(ACTIVITIES_BASE);
 const ACTIVITY_EMOJI = overrideView(ACTIVITY_EMOJI_BASE);
 applyActivityOverrides();
 
-// For select menus: { id, name } pairs.
-const ACTIVITY_EMOJI_OBJ = {
-  toa: { id: '1567763663408996422', name: 'toa' },
-  toa_expert: { id: '1567763663408996422', name: 'toa' },
-  cox: { id: '1567764066254979153', name: 'cox' },
-  cox_cm: { id: '1567764066254979153', name: 'cox' },
-  tob: { id: '1567764206756036628', name: 'tob' },
-  tob_hard: { id: '1567764206756036628', name: 'tob' },
-  wintertodt: { id: '1567765048074444940', name: 'wintertodt' },
-  gotr: { id: '1561953776414359563', name: 'gotr' },
-  tempoross: { id: '1567764908203049022', name: 'tempoross' },
-  zalcano: { id: '1567764767123181760', name: 'zalcano' },
-  ba: { id: '1558470749919125557', name: 'barbarianassault' },
-  nex: { id: '1567765610861961248', name: 'nex' },
-  yama: { id: '1567764626085642311', name: 'yama' },
-  huey: { id: '1567764346350862376', name: 'hueycoatl' },
-  royals: { id: '1567764485672935516', name: 'royaltitans' },
-  venenatis: { id: '1567765188919173211', name: 'venenatis' },
-  callisto: { id: '1567765329654841376', name: 'callisto' },
-  vetion: { id: '1567765470105440256', name: 'vetion' },
-  nm: { id: '1567765760409997342', name: 'nightmare' },
-  wag: { id: '1561954199212662804', name: 'wildyagility' },
-};
+// For select menus: { id, name } pairs. (No tfa entry: it has no select
+// menu presence, matching the table this replaced.)
+const ACTIVITY_EMOJI_OBJ = Object.fromEntries(
+  Object.entries(ACTIVITY_EMOJI_NAMES)
+    .filter(([key]) => key !== 'tfa')
+    .map(([key, name]) => [key, { id: activityEmojiId(key), name }])
+);
 
 // Pre-modal button steps. Label shown on the listing too.
 const PRE_CHOICES = {
@@ -1307,7 +1291,7 @@ function teamPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Find a Team ⛧')
         .setDescription(
-          'Press Create Team, pick an activity, set it up, post it. Teams show up in <#1561600601861783562>.\n\n' +
+          'Press Create Team, pick an activity, set it up, post it. Teams show up in <#' + teamListingsChannelId() + '>.\n\n' +
           '⛧ Link RSN ⛧\n' +
           'Link your RSN once. Your stats show on the team board, pulled from Wise Old Man.\n\n' +
           '⛧ My Spec Weapons ⛧\n' +
@@ -1320,10 +1304,10 @@ function teamPanelPayload() {
     ],
     components: [
       new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji('<:teamparty:1561625302415708190>'),
-        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji('<:rsnlink:1561409641399853117>'),
+        new ButtonBuilder().setCustomId('team:create').setLabel('Create Team').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('teamparty')),
+        new ButtonBuilder().setCustomId('team:rsn').setLabel('Link RSN').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('rsnlink')),
         new ButtonBuilder().setCustomId('team:specs').setLabel('My Spec Weapons').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('myspecs')),
-        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji('<:teamsettings:1561560405594345533>'),
+        new ButtonBuilder().setCustomId('team:settings').setLabel('Settings').setStyle(ButtonStyle.Danger).setEmoji(emojiTag('teamsettings')),
         new ButtonBuilder().setCustomId('team:myteams').setLabel('My Teams').setStyle(ButtonStyle.Secondary).setEmoji('📋')
       ),
     ],
@@ -1332,7 +1316,7 @@ function teamPanelPayload() {
 
 // ─── Settings popup: per-user defaults (region, hub, world, board style) ──
 // Staff role for team management (Clear All). Separate from isStaff (senior roles).
-const TEAM_STAFF_ROLE_ID = '1558735997922054225';
+const TEAM_STAFF_ROLE_ID = config.teams && config.teams.staffRoleId;
 function hasTeamStaffRole(interactionOrMember) {
   const member = interactionOrMember.member || interactionOrMember;
   return member.roles?.cache?.some((r) => r.id === TEAM_STAFF_ROLE_ID) || false;
@@ -1699,7 +1683,7 @@ async function handleBadgeButton(interaction) {
               .setCustomId('team:rsn')
               .setLabel('Link RSN')
               .setStyle(ButtonStyle.Danger)
-              .setEmoji('<:rsnlink:1561409641399853117>')
+              .setEmoji(emojiTag('rsnlink'))
           ),
         ],
         ephemeral: true,
@@ -2292,12 +2276,11 @@ const BADGE_WORDS = {
 // Game mode roles (the TYPE OF IRON set). Stating a mode grants its role;
 // main has no role in the set.
 const MODE_ROLES = {
-  ironman: '1558469085287682088', hc: '1558469100139716609',
-  ult: '1558469114903666798', gim: '1558469129650839705',
-  ugim: '1558469144381362246', hcgim: '1558469159950614610', main: null,
+  ...((config.teams && config.teams.modeRoles) || {}),
+  main: null,
 };
-const IRON_SWORN_ROLE = '1558540424048803860';
-const UNBOUND_ROLE = '1558540434652008569';
+const IRON_SWORN_ROLE = config.teams && config.teams.ironSwornRoleId;
+const UNBOUND_ROLE = config.teams && config.teams.unboundRoleId;
 
 // WOM account types -> badge ids. Regular covers mains AND group irons
 // (WOM can't tell them apart), so regular maps to the main badge and

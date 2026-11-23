@@ -1141,8 +1141,10 @@ async function t(name, fn, needFile = true) {
 
     // Emoji dedupe (Nov 6, 2026): bounty buttons use the kept
     // zamoraksymbol; the duplicate zamorak id is gone from source.
+    // The emoji id itself lives in config (bounty.claimEmojiId).
     const bountySrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bounty.js'), 'utf8');
-    ok('emoji: bounty buttons use the kept zamoraksymbol', bountySrc.includes("id: '1559104599032594442', name: 'zamoraksymbol'") && !bountySrc.includes('1558477037537329182'));
+    const bountyCfg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config.json'), 'utf8'));
+    ok('emoji: bounty buttons use the kept zamoraksymbol', bountySrc.includes('claimEmojiId') && bountyCfg.bounty?.claimEmojiId === '1559104599032594442' && !bountySrc.includes('1558477037537329182'));
 
     // Pre-link decision order in source: the verified-owner check
     // runs before any link write, and failures post to the thread.

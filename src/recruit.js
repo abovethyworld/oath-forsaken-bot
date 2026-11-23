@@ -159,13 +159,14 @@ function appTypes() {
 // (the pre-Nov 6 AUTO semantics; group badges stay manual-only because
 // Wise Old Man cannot tell a group iron from a main). Multiple types
 // for alts are parked by the owner and are not built here.
+const MODE_EMOJIS = (config.recruit && config.recruit.modeEmojis) || {};
 const MODE_PICKS = [
-  { id: 'ironman', label: 'Ironman', emoji: { id: '1558644677886869604', name: 'standard_iron' } },
-  { id: 'hc', label: 'Hardcore Ironman', emoji: { id: '1558644444654473256', name: 'hardcore_iron' } },
-  { id: 'ult', label: 'Ultimate Ironman', emoji: { id: '1558644481350303874', name: 'ultimate_iron' } },
-  { id: 'gim', label: 'Group Ironman', emoji: { id: '1558644518184685628', name: 'group_iron' } },
-  { id: 'ugim', label: 'Unranked Group Ironman', emoji: { id: '1558644555182768259', name: 'unranked_iron' } },
-  { id: 'hcgim', label: 'Hardcore Group Ironman', emoji: { id: '1558644592352436344', name: 'hc_group_iron' } },
+  { id: 'ironman', label: 'Ironman', emoji: { id: MODE_EMOJIS.ironman, name: 'standard_iron' } },
+  { id: 'hc', label: 'Hardcore Ironman', emoji: { id: MODE_EMOJIS.hc, name: 'hardcore_iron' } },
+  { id: 'ult', label: 'Ultimate Ironman', emoji: { id: MODE_EMOJIS.ult, name: 'ultimate_iron' } },
+  { id: 'gim', label: 'Group Ironman', emoji: { id: MODE_EMOJIS.gim, name: 'group_iron' } },
+  { id: 'ugim', label: 'Unranked Group Ironman', emoji: { id: MODE_EMOJIS.ugim, name: 'unranked_iron' } },
+  { id: 'hcgim', label: 'Hardcore Group Ironman', emoji: { id: MODE_EMOJIS.hcgim, name: 'hc_group_iron' } },
 ];
 
 function modePickPayload() {
