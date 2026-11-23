@@ -3,3 +3,17 @@ node_modules/
 data/
 *.bak
 work/
+
+# Source art lives outside the repo (local archive). Only the assets the
+# bot loads at runtime are tracked: countdown, party-board, boss-icons.
+assets/banner-art/
+assets/emoji-drafts/
+assets/emoji-preview/
+assets/role-banners/
+assets/seniority-icons/
+assets/server-icon/
+assets/staff-icons/
+assets/webhook-avatar/
+assets/welcome-art/
+assets/*.webp
+__pycache__/
