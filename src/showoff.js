@@ -1880,7 +1880,10 @@ async function handleClogCommand(message, args) {
 }
 
 const SITE_BASE = 'https://oathforsaken.cc';
-const CARD_API = 'https://oathforsaken.cc/api/cards';
+// The card renderer normally lives on the clan website. CARD_API_URL
+// overrides it (the CI smoke suite points it at a local stub so test
+// runs never burst against the production renderer).
+const CARD_API = process.env.CARD_API_URL || 'https://oathforsaken.cc/api/cards';
 
 // Card calls share one keep-alive agent: the card service is a
 // same-machine hop, and a fresh connection setup per card was pure
@@ -1898,7 +1901,7 @@ const _cardDispatcher = _cardAgent ? { dispatcher: _cardAgent } : {};
 // already computed and posts the PNG that comes back. Any failure
 // returns null and the caller falls back to the in-bot renderers, so
 // a card outage never kills a command.
-async function fetchCard(path, body) {
+async function fetchCardOnce(path, body) {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -1910,11 +1913,28 @@ async function fetchCard(path, body) {
       ..._cardDispatcher,
     });
     clearTimeout(timer);
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    if (res.ok) return { buf: Buffer.from(await res.arrayBuffer()) };
+    return { status: res.status, retryAfter: res.headers.get('retry-after') };
   } catch {
-    return null;
+    return { status: 0 };
   }
+}
+
+async function fetchCard(path, body) {
+  // A burst of card commands can trip the renderer's rate limit
+  // (HTTP 429). Retry those twice with backoff, honoring Retry-After,
+  // before giving up; every other failure returns null at once.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await fetchCardOnce(path, body);
+    if (r.buf) return r.buf;
+    if (r.status !== 429 || attempt === 2) return null;
+    const retryAfter = Number(r.retryAfter);
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? Math.min(retryAfter * 1000, 10000)
+      : 1000 * (attempt + 1);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+  return null;
 }
 
 // Card commands have one visual style: the card service. When it is

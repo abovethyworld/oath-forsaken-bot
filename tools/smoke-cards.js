@@ -181,17 +181,21 @@ async function t(name, fn, needFile = true) {
   }
   const toaFull = await S.leaderboardPayload(OWNER, 'boss:toa');
   const toaVarBtn = flat(toaFull).find((c) => c.id.startsWith('lbvar:1:'));
-  const ixT = fakeIx(toaVarBtn.id, toaFull.components);
-  await S.handleLeaderboardButton(ixT);
-  ok('variant press updates message', !!ixT.last && hasFile(ixT.last));
-  ok('variant board differs from total board',
-    Buffer.compare(ixT.last.files[0].attachment, toaFull.files[0].attachment) !== 0);
-  for (const sel of ['9', '-1', 'x']) {
-    const crafted = toaVarBtn.id.replace('lbvar:1:', `lbvar:${sel}:`);
-    const ix = fakeIx(crafted, toaFull.components);
-    let threw = false;
-    try { await S.handleLeaderboardButton(ix); } catch { threw = true; }
-    ok(`lbvar sel=${sel} survives`, !threw && !!ix.last);
+  ok('toa board carries a variant button', !!toaVarBtn,
+    'no lbvar button on the ToA board; variant press checks skipped');
+  if (toaVarBtn) {
+    const ixT = fakeIx(toaVarBtn.id, toaFull.components);
+    await S.handleLeaderboardButton(ixT);
+    ok('variant press updates message', !!ixT.last && hasFile(ixT.last));
+    ok('variant board differs from total board',
+      Buffer.compare(ixT.last.files[0].attachment, toaFull.files[0].attachment) !== 0);
+    for (const sel of ['9', '-1', 'x']) {
+      const crafted = toaVarBtn.id.replace('lbvar:1:', `lbvar:${sel}:`);
+      const ix = fakeIx(crafted, toaFull.components);
+      let threw = false;
+      try { await S.handleLeaderboardButton(ix); } catch { threw = true; }
+      ok(`lbvar sel=${sel} survives`, !threw && !!ix.last);
+    }
   }
   const stale = fakeIx('lbtab:pvm:o|-|0|-|0|-|0|x|7', []);
   let staleThrew = false;
@@ -1318,6 +1322,8 @@ async function t(name, fn, needFile = true) {
           [U.recordGuest]: { standing: 'guest', at: 1, via: 'approval' },
           [U.memberRemoved]: { standing: 'member', at: 1, via: 'approval' },
           [U.memberSeeded]: { standing: 'member', at: 1, via: 'approval' },
+          [U.memberLow]: { standing: 'member', at: 1, via: 'approval' },
+          [U.memberFirst]: { standing: 'member', at: 1, via: 'approval' },
         },
       });
       writeFixture('seniority-assigned.json', {
@@ -1435,7 +1441,7 @@ async function t(name, fn, needFile = true) {
     ok('stafflink: staff gate on command, button, select, modal',
       (slSrc.match(/isStaff\(interaction\)/g) || []).length >= 4);
     ok('stafflink: writes only through linkRsnQuiet', slSrc.includes('linkRsnQuiet(targetId, check.rsn)') && !slSrc.includes('addRsn('));
-    ok('stafflink: audit line posts to the mod-log', slSrc.includes('config.channels.modLog') && slSrc.includes('Staff link:'));
+    ok('stafflink: audit line posts to the joins/leaves log', slSrc.includes('config.channels.joinsLeaves') && slSrc.includes('Staff link:'));
 
     // Panel home: the configured thread wins; with no thread
     // configured the panel falls back to the staff chat channel.
@@ -1617,7 +1623,7 @@ async function t(name, fn, needFile = true) {
     // Forged or stale refresh ids end quietly, before any defer.
     for (const bad of ['refresh:kc::', 'refresh:dry:zulrah:', 'refresh:hub:garbage', 'refresh:nope:x:y']) {
       let threw = false;
-      try { await S.handleRefreshButton({ customId: bad, user: { id: UID } }); } catch { threw = true; }
+      try { await S.handleRefreshButton({ customId: bad, user: { id: UID }, reply: async () => {} }); } catch { threw = true; }
       ok(`refresh: malformed id survives: ${bad}`, !threw);
     }
 
@@ -1785,7 +1791,7 @@ async function t(name, fn, needFile = true) {
     const kcP = await S.kcPayload('zulrah', PRIMARY, OWNER);
     const kcBtn = flat(kcP).find((c) => c.id.startsWith('refresh:kc:zulrah:'));
     ok('refresh: kc card carries the Refresh button', !!kcBtn, JSON.stringify(flat(kcP).map((c) => c.id)));
-    ok('refresh: kc button label shows the count left', !!kcBtn && /^Refresh · \d+ left$/.test(kcBtn.label), kcBtn && kcBtn.label);
+    ok('refresh: kc button label is Refresh', !!kcBtn && kcBtn.label === 'Refresh', kcBtn && kcBtn.label);
     ok('refresh: kc card carries the Updated line', typeof kcP.content === 'string' && kcP.content.startsWith('Updated '), String(kcP.content));
     const dryP = await S.dryPayload('zulrah', PRIMARY, OWNER);
     ok('refresh: dry card carries the Refresh button',

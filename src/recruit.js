@@ -577,7 +577,7 @@ async function finalizeApplication(interaction, p) {
     lines.push(`**${q.label}:** ${answer}`);
   }
   const embed = new EmbedBuilder()
-    .setTitle(`Application — ${interaction.user.tag}`)
+    .setTitle(`Application - ${interaction.user.tag}`)
     .setDescription(lines.join('\n').slice(0, 4000))
     .addFields(
       {
@@ -586,7 +586,7 @@ async function finalizeApplication(interaction, p) {
       },
       {
         name: 'Account age',
-        value: ageOk ? `✅ ${ageDays} days (meets ${rc.minAccountAgeDays}-day minimum)` : `⚠️ **${ageDays} days** — under the ${rc.minAccountAgeDays}-day minimum`,
+        value: ageOk ? `✅ ${ageDays} days (meets ${rc.minAccountAgeDays}-day minimum)` : `⚠️ **${ageDays} days** - under the ${rc.minAccountAgeDays}-day minimum`,
       },
       {
         name: 'Link state',
@@ -1111,7 +1111,7 @@ async function applyStatsCommand(interaction) {
   const { EmbedBuilder } = require('discord.js');
   const { ZAMORAK_RED } = require('./utils');
   const embed = new EmbedBuilder()
-    .setTitle(`⛧ Application Stats — last ${days} days ⛧`)
+    .setTitle(`⛧ Application Stats - last ${days} days ⛧`)
     .setDescription(
       `**${stats.length}** decisions: **${approved}** approved, **${denied}** denied (${rate}% approval)\n\n` +
       `By type:\n${typeLines}\n\n` +

@@ -191,7 +191,13 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (!isMember) continue;
       // Accrued time in the clan chat, from the tenure ledger. A member
       // with no ledger record yet has no accrued time.
-      const months = tenure.accruedMs(tenure.getRecord(m.id), now) / MONTH_MS;
+      let months = tenure.accruedMs(tenure.getRecord(m.id), now) / MONTH_MS;
+      if (months < 0) {
+        // Future-dated tenure record (clock skew or a bad seed):
+        // clamping to 0 months instead of silently skipping the member.
+        console.warn(`[seniority] ${m.user.tag} has a future-dated tenure record; clamping to 0 months`);
+        months = 0;
+      }
       const want = rankForMonths(months);
       if (!want) continue;
       // Never derank: a member already holding a rank at or above the

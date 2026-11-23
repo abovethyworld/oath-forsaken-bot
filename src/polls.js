@@ -24,7 +24,7 @@ function pollEmbed(poll) {
   const lines = poll.options.map((opt, i) => {
     const c = counts[i];
     const pct = total ? Math.round((c / total) * 100) : 0;
-    return `${['1️⃣', '2️⃣', '3️⃣', '4️⃣'][i]} **${opt}** — ${c} vote${c === 1 ? '' : 's'} (${pct}%)`;
+    return `${['1️⃣', '2️⃣', '3️⃣', '4️⃣'][i]} **${opt}** - ${c} vote${c === 1 ? '' : 's'} (${pct}%)`;
   });
   return new EmbedBuilder()
     .setTitle(`📊 ${poll.question}`)
@@ -226,7 +226,7 @@ async function closePollCommand(interaction) {
     const channel = interaction.guild.channels.cache.get(poll.channelId);
     const msg = channel ? await channel.messages.fetch(poll.messageId).catch(() => null) : null;
     if (msg) {
-      const embed = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Poll by ${poll.authorTag} — closed` });
+      const embed = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Poll by ${poll.authorTag} - closed` });
       await msg.edit({ embeds: [embed], components: [] }).catch(() => {});
     }
   } catch {}

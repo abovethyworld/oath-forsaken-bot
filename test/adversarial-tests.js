@@ -210,12 +210,23 @@ const B = () => ({ vulnerable: false });
   // 13. Timezone confusion in event creation
   await attack('Event timezone mismatch', async () => {
     const fs = require('fs');
-    const src = fs.readFileSync('./src/calendar.js', 'utf8');
-    // Confirmation step shows auto-converting <t:> timestamp + explicit timezone before creating
-    if (src.includes('pendingEvents') && src.includes('handleEventButton') && src.includes('auto-converting')) {
-      return B();
+    // In-Discord event creation was removed by design (Nov 21, 2026):
+    // events live in Google Calendar only and the bot just mirrors
+    // them, so there is no event-creation flow left to confuse
+    // timezones with. This check guards the removal: if an
+    // event-creation surface comes back, the timezone question
+    // has to be answered again.
+    if (fs.existsSync('./src/calendar.js')) {
+      return V('src/calendar.js is back: in-Discord event creation needs a timezone confirmation check again.');
     }
-    return V('No timezone confirmation shown to user before event creation. User in CST creating "19:00" event gets 19:00 UTC (2pm CST) — 5 hour discrepancy with no warning.');
+    const allSrc = fs.readdirSync('./src')
+      .filter((f) => f.endsWith('.js'))
+      .map((f) => fs.readFileSync('./src/' + f, 'utf8'))
+      .join('\n');
+    if (allSrc.includes('event-create') || allSrc.includes('event-cancel')) {
+      return V('An event creation/cancel command is back in src/ without a timezone check.');
+    }
+    return B();
   });
 
   console.log('\n=== SUMMARY ===');

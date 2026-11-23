@@ -211,7 +211,8 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     assert.strictEqual(typeof recruit.handleApplyButton, 'function');
     assert.ok(Array.isArray(recruit.commands), 'commands should be array');
     const names = recruit.commands.map((c) => c.data.name);
-    assert.ok(names.includes('apply'), `should have /apply command, got: ${names.join(',')}`);
+    assert.ok(names.includes('setup-applications'), `should have /setup-applications command, got: ${names.join(',')}`);
+    assert.ok(!names.includes('apply'), 'the /apply command was replaced by the application panel');
   });
 
   await atest('isStaff (via utils): recruit uses shared version', async () => {
@@ -232,7 +233,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     assert.ok(msg.includes('⛧ ━'), 'should have divider');
     assert.ok(msg.includes('<@999> has joined Oath Forsaken.'), 'should have join line');
     assert.ok(msg.includes('Drop an intro'), 'should have intro action');
-    assert.ok(msg.includes('Grab your roles'), 'should have roles action');
+    assert.ok(msg.includes('Pick what you would like to be pinged for'), 'should have roles action');
     assert.ok(msg.includes('clan chat invite'), 'should have CC invite action');
   });
 
@@ -259,7 +260,7 @@ function mockInteraction({ customId = '', member, guild, options = {}, channel =
     const dupes = names.filter((n, i) => names.indexOf(n) !== i);
     assert.strictEqual(dupes.length, 0, `duplicate command names: ${dupes.join(',')}`);
     // Key commands present
-    for (const expected of ['apply', 'poll', 'check-permissions', 'event-create']) {
+    for (const expected of ['setup-applications', 'poll', 'check-permissions', 'calendar-sync']) {
       assert.ok(names.includes(expected), `missing command: ${expected}`);
     }
   });

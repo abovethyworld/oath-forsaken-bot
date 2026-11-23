@@ -754,7 +754,7 @@ function kcColumnsForTeam(team) {
 // the card commands; the bot sends the row data plus the board's PNG
 // icons as base64. A failed call returns null and the listing posts
 // with no board, the same as any other board failure.
-const CARD_API = 'https://oathforsaken.cc/api/cards';
+const CARD_API = process.env.CARD_API_URL || 'https://oathforsaken.cc/api/cards';
 const BOARD_ASSET_DIR = path.join(__dirname, '..', 'assets', 'party-board');
 const BOARD_MAX_ROWS = 12;
 const BOARD_COLUMNS = ['combat', 'attack', 'strength', 'ranged', 'magic', 'defence', 'hitpoints', 'prayer'];
@@ -3128,7 +3128,7 @@ async function handleTeamSizeSet(interaction, messageId, value) {
     } else {
       const n = Math.min(parseInt(value, 10), 100);
       const members = Object.keys(t.members || {}).length;
-      if (n < members) return { error: `Can't shrink below ${members} — ${members} already signed up.` };
+      if (n < members) return { error: `Can't shrink below ${members} - ${members} already signed up.` };
       t.size = n;
       t.mass = false;
     }

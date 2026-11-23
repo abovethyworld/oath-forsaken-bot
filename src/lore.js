@@ -40,7 +40,7 @@ const LORE_DROPS = [
   },
 ];
 
-const CARD_API = 'https://oathforsaken.cc/api/cards';
+const CARD_API = process.env.CARD_API_URL || 'https://oathforsaken.cc/api/cards';
 
 // Card calls share one keep-alive agent: the card service is a
 // same-machine hop, and a fresh connection setup per card was pure

@@ -113,7 +113,7 @@ async function createTicket(interaction, ticketType) {
   try {
     // Create a private thread — named for the ticket type.
     // Append user ID suffix to avoid collisions (two "johndoe"s).
-    const threadName = `${theme.label} — ${safeName}-${interaction.user.id.slice(-4)}`.slice(0, 100);
+    const threadName = `${theme.label} - ${safeName}-${interaction.user.id.slice(-4)}`.slice(0, 100);
     thread = await ticketsChannel.threads.create({
       name: threadName,
       type: ChannelType.PrivateThread,

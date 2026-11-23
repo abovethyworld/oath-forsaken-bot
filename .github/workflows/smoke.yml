@@ -33,5 +33,14 @@ jobs:
       - name: Stage fixture data
         run: node tools/smoke-fixtures.js
 
+      # The suite renders dozens of cards in seconds. Against the
+      # production renderer that burst trips its rate limit and the
+      # run fails on cards that are fine in normal use, so CI renders
+      # against a local stub instead.
+      - name: Start stub card service
+        run: |
+          node tools/card-stub.js &
+          echo "CARD_API_URL=http://127.0.0.1:8799" >> "$GITHUB_ENV"
+
       - name: Run the smoke suite
         run: node tools/smoke-cards.js

@@ -49,6 +49,8 @@ const {
   getBadge,
   getManualBadge,
   setManualBadge,
+  getStatedBadge,
+  setStatedBadge,
   mutateTeams,
 } = require('../src/teams');
 const { combatLevel, parseStats, cacheLookup, CACHE_MS } = require('../src/wom');
@@ -81,9 +83,9 @@ function test(name, fn) {
 
 // ─── Activity registry ──────────────────────────────────────────
 
-test('all 20 activities defined with name, category, and ping role', () => {
+test('all 21 activities defined with name, category, and ping role', () => {
   const keys = Object.keys(ACTIVITIES);
-  assert.strictEqual(keys.length, 20, `expected 20 activities, got ${keys.length}`);
+  assert.strictEqual(keys.length, 21, `expected 21 activities, got ${keys.length}`);
   for (const [key, a] of Object.entries(ACTIVITIES)) {
     assert.ok(a.name, `${key} missing name`);
     assert.ok(['raids', 'skilling', 'bosses'].includes(a.category), `${key} bad category`);
@@ -501,8 +503,9 @@ test('buildTeamEmbed shows Mass for mass teams', () => {
     members: { u1: true, u2: true }, memberNames: { u1: 'Staff', u2: 'Sam', org1: 'Staff' },
     organizerId: 'org1', region: 'US', messageId: 'm1',
   };
-  const desc = buildTeamEmbed(team).toJSON().description;
-  assert.ok(desc.includes('· Mass'), `expected Mass in embed, got: ${desc}`);
+  const json = buildTeamEmbed(team).toJSON();
+  const desc = json.description;
+  assert.ok(json.title.includes('· Mass'), `expected Mass in embed title, got: ${json.title}`);
   assert.ok(!/\d+\/\d+/.test(desc), 'mass team should not show a fill count like 2/4');
   assert.ok(!/\d+ in/.test(desc), 'mass team should not show an open count like 2 in');
 });
@@ -555,7 +558,7 @@ test('buildTeamEmbed uses Zamorak red and has no em dashes', () => {
   assert.ok(!json.description.includes('—'), 'em dash found in embed');
   assert.ok(!json.title.includes('—'), 'em dash found in title');
   assert.ok(json.description.includes('Raid level: High Invo (350+)'), 'raid level invo label missing');
-  assert.ok(json.description.includes('1/4'));
+  assert.ok(json.title.includes('1/4'), 'fill count in title');
 });
 
 test('buildTeamEmbed shows ToB pre label in the title', () => {
@@ -687,8 +690,8 @@ test('buildTeamEmbed shows role count as 2/4 for ToB', () => {
     memberNames: { u1: 'Staff', u2: 'Sam', org1: 'Staff' },
     organizerId: 'org1', world: '388',
   };
-  const desc = buildTeamEmbed(team).toJSON().description;
-  assert.ok(desc.includes('2/4'), `expected 2/4 in embed, got: ${desc}`);
+  const json = buildTeamEmbed(team).toJSON();
+  assert.ok(json.title.includes('2/4'), `expected 2/4 in embed title, got: ${json.title}`);
 });
 
 // ─── Party board ──────────────────────────────────────────────────
@@ -992,7 +995,7 @@ test('parseStats reads a WOM snapshot defensively', () => {
 test('parseStats pulls minigame skill levels and activity scores', () => {
   const skills = {};
   const lvls = { attack: 99, strength: 99, defence: 99, ranged: 99, magic: 99, hitpoints: 99, prayer: 99,
-    firemaking: 99, runecraft: 80, fishing: 91, mining: 85, agility: 77 };
+    firemaking: 99, runecrafting: 80, fishing: 91, mining: 85, agility: 77 };
   for (const [k, v] of Object.entries(lvls)) skills[k] = { rank: 1, level: v, experience: 13034431 };
   const activities = { wintertodt: { score: 1240, rank: 500 }, soul_wars_zeal: { score: 36, rank: 1000 } };
   const st = parseStats({ latestSnapshot: { data: { skills, activities } }, type: 'regular' });
@@ -1058,12 +1061,12 @@ test('getBadge: manual beats WOM beats role', () => {
     assert.strictEqual(getBadge(u, ironMember, { accountType: 'ultimate' }), 'ult', 'wom ultimate');
     assert.strictEqual(getBadge(u, null, { accountType: 'ironman' }), 'ironman', 'wom ironman');
     assert.strictEqual(getBadge(u, null, { accountType: 'regular' }), 'main', 'wom regular');
-    // Manual beats everything.
-    setManualBadge(u, 'gim');
-    assert.strictEqual(getManualBadge(u), 'gim');
-    assert.strictEqual(getBadge(u, ironMember, { accountType: 'hardcore' }), 'gim', 'manual wins');
-    setManualBadge(u, null);
-    assert.strictEqual(getManualBadge(u), null, 'cleared');
+    // Stated (manual) beats everything, per account (badges v2).
+    setStatedBadge(u, 'Badge Rsn', 'gim');
+    assert.strictEqual(getStatedBadge(u, 'Badge Rsn'), 'gim');
+    assert.strictEqual(getBadge(u, ironMember, { accountType: 'hardcore' }, 'Badge Rsn'), 'gim', 'stated wins');
+    setStatedBadge(u, 'Badge Rsn', null);
+    assert.strictEqual(getStatedBadge(u, 'Badge Rsn'), null, 'cleared');
     assert.strictEqual(getBadge(u, ironMember, null), 'ironsworn', 'back to auto');
   } finally {
     if (backup !== null) fs.writeFileSync(file, backup);
@@ -1340,12 +1343,12 @@ test('item icon fetcher tries RuneLite static cache by id first', async () => {
 test('/kc slash payload renders a card; slash commands register', async () => {
   const fs = require('node:fs');
   const so = require('../src/showoff');
-  assert.deepStrictEqual(so.commands.map((c) => c.data.name), ['kc', 'clog', 'profile', 'leaderboard']);
+  assert.deepStrictEqual(so.commands.map((c) => c.data.name), ['kc', 'clog', 'profile', 'compare', 'skills', 'pb', 'gains', 'dry', 'leaderboard']);
   const { commands } = require('../src/commands');
-  assert.strictEqual(commands.length, 31, '27 existing + 4 showoff commands');
+  assert.strictEqual(commands.length, 41, '32 existing + 9 showoff commands');
   const skills = { attack: { level: 50 }, defence: { level: 45 }, strength: { level: 55 }, ranged: { level: 40 }, prayer: { level: 44 }, magic: { level: 52 }, hitpoints: { level: 48 } };
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => ({ username: 'kcpay', type: 'regular', latestSnapshot: { data: { skills, bosses: { yama: { kills: 438 } }, activities: {} } } }) });
+  globalThis.fetch = async () => ({ status: 200, ok: true, json: async () => ({ username: 'kcpay', type: 'regular', latestSnapshot: { data: { skills, bosses: { yama: { kills: 438 } }, activities: {} } } }), arrayBuffer: async () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer });
   try {
     const payload = await so.kcPayload('yama', 'Kc Pay');
     assert.ok(payload.files && payload.files.length === 1, 'kc payload carries one card file');
@@ -1367,7 +1370,7 @@ console.log(`Results: ${passed} passed, ${failed} failed`);
 test('showoff unlinked payload is one short line plus the Link RSN button', () => {
   const so = require('../src/showoff');
   const p = so.unlinkedPayload();
-  assert.strictEqual(p.content, 'No RSN linked yet. Tap below to link yours.');
+  assert.strictEqual(p.content, 'No RSN linked yet. Press below to link yours.');
   assert.strictEqual(p.components.length, 1, 'one action row');
   assert.strictEqual(p.components[0].components[0].data.custom_id, 'team:rsn', 'button is the existing Link RSN handler');
 });
@@ -1375,14 +1378,14 @@ test('showoff unlinked payload is one short line plus the Link RSN button', () =
 test('showoff cooldown: one notice per window, shared !/slash bucket', () => {
   const so = require('../src/showoff');
   const uid = 'cooldown-tester';
-  assert.strictEqual(so.checkCooldown(uid, 1_000_000).wait, 0, 'first use is free');
-  so.noteUse(uid, 1_000_000);
-  const mid = so.checkCooldown(uid, 1_004_000);
+  assert.strictEqual(so.checkCooldown(uid, 'kc', 1_000_000).wait, 0, 'first use is free');
+  so.noteUse(uid, 'kc', 1_000_000);
+  const mid = so.checkCooldown(uid, 'kc', 1_004_000);
   assert.strictEqual(mid.wait, 6);
   assert.strictEqual(mid.notify, true, 'first notice fires');
-  const again = so.checkCooldown(uid, 1_005_000);
+  const again = so.checkCooldown(uid, 'kc', 1_005_000);
   assert.strictEqual(again.notify, false, 'repeat inside window is silent');
-  assert.strictEqual(so.checkCooldown(uid, 1_010_001).wait, 0, 'window expires');
+  assert.strictEqual(so.checkCooldown(uid, 'kc', 1_010_001).wait, 0, 'window expires');
 });
 
 test('wom parseStats drops the -1 unranked sentinel from KC', () => {

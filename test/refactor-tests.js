@@ -228,7 +228,7 @@ console.log('\nrun async tests...');
       update: async () => { throw new Error('should not reach update'); },
     };
     await polls.handlePollButton(fakeInteraction);
-    assert.ok(replyContent && replyContent.includes('Invalid'), `expected invalid reply, got: ${replyContent}`);
+    assert.ok(replyContent && replyContent.includes('not a valid choice'), `expected invalid-choice reply, got: ${replyContent}`);
   });
 
   await atest('handlePollButton: rejects negative index', async () => {
@@ -241,7 +241,7 @@ console.log('\nrun async tests...');
       update: async () => { throw new Error('should not reach update'); },
     };
     await polls.handlePollButton(fakeInteraction);
-    assert.ok(replyContent && replyContent.includes('Invalid'), `expected invalid reply, got: ${replyContent}`);
+    assert.ok(replyContent && replyContent.includes('not a valid choice'), `expected invalid-choice reply, got: ${replyContent}`);
   });
 
   // ─── permissions.js (regression) ───

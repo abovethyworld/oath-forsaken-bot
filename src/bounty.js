@@ -118,7 +118,7 @@ function proofLine(proof) {
 }
 
 
-const CARD_API = 'https://oathforsaken.cc/api/cards';
+const CARD_API = process.env.CARD_API_URL || 'https://oathforsaken.cc/api/cards';
 const thumbCache = new Map();
 
 async function thumbB64(url) {

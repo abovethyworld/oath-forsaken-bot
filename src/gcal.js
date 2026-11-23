@@ -6,7 +6,9 @@
 //      -> add Authorized redirect URI: http://localhost:53682/callback
 //   4. Put the client ID + secret in .env as GCAL_CLIENT_ID / GCAL_CLIENT_SECRET
 //   5. Run: node src/gcal-auth.js  (opens the Google approval page, saves tokens)
-// After that, every /event-create also lands on the linked Google Calendar.
+// After that, the linked Google Calendar is mirrored into the
+// server's event calendar embed. Events are managed in Google
+// Calendar only; the bot never writes back.
 const fs = require('node:fs');
 const path = require('node:path');
 const { google } = require('googleapis');

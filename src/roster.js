@@ -1,5 +1,5 @@
 // Event roster: button-based signup for clan events.
-// When /event-create posts its announcement, it includes a "Join Roster" button.
+// Event announcements carry a "Join Roster" button.
 // Members click to join/leave; the roster updates live on the message.
 // Data persists in data/rosters.json so it survives restarts.
 const {
@@ -23,7 +23,7 @@ function rosterEmbed(eventName, roster) {
     const members = Object.entries(roster)
       .filter(([, r]) => r === role)
       .map(([uid]) => `<@${uid}>`);
-    return `**${role}** (${members.length}): ${members.join(', ') || '—'}`;
+    return `**${role}** (${members.length}): ${members.join(', ') || 'none'}`;
   });
   const unassigned = Object.entries(roster)
     .filter(([, r]) => !r)
@@ -32,8 +32,8 @@ function rosterEmbed(eventName, roster) {
     lines.push(`**Unassigned** (${unassigned.length}): ${unassigned.join(', ')}`);
   }
   return new EmbedBuilder()
-    .setTitle(`⛧ ${eventName} — Roster`)
-    .setDescription(clampDesc(lines.join('\n') + `\n\n*${total} signed up — click to join, pick your role*`))
+    .setTitle(`⛧ ${eventName} - Roster`)
+    .setDescription(clampDesc(lines.join('\n') + `\n\n*${total} signed up - click to join, pick your role*`))
     .setColor(ZAMORAK_RED);
 }
 
