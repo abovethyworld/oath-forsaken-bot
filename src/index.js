@@ -46,6 +46,7 @@ const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
 const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
+const { handleBoostMessage } = require('./boost-thanks');
 const { ensureBumpTool, checkBumpTool } = require('./bump-tool');
 const { keepThreadAwake } = require('./thread-keepawake');
 
@@ -400,6 +401,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await interaction.reply({ content: 'Something went wrong. Try again.', ephemeral: true }).catch((e) => console.error("[index.js] Non-fatal error:", e.message));
     }
   }
+});
+
+// Boost thank-you: Discord's own boost system messages get one thank-you
+// post in General (boost-thanks.js). Separate handler so the !-command
+// routing below never sees them.
+client.on(Events.MessageCreate, async (message) => {
+  await handleBoostMessage(message);
 });
 
 // !-prefixed show-off commands (!kc / !clog / !profile / !leaderboard). Everything else ignores
