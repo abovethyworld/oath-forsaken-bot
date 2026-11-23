@@ -46,6 +46,7 @@ const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
 const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
+const { ensureBumpTool, checkBumpTool } = require('./bump-tool');
 const { keepThreadAwake } = require('./thread-keepawake');
 
 // Command cooldowns: userId:commandName -> timestamp
@@ -224,6 +225,7 @@ client.once(Events.ClientReady, async (c) => {
       // Launch countdown channel: create and pin on first run, then
       // top up any missed daily banner refresh.
       await ensureLaunchCountdown(client);
+      await ensureBumpTool(client);
 
       // About the Forsaken thread: un-archive it if it slept, so the
       // Apply-Here pointer's link keeps landing on a listed thread.
@@ -254,6 +256,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('drift', () => syncDrift(client)), 24 * 3600 * 1000);
   setInterval(() => run('calendar', () => syncCalendar(client)), 24 * 3600 * 1000);
   setInterval(() => run('countdown', () => refreshLaunchCountdown(client)), 30 * 60 * 1000);
+  setInterval(() => run('bump-tool', () => checkBumpTool(client)), 10 * 60 * 1000);
   setInterval(() => run('thread-keepawake', () => keepThreadAwake(client)), 24 * 3600 * 1000);
   setInterval(() => run('bounties-sweep', () => sweepExpiredBounties(client)), 6 * 3600 * 1000);
   setTimeout(() => { run('bounty-sync', () => require('./bounty-sync').syncBountyPool(client)); }, 5 * 60 * 1000);
