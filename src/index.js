@@ -39,8 +39,9 @@ const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
 const { refreshCompRoster } = require('./comp-roster');
 const { mergeSiteLinkRequests } = require('./link-requests');
-const { handleStaffLinkSelect, handleStaffLinkModal } = require('./staff-link');
-const { handleWebsiteControlsSelect } = require('./website-controls');
+const { handleStaffLinkSelect, handleStaffLinkModal, refreshStaffLinkPanel } = require('./staff-link');
+const { handleWebsiteControlsSelect, refreshWebsiteControlsPanel } = require('./website-controls');
+const { refreshChecklist } = require('./cc-checklist');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
@@ -227,6 +228,15 @@ client.once(Events.ClientReady, async (c) => {
       // top up any missed daily banner refresh.
       await ensureLaunchCountdown(client);
       await ensureBumpTool(client);
+
+      // Staff tool panels: repost into their configured threads on
+      // boot, so a panel whose thread moved lands in its new home
+      // on the next restart instead of waiting for its next use.
+      if (guild) {
+        await refreshChecklist(guild);
+        await refreshStaffLinkPanel(guild);
+        await refreshWebsiteControlsPanel(guild);
+      }
 
       // About the Forsaken thread: un-archive it if it slept, so the
       // Apply-Here pointer's link keeps landing on a listed thread.
