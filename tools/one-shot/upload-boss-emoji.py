@@ -1,10 +1,12 @@
 import json, time, base64, urllib.request, urllib.error, os
 
-env = open('./.env').read()
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+env = open(f'{BASE_DIR}/.env').read()
 token = [l.split('=', 1)[1].strip() for l in env.splitlines() if l.startswith('DISCORD_TOKEN')][0]
 GUILD = '1558390769746845718'
 H = {'Authorization': f'Bot {token}', 'Content-Type': 'application/json', 'User-Agent': 'OathbreakersBot/1.0'}
-D = './assets/boss-icons'
+D = f'{BASE_DIR}/assets/boss-icons'
 
 NAMES = ['fracturedarchive', 'toa', 'cox', 'tob', 'hueycoatl', 'royaltitans',
          'barbarianassault', 'yama', 'zalcano', 'tempoross', 'wintertodt',

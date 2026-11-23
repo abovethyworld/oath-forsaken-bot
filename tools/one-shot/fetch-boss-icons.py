@@ -1,7 +1,9 @@
 """Fetch boss/activity icons from oldschool.runescape.wiki for button emoji."""
-import json, time, urllib.request, urllib.parse
+import json, time, urllib.request, urllib.parse, os
 from io import BytesIO
 from PIL import Image
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 API = 'https://oldschool.runescape.wiki/api.php'
 
@@ -57,7 +59,7 @@ for ename, candidates in TARGETS.items():
         results[ename] = url
     time.sleep(0.5)
 
-json.dump(results, open('./assets/boss-icons/urls.json', 'w'), indent=1)
+json.dump(results, open(f'{BASE_DIR}/assets/boss-icons/urls.json', 'w'), indent=1)
 
 # download + resize to 128x128 PNG
 for ename, url in results.items():
@@ -69,7 +71,7 @@ for ename, url in results.items():
         img.thumbnail((128, 128), Image.LANCZOS)
         out = Image.new('RGBA', (128, 128), (0, 0, 0, 0))
         out.paste(img, ((128 - img.width) // 2, (128 - img.height) // 2), img)
-        p = f'./assets/boss-icons/{ename}.png'
+        p = f'{BASE_DIR}/assets/boss-icons/{ename}.png'
         out.save(p, 'PNG')
         import os
         print(f'{ename}: saved {os.path.getsize(p)//1024}KB', flush=True)

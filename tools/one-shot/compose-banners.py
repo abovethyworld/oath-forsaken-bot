@@ -2,7 +2,7 @@
 from PIL import Image, ImageFilter, ImageDraw
 import os
 
-D = './assets/banner-art'
+D = os.environ.get('BOT_ART_DIR', os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'assets', 'banner-art'))
 W, H = 1200, 300
 
 def load(n):

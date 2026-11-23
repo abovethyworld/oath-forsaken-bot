@@ -1,6 +1,6 @@
-import json, time, subprocess, urllib.request, urllib.error
+import json, time, subprocess, urllib.request, urllib.error, os
 
-BASE_DIR = '.'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 env = open(f'{BASE_DIR}/.env').read()
 token = [l.split('=', 1)[1].strip() for l in env.splitlines() if l.startswith('DISCORD_TOKEN')][0]
 BOT_ID = '1558391167413129216'
@@ -59,7 +59,10 @@ BANNERS = {
 }
 
 def post_banner(fname):
-    p = f'{BASE_DIR}/assets/role-banners/{fname}'
+    # Banner art lives outside the repo; point BOT_ART_DIR at the art
+    # archive (its role-banners/ folder), or restore assets/role-banners/.
+    art_dir = os.environ.get('BOT_ART_DIR', f'{BASE_DIR}/assets')
+    p = f'{art_dir}/role-banners/{fname}'
     r = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}',
         '-X', 'POST', '-H', f'Authorization: Bot {token}',
         '-F', f'file=@{p}',

@@ -1,6 +1,8 @@
-import json, time, urllib.request, urllib.error
+import json, time, urllib.request, urllib.error, os
 
-env = open('./.env').read()
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+env = open(f'{BASE_DIR}/.env').read()
 token = [l.split('=', 1)[1].strip() for l in env.splitlines() if l.startswith('DISCORD_TOKEN')][0]
 GUILD = '1558390769746845718'
 BOT_ID = '1558391167413129216'
@@ -129,9 +131,9 @@ panels = [
      ]},
 ]
 
-cfg = json.load(open('./config.json'))
+cfg = json.load(open(f'{BASE_DIR}/config.json'))
 cfg['rolePanels'] = panels
-json.dump(cfg, open('./config.json', 'w'), indent=1)
+json.dump(cfg, open(f'{BASE_DIR}/config.json', 'w'), indent=1)
 print('config.rolePanels rebuilt', flush=True)
 ROLES_CH = cfg['channels']['roles']
 

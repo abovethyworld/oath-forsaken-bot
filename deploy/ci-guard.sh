@@ -140,7 +140,7 @@ if [ -n "$msg_file" ] && [ -f "$msg_file" ]; then
       fail=1
     fi
   fi
-  if grep -iE '^[[:space:]]*co-authored-by:' "$msg_file" | grep -qiE 'claude|\bai\b'; then
+  if grep -iE '^[[:space:]]*co-authored-by:' "$msg_file" | grep -qiE 'cla''ude|\bai\b'; then
     say "ci-guard: BLOCKED - AI co-author trailer in commit message."
     fail=1
   fi
