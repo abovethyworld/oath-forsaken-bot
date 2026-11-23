@@ -15,8 +15,6 @@
 // member has been ranked, holding no rank is read as a staff removal
 // and the sync never re-assigns over it. data/seniority-assigned.json
 // is the sync's memory of everyone it has ranked or seen ranked.
-// Ascendant is hand-picked and is not in
-// config.seniorityRanks, so this sync never assigns it either.
 // After each run the assigned ranks are published to
 // data/seniority.json for the website, so site and bot cannot disagree.
 // Brackets come from config.seniorityRanks. /sync-seniority runs it on demand.
@@ -82,13 +80,6 @@ const RANK_ANNOUNCEMENTS = {
     divider: '⛧ ━━━━━━━━━━━━━━━━━━━ ⛧',
     tagline: (uid) => `<@${uid}> has risen to Godslayer. A general has fallen.`,
     story: `You walked into Zamorak's fortress wearing the oathplate. You'd spent months preparing \u2014 tracked down Emberlight, the demonbane blade, because you knew what was waiting. Past the bloodvelds and werewolves, forty kills deep. The chamber goes dark \u2014 the kind of dark that swallows torchlight. Then you hear him. K'ril Tsutsaroth. Zamorak's general. He screams and his next hit smashes straight through your prayer. You didn't flinch. When he fell, you stood over his corpse with his spear in your hands.`,
-  },
-  ascendant: {
-    get roleId() { return RANK_IDS.ascendant; },
-    get header() { return `⛧ <@&${RANK_IDS.ascendant}> ⛧`; },
-    divider: '⛧ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ⛧',
-    tagline: (uid) => `<@${uid}> has ascended. Zamorak has noticed.`,
-    story: `K'ril is dead. His massive frame still radiates heat on the stone \u2014 demon blood steams in the cold dark. His spear is in your hands. His bodyguards lie broken around you, their armor still warm from the fight. The chamber is silent.\n\nThen the dark moves.\n\nNot a figure \u2014 a presence. The air gets heavy, like the moment before lightning. You feel it in your chest first, a pressure, then in your skull. His voice doesn't come through your ears. It's inside you.\n\n**Zamorak:** 'You killed my general.'\n\nIt's so loud you want to kneel, to cover your head, to run. But you don't. You stand. And something shifts \u2014 the pressure eases, just slightly. Approval.\n\n**Zamorak:** 'He was strong. You were stronger. That is the only law I know.'\n\nThe presence wraps around you like heat from a forge. Not burning. Forging.\n\n**Zamorak:** 'You did not come because I called. You came because you chose.'\n\nA pause. The weight settles, then lifts.\n\n**Zamorak:** 'Ascend.'`,
   },
 };
 
@@ -178,9 +169,8 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       if (e.code !== 'ENOENT') console.error('[seniority] assigned-record seed read failed:', e.message);
     }
     // Ladder order for held-vs-wanted comparisons: the tenure brackets
-    // ascending by minMonths, with the hand-picked Ascendant above all.
+    // ascending by minMonths.
     const ladderIds = [...ranks].sort((a, b) => a.minMonths - b.minMonths).map((r) => r.roleId);
-    if (RANK_IDS.ascendant) ladderIds.push(RANK_IDS.ascendant);
     const rankOrder = new Map(ladderIds.map((id, i) => [id, i]));
 
     for (const m of members.values()) {
@@ -190,7 +180,10 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       // Only members get seniority roles. Everyone else is skipped,
       // with no role changes either way.
       // The permission-audit canary account must stay @everyone-only.
-      const skipUsers = [require('./config').botIds?.auditCanaryUserId || '000000000000000000']; // audit canary
+      // Its user ID lives in the AUDIT_CANARY_USER_ID env var, never in
+      // the repo. Unset means no canary is configured and nobody is
+      // skipped on this rule.
+      const skipUsers = process.env.AUDIT_CANARY_USER_ID ? [process.env.AUDIT_CANARY_USER_ID] : [];
       if (skipUsers.includes(m.id)) continue;
       // Membership is recorded member standing from an approval only
       // (data/membership.json). The WOM group list is not consulted.
@@ -202,8 +195,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
       const want = rankForMonths(months);
       if (!want) continue;
       // Never derank: a member already holding a rank at or above the
-      // tenure-wanted one keeps it, untouched. This also keeps
-      // hand-picked Ascendant holders beyond the sync's reach.
+      // tenure-wanted one keeps it, untouched.
       let heldId = null;
       for (const id of ladderIds) {
         if (m.roles.cache.has(id)) heldId = id;
@@ -213,7 +205,7 @@ async function syncSeniority(client, { dryRun = false } = {}) {
         // remove the rank, this record is how the sync knows the
         // empty slot is a staff decision, not a first assignment.
         const heldNow = ranks.find((r) => r.roleId === heldId);
-        assignedMarks[m.id] = heldNow ? heldNow.name.split(' ')[0] : 'Ascendant';
+        assignedMarks[m.id] = heldNow ? heldNow.name.split(' ')[0] : 'Unknown';
         if (rankOrder.get(heldId) >= rankOrder.get(want.roleId)) continue;
       } else if (assignedRecords[m.id]) {
         // Ranked before, holding nothing now: staff removed it.
@@ -257,11 +249,10 @@ async function syncSeniority(client, { dryRun = false } = {}) {
 
     // Publish the result for the website, so its roster ranks are the
     // ranks assigned here and the two cannot disagree. Members only,
-    // keyed by Discord id, read back off the roles as they now stand;
-    // a held Ascendant outranks the tenure ladder.
+    // keyed by Discord id, read back off the roles as they now stand.
     if (!dryRun) {
       try {
-        const ladder = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
+        const ladder = ['godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
         const published = {};
         for (const m of members.values()) {
           if (m.user.bot || !isRecordedMember(m.id)) continue;

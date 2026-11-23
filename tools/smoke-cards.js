@@ -1265,7 +1265,7 @@ async function t(name, fn, needFile = true) {
         [U.womMember]: { rsns: ['Fake Wom'] },
         [U.memberHigh]: { rsns: ['Fake High'] },
         [U.memberLow]: { rsns: ['Fake Low'] },
-        [U.memberTop]: { rsns: ['Fake Asc'] },
+        [U.memberTop]: { rsns: ['Fake Top'] },
         [U.memberFirst]: { rsns: ['Fake First'] },
       });
       writeFixture('seniority-holds.json', {});
@@ -1355,7 +1355,7 @@ async function t(name, fn, needFile = true) {
         mkMember(U.nonMemberRank, [RIDS.devout]),
         mkMember(U.memberHigh, [RIDS.devout]),
         mkMember(U.memberLow, [RIDS.initiate]),
-        mkMember(U.memberTop, [RIDS.ascendant]),
+        mkMember(U.memberTop, [RIDS.godslayer]),
         mkMember(U.memberFirst, []),
         mkMember(U.recordMember, [RIDS.initiate]),
         mkMember(U.recordGuest, [RIDS.acolyte]),
@@ -1384,7 +1384,7 @@ async function t(name, fn, needFile = true) {
         !entryFor(U.memberHigh), joined);
       ok('standing: (c) a member below their tenure rank is swapped up only',
         entryFor(U.memberLow) === `fake${U.memberLow.slice(-3)}: Initiate → Devout`, joined);
-      ok('standing: (d) an Ascendant holder is untouched', !entryFor(U.memberTop), joined);
+      ok('standing: (d) a Godslayer holder is untouched', !entryFor(U.memberTop), joined);
       ok('standing: a recorded member not on the WOM list still ranks up',
         entryFor(U.recordMember) === `fake${U.recordMember.slice(-3)}: Initiate → Devout`, joined);
       ok('standing: a recorded guest is skipped, rank and all',
@@ -1542,7 +1542,7 @@ async function t(name, fn, needFile = true) {
     // each standing family; every other shape → false.
     const fam = {
       'application type': cfgN.recruit.types.iron.roleId,
-      'seniority ladder': cfgN.seniority.rankIds.ascendant,
+      'seniority ladder': cfgN.seniority.rankIds.godslayer,
       'friend of the clan': cfgN.seniority.friendOfClanRoleId,
       'staff': cfgN.tickets.staffRoleIds[0],
     };

@@ -809,7 +809,7 @@
     "sections": [
       {
         "heading": "Clan Ranks",
-        "body": "<:zamorakian:1558454806744666182> **Ascendant** (Hand-picked prestige)\n<:destroyer:1558454830056476672> **Godslayer (1 year+)**\n<:unholy:1558454842094256208> **Heretic (9-11 months)**\n<:wrath:1558454818396176394> **Zealot (6-8 months)**\n<:skulled:1558454852596531310> **Devout (3-5 months)**\n<:imp:1558454873924833457> **Acolyte (1-2 months)**\n<:necromancer:1558454896095797259> **Initiate (Under 1 month)**\n\n_Automatic. Based on how long you have been in the server._",
+        "body": "<:destroyer:1558454830056476672> **Godslayer (1 year+)**\n<:unholy:1558454842094256208> **Heretic (9-11 months)**\n<:wrath:1558454818396176394> **Zealot (6-8 months)**\n<:skulled:1558454852596531310> **Devout (3-5 months)**\n<:imp:1558454873924833457> **Acolyte (1-2 months)**\n<:necromancer:1558454896095797259> **Initiate (Under 1 month)**\n\n_Automatic. Based on how long you have been in the server._",
         "divider_before": true
       },
       {
@@ -826,8 +826,7 @@
   "botIds": {
     "wipeChannelId": "1561979844470775839",
     "countdownViewRoleIds": ["1558621489283211316", "1558540434652008569", "1558540424048803860", "1558540445611728997"],
-    "countdownStaffRoleIds": ["1558578603359207555", "1558578608233119765"],
-    "auditCanaryUserId": "000000000000000000"
+    "countdownStaffRoleIds": ["1558578603359207555", "1558578608233119765"]
   },
   "winnerRoles": [
     {
@@ -907,8 +906,7 @@
       "Devout": "1558452002319769631",
       "Zealot": "1558451991448129628",
       "Heretic": "1558451981562151062",
-      "Godslayer": "1558451970883453003",
-      "Ascendant": "1559619699493437482"
+      "Godslayer": "1558451970883453003"
     },
     "rankEmojis": {
       "Initiate": "<:initiate:1558454896095797259>",
@@ -916,8 +914,7 @@
       "Devout": "<:devout:1558454852596531310>",
       "Zealot": "<:zealot:1558454818396176394>",
       "Heretic": "<:heretic:1558454842094256208>",
-      "Godslayer": "<:godslayer:1558454830056476672>",
-      "Ascendant": "<:ascendant:1558454806744666182>"
+      "Godslayer": "<:godslayer:1558454830056476672>"
     }
   },
   "staffLink": {
@@ -946,8 +943,7 @@
       "devout": "1558452002319769631",
       "zealot": "1558451991448129628",
       "heretic": "1558451981562151062",
-      "godslayer": "1558451970883453003",
-      "ascendant": "1559619699493437482"
+      "godslayer": "1558451970883453003"
     }
   },
   "teams": {

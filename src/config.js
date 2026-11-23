@@ -55,15 +55,13 @@ for (const [name, id] of Object.entries({
 
 // The sync assigns roles from seniorityRanks while rank-up stories mention
 // roles from seniority.rankIds, so the two lists must name the same roles.
-// rankIds may carry one extra entry (the hand-picked Ascendant rank, which
-// has no bracket because the sync never assigns it).
 const rankIdValues = new Set(Object.values(sen.rankIds || {}));
 const bracketIds = new Set((config.seniorityRanks || []).map((r) => r.roleId));
 for (const id of bracketIds) {
   if (!rankIdValues.has(id)) problems.push('config.seniority.rankIds is missing a roleId from config.seniorityRanks');
 }
 const rankIdExtras = [...rankIdValues].filter((id) => !bracketIds.has(id));
-if (rankIdExtras.length > 1) problems.push('config.seniority.rankIds has roleIds not in config.seniorityRanks (only the Ascendant extra is allowed)');
+if (rankIdExtras.length > 0) problems.push('config.seniority.rankIds has roleIds not in config.seniorityRanks');
 
 // Validate seniority rank brackets: must be sorted, non-overlapping, no gaps at start
 const ranks = [...(config.seniorityRanks || [])].sort((a, b) => a.minMonths - b.minMonths);

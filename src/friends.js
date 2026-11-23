@@ -23,7 +23,7 @@ const GROUP_FILE = path.join(__dirname, '..', 'data', 'wom-group.json');
 const FRIEND_ROLE_ID = (config.seniority || {}).friendOfClanRoleId;
 // Seniority rank roles, highest first, so a member holding more than one
 // is published under the highest. Keys in config are lowercase.
-const RANK_ORDER = ['ascendant', 'godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
+const RANK_ORDER = ['godslayer', 'heretic', 'zealot', 'devout', 'acolyte', 'initiate'];
 const RANK_ROLE_IDS = (config.seniority || {}).rankIds || {};
 
 function heldRank(member) {
