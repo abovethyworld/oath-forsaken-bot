@@ -13,6 +13,7 @@ const { handleWipeButton } = require('./wipe');
 const { handleStrikesButton } = require('./commands');
 const { handleHelpButton } = require('./guide');
 const { handleStaffLinkButton } = require('./staff-link');
+const { handleBumpButton } = require('./bump-tool');
 const { handleWebsiteControlsButton } = require('./website-controls');
 const config = require('./config');
 
@@ -29,6 +30,7 @@ function panelRoleIds() {
 async function routeButton(interaction) {
   const [kind, roleId] = interaction.customId.split(':');
   if (kind === 'help') return handleHelpButton(interaction);
+  if (kind === 'bump') return handleBumpButton(interaction);
   if (kind === 'ticket') return handleTicketButton(interaction);
   if (kind === 'member') return handleMemberConfirm(interaction);
   if (kind === 'stafflink') return handleStaffLinkButton(interaction);
