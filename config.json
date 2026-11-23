@@ -12,7 +12,8 @@
     "general": "1558583385440395476",
     "suggestions": "1560559333337468942",
     "botGuide": "1561976856780210186",
-    "aboutThreadId": "1573455016943943813"
+    "aboutThreadId": "1573455016943943813",
+    "goalsAndAchievements": "1558428264135925813"
   },
   "guildId": "1558390769746845718",
   "womGroupId": 26687,
@@ -834,8 +835,16 @@
   },
   "botIds": {
     "wipeChannelId": "1561979844470775839",
-    "countdownViewRoleIds": ["1558621489283211316", "1558540434652008569", "1558540424048803860", "1558540445611728997"],
-    "countdownStaffRoleIds": ["1558578603359207555", "1558578608233119765"]
+    "countdownViewRoleIds": [
+      "1558621489283211316",
+      "1558540434652008569",
+      "1558540424048803860",
+      "1558540445611728997"
+    ],
+    "countdownStaffRoleIds": [
+      "1558578603359207555",
+      "1558578608233119765"
+    ]
   },
   "winnerRoles": [
     {
@@ -1029,5 +1038,11 @@
       "14:00",
       "20:00"
     ]
+  },
+  "goalBoardsGuide": {
+    "channel": "1558428264135925813",
+    "messageId": "1574450850477379617",
+    "color": 10688033,
+    "intro": "\u26e7 **Goal Boards** \u26e7\n\nYour Goal Board is your list of goals on the clan website. It fills itself in as you play, from the account data you already sync.\n\n**Set yours up**\n1. Go to [oathforsaken.cc/boards](https://oathforsaken.cc/boards) and sign in with Discord.\n2. Link your RuneScape name in Settings if you have not yet. Your board needs it.\n3. Start a new board: pick a template, copy a clanmate's board, or start blank. Boards are 25 or 49 tiles.\n4. Fill it by hand, or press Fill the rest to top it up from your account.\n5. Press Post board. You can keep editing it after.\n\n**Sharing it**\nYour board page has a Download image button. Save the picture and drop it in this channel so the Forsaken can see what you are chasing."
   }
 }
