@@ -38,9 +38,10 @@ function chunkButtons(buttons) {
   return rows;
 }
 
-function sectionsDesc(intro, sections, footer) {
+function sectionsDesc(intro, sections, footer, looseHeadings) {
   let d = intro ? `${intro}\n\n` : '';
-  for (const s of sections || []) d += `**${s.heading}**\n${s.body}\n\n`;
+  const gap = looseHeadings ? '\n\n' : '\n';
+  for (const s of sections || []) d += `**${s.heading}**${gap}${s.body}\n\n`;
   if (footer) d += `*${footer}*`;
   return d.trim();
 }
@@ -64,7 +65,7 @@ function sectionsDesc(intro, sections, footer) {
 
   // 3. Rules
   const r = config.rules;
-  const rulesEmbed = { title: r.title, description: sectionsDesc(r.intro, r.sections, r.footer), color: r.color };
+  const rulesEmbed = { title: r.title, description: sectionsDesc(r.intro, r.sections, r.footer, true), color: r.color };
   if (r.banner) rulesEmbed.image = { url: r.banner };
   await api(`/channels/${config.channels.rules}/messages`, 'POST', { embeds: [rulesEmbed] });
   console.log('posted rules');
