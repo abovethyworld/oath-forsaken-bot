@@ -69,43 +69,43 @@
       "buttons": [
         {
           "label": "US East",
-          "emoji": "\ud83c\uddfa\ud83c\uddf8",
+          "emoji": "🇺🇸",
           "roleId": "1558469175586988115",
           "style": "Danger"
         },
         {
           "label": "US West",
-          "emoji": "\ud83c\uddfa\ud83c\uddf8",
+          "emoji": "🇺🇸",
           "roleId": "1558469190292209774",
           "style": "Danger"
         },
         {
           "label": "United Kingdom",
-          "emoji": "\ud83c\uddec\ud83c\udde7",
+          "emoji": "🇬🇧",
           "roleId": "1558469204318093356",
           "style": "Danger"
         },
         {
           "label": "Germany",
-          "emoji": "\ud83c\udde9\ud83c\uddea",
+          "emoji": "🇩🇪",
           "roleId": "1558469219799277639",
           "style": "Danger"
         },
         {
           "label": "Australia",
-          "emoji": "\ud83c\udde6\ud83c\uddfa",
+          "emoji": "🇦🇺",
           "roleId": "1558469235158687765",
           "style": "Danger"
         },
         {
           "label": "Singapore",
-          "emoji": "\ud83c\uddf8\ud83c\uddec",
+          "emoji": "🇸🇬",
           "roleId": "1558537713123336232",
           "style": "Danger"
         },
         {
           "label": "Japan",
-          "emoji": "\ud83c\uddef\ud83c\uddf5",
+          "emoji": "🇯🇵",
           "roleId": "1558537723222958284",
           "style": "Danger"
         }
@@ -113,9 +113,9 @@
       "banner": ""
     },
     {
-      "title": "\u26e7 Clan Roles \u26e7",
+      "title": "⛧ Clan Roles ⛧",
       "color": 7015950,
-      "description": "Press each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.\n\ud83d\udcdc <@&1566342297082269787> - Get pinged when a new bounty is posted.",
+      "description": "Press each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n🎬 <@&1558468788897452174> - Get pinged for movies and shows.\n📜 <@&1566342297082269787> - Get pinged when a new bounty is posted.",
       "banner": "",
       "buttons": [
         {
@@ -147,26 +147,26 @@
         },
         {
           "label": "Other Games",
-          "emoji": "\ud83c\udfae",
+          "emoji": "🎮",
           "roleId": "1558468773806084168",
           "style": "Danger"
         },
         {
           "label": "Movies and Shows",
-          "emoji": "\ud83c\udfac",
+          "emoji": "🎬",
           "roleId": "1558468788897452174",
           "style": "Danger"
         },
         {
           "label": "Bounty Hunter",
-          "emoji": "\ud83d\udcdc",
+          "emoji": "📜",
           "roleId": "1566342297082269787",
           "style": "Danger"
         }
       ]
     },
     {
-      "title": "\u26e7 PvM Roles \u26e7",
+      "title": "⛧ PvM Roles ⛧",
       "color": 7015950,
       "description": "Press each PvM role you want.\n\nThese roles get pinged when people form bossing teams in <#1558428263322357811>.",
       "banner": "",
@@ -291,7 +291,7 @@
       ]
     },
     {
-      "title": "\u26e7 Skilling Roles \u26e7",
+      "title": "⛧ Skilling Roles ⛧",
       "color": 7015950,
       "description": "Pick the skilling activities you do. You'll get pinged when people are putting together a group in <#1558428263322357811>.",
       "banner": "",
@@ -344,7 +344,7 @@
       ]
     },
     {
-      "title": "\u26e7 Wise Old Man Weekly Comps \u26e7",
+      "title": "⛧ Wise Old Man Weekly Comps ⛧",
       "color": 7015950,
       "description": "Press each comp you want in on.\n\nThese roles get pinged for comp polls, starts, and winner posts.\n\n<:sotwwinner:1559070785769967616> <@&1558539205527732306>\n<:rotwwinner:1559070865851944980> <@&1558539229414559806>\n<:botwwinner:1559070945400987740> <@&1558539218496786513>\n\n_Top 3 in each competition earn the winner role. Discord role held for 6 weeks, CC rank title for 2 weeks._",
       "buttons": [
@@ -383,62 +383,62 @@
     "banner": "",
     "color": 7015950,
     "footer": "Our staff team enforces these rules to keep Oath Forsaken a great place to be. Questions? Open a ticket in <#1558399103757717518>.\nSee <#1558481986706870445> for rank information and <#1558399101454786670> to set up your notifications.",
-    "intro": "\u26e7 *Chaos takes all.* \u26e7\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\n**TL;DR:** Be respectful. Ironman-centric clan. FFA loot.\n\n**Need staff?** Open a ticket in <#1558399103757717518>.\n\n**Our clan website** is [oathforsaken.cc](https://oathforsaken.cc), where every member gets their own profile page with stats and collection log, and can sign in with Discord to build a Goal Board.\n\nIf you are in this server you agree to the rules below.",
+    "intro": "⛧ *Chaos takes all.* ⛧\nThe weak fear chaos. We swear by it. Every member takes one oath: get stronger, never bend, let chaos take the rest.\n\n**TL;DR:** Be respectful. Ironman-centric clan. FFA loot.\n\n**Need staff?** Open a ticket in <#1558399103757717518>.\n\n**Our clan website** is [oathforsaken.cc](https://oathforsaken.cc), where every member gets their own profile page with stats and collection log, and can sign in with Discord to build a Goal Board.\n\nIf you are in this server you agree to the rules below.",
     "sections": [
       {
-        "heading": "\u26e7 Be respectful",
+        "heading": "⛧ Be respectful",
         "body": "We're here to have fun together. Treat everyone with respect. No harassment, hate speech, or drama. Don't ask others for items or GP. Don't crash others or PK clanmates. Friendly banter is always welcome."
       },
       {
-        "heading": "\u26e7 LGBTQ+ friendly",
+        "heading": "⛧ LGBTQ+ friendly",
         "body": "We're LGBTQ+ friendly. Whoever you are, you belong here. Discrimination isn't tolerated."
       },
       {
-        "heading": "\u26e7 No scamming",
+        "heading": "⛧ No scamming",
         "body": "Trust matters here. Scamming a fellow clanmate will result in a permanent ban and a report to RuneWatch. If you lend items, do so at your own risk and always use collateral."
       },
       {
-        "heading": "\u26e7 Keep it clean",
+        "heading": "⛧ Keep it clean",
         "body": "Keep public channels safe for work so everyone feels comfortable here."
       },
       {
-        "heading": "\u26e7 No spam or advertising",
+        "heading": "⛧ No spam or advertising",
         "body": "Don't spam or advertise other servers without checking with staff first."
       },
       {
-        "heading": "\u26e7 Ironman-centric",
+        "heading": "⛧ Ironman-centric",
         "body": "Oath Forsaken is an ironman-centric clan. Mains are welcome too. Earn seniority, join events, game nights, group PvM and skilling. Be part of the clan. Alts are welcome and earn ranks independently. Our team events and weekly skilling, raiding, and bossing competitions are designed for ironmen."
       },
       {
-        "heading": "\u26e7 No poaching",
+        "heading": "⛧ No poaching",
         "body": "Don't recruit our members to other clans."
       },
       {
-        "heading": "\u26e7 PvM etiquette",
+        "heading": "⛧ PvM etiquette",
         "body": "We're an FFA clan, so your drops are yours to keep. If your group would prefer to split, agree on it before you head out. Screenshots help resolve any disputes."
       },
       {
-        "heading": "\u26e7 Match your RSN",
+        "heading": "⛧ Match your RSN",
         "body": "Set your Discord nickname to match your RuneScape name so we know who's who. Staff are happy to help if you need it."
       },
       {
-        "heading": "\u26e7 Handle disputes maturely",
+        "heading": "⛧ Handle disputes maturely",
         "body": "If something comes up, try to work it out directly first. Staff are here if you need them, but they're the last resort."
       },
       {
-        "heading": "\u26e7 Stay active",
+        "heading": "⛧ Stay active",
         "body": "After 90 days of no gains and no Discord activity without notifying staff, you may be removed from the CC and Discord. Doesn't apply to alts.\n\nIf you join but don't apply within 7 days, you'll be removed from the server."
       },
       {
-        "heading": "\u26e7 Keep chat comfortable",
+        "heading": "⛧ Keep chat comfortable",
         "body": "Avoid spoilers for games, shows, books, or movies. Political discussions stay out of the server to keep things relaxed for everyone."
       },
       {
-        "heading": "\u26e7 Jagex rules apply",
+        "heading": "⛧ Jagex rules apply",
         "body": "All of Jagex's rules apply here as well."
       }
     ],
-    "title": "\u26e7 Rules \u26e7"
+    "title": "⛧ Rules ⛧"
   },
   "strikeSystem": {
     "banner": "",
@@ -464,16 +464,16 @@
       },
       {
         "heading": "Appeals",
-        "body": "Think a strike was unfair? Open a ticket in <#1558399103757717518>.\n\u26e7 A successful appeal removes the strike. Earlier strikes stay on record.\n\u26e7 Strike 3 is a ban, and bans are final."
+        "body": "Think a strike was unfair? Open a ticket in <#1558399103757717518>.\n⛧ A successful appeal removes the strike. Earlier strikes stay on record.\n⛧ Strike 3 is a ban, and bans are final."
       }
     ],
-    "title": "\u26e7 Strike System \u26e7"
+    "title": "⛧ Strike System ⛧"
   },
   "welcome": {
     "banner": "",
     "color": 5763719,
     "message": "Welcome {user} to **{server}**!\n\nRead the rules, grab your roles in <#1558399101454786670>, and hit **Link RSN** in <#1561976856780210186> so the clan bot knows your name. See you in Gielinor.",
-    "title": "Welcome to the clan! \u2694\ufe0f"
+    "title": "Welcome to the clan! ⚔️"
   },
   "tickets": {
     "panelChannelId": "1558399103757717518",
@@ -506,7 +506,7 @@
       "iron": {
         "label": "Ironman",
         "buttonLabel": "Apply as Ironman",
-        "emoji": "\u2694\ufe0f",
+        "emoji": "⚔️",
         "roleId": "1558540424048803860",
         "questions": [
           {
@@ -533,7 +533,7 @@
       "main": {
         "label": "Main",
         "buttonLabel": "Apply as Main",
-        "emoji": "\ud83d\udee1\ufe0f",
+        "emoji": "🛡️",
         "roleId": "1558540434652008569",
         "questions": [
           {
@@ -560,7 +560,7 @@
       "guest": {
         "label": "Guest",
         "buttonLabel": "Apply as Guest",
-        "emoji": "\ud83d\udc4b",
+        "emoji": "👋",
         "roleId": "1558540445611728997",
         "questions": [
           {
@@ -1043,6 +1043,6 @@
     "channel": "1558428264135925813",
     "messageId": "1574450850477379617",
     "color": 10688033,
-    "intro": "\u26e7 **Goal Boards** \u26e7\n\nYour Goal Board is your list of goals on the clan website. It fills itself in as you play, from the account data you already sync.\n\n**Set yours up**\n1. Go to [oathforsaken.cc/boards](https://oathforsaken.cc/boards) and sign in with Discord.\n2. Link your RuneScape name in Settings if you have not yet. Your board needs it.\n3. Start a new board: pick a template, copy a clanmate's board, or start blank. Boards are 5x5 or 7x7.\n4. Fill it by hand, or press Fill the rest to top it up from your account.\n5. Press Post board. You can keep editing it after.\n\n**Sharing it**\nYour board page has a Download image button. Save the picture and drop it in this channel so the Forsaken can see what you are chasing."
+    "intro": "⛧ **Goal Boards** ⛧\n\nYour Goal Board is your list of goals on the clan website. It fills itself in as you play, from the account data you already sync.\n\n**Set yours up**\n1. Go to [oathforsaken.cc/boards](https://oathforsaken.cc/boards) and sign in with Discord.\n2. Link your RuneScape name in Settings if you have not yet. Your board needs it.\n3. Start a new board: pick 5x5 or 7x7 for a blank one, or copy a clanmate's board.\n4. Fill it by hand, or press Fill the rest to top it up from your account.\n5. Press Post board. You can keep editing it after.\n\n**Sharing it**\nYour board page has a Download image button. Save the picture and drop it in this channel so the Forsaken can see what you are chasing."
   }
 }
