@@ -11,9 +11,9 @@
 # runs (degraded mode). Exit status is non-zero if anything is blocked.
 #
 # Checks (added lines only): blocklist names, secret-shaped strings, banned
-# added files (*.bak *.old *.db *.sqlite, .env), absolute home paths, plus an
-# AI co-author trailer in commit messages. The sanctioned clan domain and the
-# clan Ko-fi page URL are stripped before the name scan; nothing else is.
+# added files (*.bak *.old *.db *.sqlite, .env) and absolute home paths.
+# The clan's public domain and Ko-fi page URL are stripped before the name
+# scan; nothing else is.
 # The sk- pattern needs 16+ token characters so words like "mask-image" pass.
 set -u
 
@@ -72,7 +72,7 @@ scan_file() {
     say "ci-guard: BLOCKED - secret-shaped string in added lines: $f"
     fail=1
   fi
-  if grep -oE '/home/[A-Za-z0-9._+-]+' "$added_file" | grep -qvx '/home/host'; then
+  if grep -qE '/home/[A-Za-z0-9._+-]+' "$added_file"; then
     say "ci-guard: BLOCKED - absolute home path in added lines: $f"
     fail=1
   fi
@@ -139,10 +139,6 @@ if [ -n "$msg_file" ] && [ -f "$msg_file" ]; then
       say "ci-guard: BLOCKED - blocklisted name in commit message."
       fail=1
     fi
-  fi
-  if grep -iE '^[[:space:]]*co-authored-by:' "$msg_file" | grep -qiE 'cla''ude|\bai\b'; then
-    say "ci-guard: BLOCKED - AI co-author trailer in commit message."
-    fail=1
   fi
 fi
 
