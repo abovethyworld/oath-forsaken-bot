@@ -6,10 +6,10 @@ set -u
 
 IMAGE=ghcr.io/abovethyworld/oath-forsaken-bot
 LATEST="$IMAGE:latest"
-PIN_FILE=/opt/oathbreakers-bot/image-pin
-PREV_FILE=/opt/oathbreakers-bot/image-pin.prev
-SERVICE=oathbreakers-bot
-CONTAINER=oathbreakers-bot
+PIN_FILE=/opt/oath-forsaken-bot/image-pin
+PREV_FILE=/opt/oath-forsaken-bot/image-pin.prev
+SERVICE=oath-forsaken-bot
+CONTAINER=oath-forsaken-bot
 TIMEOUT=120
 
 log() { echo "bot-deploy: $*"; }

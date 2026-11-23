@@ -1,4 +1,4 @@
-# OathBreakers bot image. State (data/) is mounted at runtime, secrets come from --env-file.
+# Oath Forsaken bot image. State (data/) is mounted at runtime, secrets come from --env-file.
 
 # Install deps on the build machine's native arch. Every dependency is pure JS (no native
 # addons), so the same node_modules works on amd64 and arm64, and nothing runs under QEMU

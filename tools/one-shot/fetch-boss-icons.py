@@ -33,7 +33,7 @@ def wiki_file_url(title):
     q = urllib.parse.urlencode({
         'action': 'query', 'titles': f'File:{title}',
         'prop': 'imageinfo', 'iiprop': 'url|size', 'format': 'json', 'formatversion': 2})
-    req = urllib.request.Request(f'{API}?{q}', headers={'User-Agent': 'OathbreakersClanBot/1.0'})
+    req = urllib.request.Request(f'{API}?{q}', headers={'User-Agent': 'oath-forsaken-bot/1.0'})
     with urllib.request.urlopen(req, timeout=30) as r:
         data = json.load(r)
     pages = data.get('query', {}).get('pages', [])
@@ -64,7 +64,7 @@ json.dump(results, open(f'{BASE_DIR}/assets/boss-icons/urls.json', 'w'), indent=
 # download + resize to 128x128 PNG
 for ename, url in results.items():
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'OathbreakersClanBot/1.0'})
+        req = urllib.request.Request(url, headers={'User-Agent': 'oath-forsaken-bot/1.0'})
         with urllib.request.urlopen(req, timeout=30) as r:
             raw = r.read()
         img = Image.open(BytesIO(raw)).convert('RGBA')

@@ -6,7 +6,7 @@ env = open(f'{BASE_DIR}/.env').read()
 token = [l.split('=', 1)[1].strip() for l in env.splitlines() if l.startswith('DISCORD_TOKEN')][0]
 GUILD = '1558390769746845718'
 BOT_ID = '1558391167413129216'
-H = {'Authorization': f'Bot {token}', 'Content-Type': 'application/json', 'User-Agent': 'OathbreakersBot/1.0'}
+H = {'Authorization': f'Bot {token}', 'Content-Type': 'application/json', 'User-Agent': 'oath-forsaken-bot/1.0'}
 STYLE = {'Primary': 1, 'Secondary': 2, 'Success': 3}
 
 def api(method, path, body=None):

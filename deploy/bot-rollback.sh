@@ -3,10 +3,10 @@
 # Running it twice swaps back (intended).
 set -u
 
-PIN_FILE=/opt/oathbreakers-bot/image-pin
-PREV_FILE=/opt/oathbreakers-bot/image-pin.prev
-SERVICE=oathbreakers-bot
-CONTAINER=oathbreakers-bot
+PIN_FILE=/opt/oath-forsaken-bot/image-pin
+PREV_FILE=/opt/oath-forsaken-bot/image-pin.prev
+SERVICE=oath-forsaken-bot
+CONTAINER=oath-forsaken-bot
 TIMEOUT=120
 
 log() { echo "bot-rollback: $*"; }

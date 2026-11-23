@@ -1,5 +1,5 @@
 [Unit]
-Description=Check for a new OathBreakers bot image
+Description=Check for a new Oath Forsaken bot image
 
 [Timer]
 OnBootSec=5min

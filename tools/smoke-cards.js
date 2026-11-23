@@ -1,7 +1,7 @@
 // Card smoke test: run INSIDE the bot container after every
 // deploy (the deploy is not done until this passes):
-//   docker cp tools/smoke-cards.js oathbreakers-bot:/app/tools/
-//   docker exec oathbreakers-bot node /app/tools/smoke-cards.js
+//   docker cp tools/smoke-cards.js oath-forsaken-bot:/app/tools/
+//   docker exec oath-forsaken-bot node /app/tools/smoke-cards.js
 // Exits 1 on any failure. Read-only: it renders payloads and
 // simulates button presses against the live caches, and never
 // writes data files or posts to Discord.

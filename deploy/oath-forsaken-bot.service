@@ -1,19 +1,19 @@
 [Unit]
-Description=OathBreakers OSRS clan Discord bot (Docker)
+Description=Oath Forsaken OSRS clan Discord bot (Docker)
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/oathbreakers-bot
+WorkingDirectory=/opt/oath-forsaken-bot
 # Container runs as the image's "node" user (uid 1000); make sure it can write data/.
-ExecStartPre=/bin/mkdir -p /opt/oathbreakers-bot/data
-ExecStartPre=/bin/chown -R 1000:1000 /opt/oathbreakers-bot/data
-ExecStartPre=-/usr/bin/docker rm -f oathbreakers-bot
+ExecStartPre=/bin/mkdir -p /opt/oath-forsaken-bot/data
+ExecStartPre=/bin/chown -R 1000:1000 /opt/oath-forsaken-bot/data
+ExecStartPre=-/usr/bin/docker rm -f oath-forsaken-bot
 # Output goes to journald via the attached client, so Docker's own log driver is off.
-ExecStart=/usr/local/bin/oathbreakers-run.sh
-ExecStop=/usr/bin/docker stop oathbreakers-bot
+ExecStart=/usr/local/bin/oath-forsaken-run.sh
+ExecStop=/usr/bin/docker stop oath-forsaken-bot
 Restart=always
 RestartSec=10
 

@@ -2,11 +2,11 @@
 """Run on the server host to update Discord embeds.
 
 Usage: python3 vm-update-embeds.py
-Reads DISCORD_TOKEN from /opt/oathbreakers-bot/.env
+Reads DISCORD_TOKEN from /opt/oath-forsaken-bot/.env
 """
 import json, os, urllib.request, time
 
-ENV_PATH = '/opt/oathbreakers-bot/.env'
+ENV_PATH = '/opt/oath-forsaken-bot/.env'
 RULES_CHANNEL = '1558393177726259241'
 
 UPDATES = [

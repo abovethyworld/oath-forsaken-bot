@@ -1,9 +1,9 @@
 #!/bin/bash
-# OathBreakers bot — VPS setup script.
+# Oath Forsaken bot — VPS setup script.
 # Run as root on a fresh Ubuntu 22.04/24.04 machine.
 set -e
 
-APP_DIR=/opt/oathbreakers-bot
+APP_DIR=/opt/oath-forsaken-bot
 
 echo "==> Installing Docker..."
 apt-get update
@@ -23,13 +23,13 @@ echo "     echo <PAT> | docker login ghcr.io -u <github-username> --password-std
 echo "2. Create $APP_DIR/.env (plain KEY=value lines, no quotes):"
 echo "     printf 'DISCORD_TOKEN=<paste-token>\nCLIENT_ID=1558391167413129216\n' > $APP_DIR/.env"
 echo "3. From your own computer, upload the service file:"
-echo "     scp deploy/oathbreakers-bot.service <user>@<vps-ip>:/tmp/"
+echo "     scp deploy/oath-forsaken-bot.service <user>@<vps-ip>:/tmp/"
 echo "   Then on this machine:"
-echo "     cp /tmp/oathbreakers-bot.service /etc/systemd/system/"
+echo "     cp /tmp/oath-forsaken-bot.service /etc/systemd/system/"
 echo "     systemctl daemon-reload"
-echo "     systemctl enable --now oathbreakers-bot"
+echo "     systemctl enable --now oath-forsaken-bot"
 echo "4. Check it's alive:"
-echo "     systemctl status oathbreakers-bot"
-echo "     journalctl -u oathbreakers-bot -f"
+echo "     systemctl status oath-forsaken-bot"
+echo "     journalctl -u oath-forsaken-bot -f"
 echo ""
-echo "To deploy a new version after GitHub Actions finishes: systemctl restart oathbreakers-bot"
+echo "To deploy a new version after GitHub Actions finishes: systemctl restart oath-forsaken-bot"
