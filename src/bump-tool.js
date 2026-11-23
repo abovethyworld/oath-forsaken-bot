@@ -37,8 +37,8 @@ function settings() {
 function loadState() {
   try {
     let parsed = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    // Early builds double-encoded the file; unwrap if it happens.
-    if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+    // Early builds re-encoded the file on every save; unwrap fully.
+    while (typeof parsed === 'string') parsed = JSON.parse(parsed);
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
