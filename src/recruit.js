@@ -131,6 +131,7 @@ function linkStateOf(check) {
 }
 
 function linkStateFieldText(linkState, droppedCount) {
+  if (linkState === 'failsafe') return 'Fail safe: name not on Wise Old Man after two tries - let through unchecked';
   if (linkState === 'unchecked') return 'Unchecked: Wise Old Man unreachable at submit';
   if (linkState === 'partial') return `Partial: ${droppedCount} name(s) dropped at check`;
   return 'Links on approval';
@@ -209,7 +210,7 @@ function guestKindPayload() {
 // Anything else is the up-front pick (null for "Not sure"), or null
 // when no pick was staged (a panel posted before this flow shipped).
 function recordBadgeFor(p) {
-  if (p.linkState === 'unchecked') return null;
+  if (p.linkState === 'unchecked' || p.linkState === 'failsafe') return null;
   if (p.type === 'main') return 'main';
   return p.badgePicked ? p.badge ?? null : null;
 }
@@ -383,6 +384,9 @@ async function handleModalSubmit(interaction) {
   });
   const pending = getPending(interaction.user.id);
   if (!check.found.length) {
+    pending.rsnFailCount = (pending.rsnFailCount || 0) + 1;
+    setPending(interaction.user.id, pending);
+    if (pending.rsnFailCount >= 2) return letThroughFailsafe(interaction, pending);
     await interaction.editReply(notFoundPayload(answers.rsn, type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
@@ -426,6 +430,9 @@ async function handleFixModalSubmit(interaction) {
   p.linkState = linkStateOf(check);
   setPending(interaction.user.id, p);
   if (!check.found.length) {
+    p.rsnFailCount = (p.rsnFailCount || 0) + 1;
+    setPending(interaction.user.id, p);
+    if (p.rsnFailCount >= 2) return letThroughFailsafe(interaction, p);
     await interaction.editReply(notFoundPayload(newRsn, p.type, check.dropped)).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     return;
   }
@@ -436,7 +443,9 @@ async function handleFixModalSubmit(interaction) {
 }
 
 // Every checked name failed: the application stops here. The Fix name
-// button opens the RSN-only modal; the rest of the form is kept.
+// button opens the RSN-only modal; the rest of the form is kept. This
+// stop only shows on the first failed check - the second one trips
+// the fail safe (letThroughFailsafe) instead of looping.
 function notFoundPayload(rawTyped, type, dropped) {
   const allInvalid = dropped.length > 0 && dropped.every((d) => d.reason === 'invalid');
   const typed = String(rawTyped || '').trim();
@@ -504,6 +513,35 @@ async function handleConfirm(interaction) {
   p.record = record;
   store.setApplicationAnswers(interaction.guildId, interaction.user.id, record);
   pendingApps.delete(interaction.user.id);
+  return finalizeApplication(interaction, p);
+}
+
+// The fail safe (the agreed design): when the name check fails for the
+// second time, the application goes through anyway instead of
+// stopping at the Fix name screen again. The names ride as typed,
+// unverified, with no badge; approval retries the lookup per name,
+// and the owner is pinged in the application thread (finalize).
+async function letThroughFailsafe(interaction, p) {
+  const typed = parseRsnList(p.answers.rsn);
+  p.found = typed.map((name) => ({ typed: name, canonical: name, verified: false }));
+  p.dropped = [];
+  p.linkState = 'failsafe';
+  const record = {
+    ...p.answers,
+    rsn: typed.join(', '),
+    prelink: {
+      names: p.found.map((f) => ({ name: f.canonical, badge: null })),
+      linkState: 'failsafe',
+      dropped: [],
+    },
+  };
+  p.record = record;
+  store.setApplicationAnswers(interaction.guildId, interaction.user.id, record);
+  pendingApps.delete(interaction.user.id);
+  await interaction.editReply({
+    content: `That name still is not on Wise Old Man, so your application has gone to staff with the name as typed: **${typed.join(', ')}**. They will sort the name with you.`,
+    components: [],
+  }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
   return finalizeApplication(interaction, p);
 }
 
@@ -619,6 +657,17 @@ async function finalizeApplication(interaction, p) {
       content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
       allowedMentions: { users: [interaction.user.id], roles: [config.tickets.staffRoleIds[0]] },
     }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    // Fail safe: the owner asked to be told personally when an
+    // application comes through on the fail safe, with the issue.
+    // His user ID lives in the FAILSAFE_PING_USER_ID env var, never
+    // in code or config (same pattern as the audit canary).
+    const failsafeUserId = process.env.FAILSAFE_PING_USER_ID;
+    if (p.linkState === 'failsafe' && failsafeUserId) {
+      await thread.send({
+        content: `<@${failsafeUserId}> Fail safe on this one: **${String(p.answers.rsn || '').slice(0, 100)}** is not on Wise Old Man after two tries, so the application came through unchecked. The name needs sorting with them.`,
+        allowedMentions: { users: [failsafeUserId] },
+      }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
+    }
     await interaction.update({ content: 'Application sent. Staff will review it.', components: [] }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Mark this application as submitted so it isn't reused
     store.setApplicationSubmitted(interaction.guildId, interaction.user.id);
@@ -744,7 +793,7 @@ async function runApprovalPrelink(client, target, appAnswers) {
   for (const item of pre.names) {
     const rsn = item.name;
     try {
-      if (pre.linkState === 'unchecked') {
+      if (pre.linkState === 'unchecked' || pre.linkState === 'failsafe') {
         const stats = await getStats(rsn).catch(() => null);
         if (!stats || stats.notFound) {
           fail(rsn, stats && stats.notFound ? 'not found on Wise Old Man' : 'Could not reach Wise Old Man');

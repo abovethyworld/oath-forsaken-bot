@@ -1063,6 +1063,10 @@ async function t(name, fn, needFile = true) {
     ok('prelink: not-found stop uses the approved line', nf.content === 'That name is not on Wise Old Man: **ghost name**\nCheck the spelling. Nothing has been sent to staff.', nf.content);
     ok('prelink: not-found stop carries the fix name button',
       JSON.stringify(nf.components.map((r) => r.toJSON())).includes('apply:fixname'));
+    ok('prelink: fail safe link state reads for staff',
+      R.linkStateFieldText('failsafe', 0) === 'Fail safe: name not on Wise Old Man after two tries - let through unchecked');
+    ok('prelink: fail safe stores no badge',
+      R.recordBadgeFor({ linkState: 'failsafe', type: 'iron', badgePicked: true, badge: 'ironman' }) === null);
     const cInv = await R.checkApplicationRsns(['bad!name'], stub);
     ok('prelink: shape-bad name drops as invalid', cInv.found.length === 0 && cInv.dropped[0].reason === 'invalid');
     const nfInv = R.notFoundPayload('bad!name', 'iron', cInv.dropped);
