@@ -33,6 +33,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { DateTime } = require('luxon');
 const config = require('./config');
 const { atomicWrite } = require('./store');
+const { isStaff } = require('./utils');
 
 const ZONE = 'America/New_York';
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bump-tool.json');
@@ -50,8 +51,9 @@ function loadState() {
     // Early builds re-encoded the file on every save; unwrap fully.
     while (typeof parsed === 'string') parsed = JSON.parse(parsed);
     return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return {};
+    throw err;
   }
 }
 
@@ -241,6 +243,11 @@ async function checkBumpTool(client) {
 // one, or the live one when the tap came from the panel), refreshes
 // the panel, and tells the tapper when the next bump is due.
 async function handleBumpButton(interaction) {
+  const pingUserId = process.env.BUMP_TOOL_PING_USER_ID;
+  if (!isStaff(interaction) && !(pingUserId && interaction.user.id === pingUserId)) {
+    await interaction.reply({ content: 'Only staff can log a bump.', ephemeral: true }).catch(() => {});
+    return;
+  }
   const state = loadState();
   state.lastBumpedAt = DateTime.now().setZone(ZONE).toISO();
   saveState(state);

@@ -3,13 +3,13 @@
 # Install deps on the build machine's native arch. Every dependency is pure JS (no native
 # addons), so the same node_modules works on amd64 and arm64, and nothing runs under QEMU
 # (Node segfaults under emulation in CI).
-FROM --platform=$BUILDPLATFORM node:22-alpine AS deps
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && mkdir data
 
 # Runtime image for the target arch. No RUN steps here, so cross-arch builds need no emulation.
-FROM node:22-alpine
+FROM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d73bde88481a
 WORKDIR /app
 ENV NODE_ENV=production
 

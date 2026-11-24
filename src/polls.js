@@ -85,6 +85,14 @@ async function createPoll(interaction) {
     await interaction.editReply({ content: 'Staff review channel is not set up. Tell staff.' });
     return;
   }
+  // One pending draft per user. Checked and saved with no await between, so
+  // two quick /poll runs cannot both slip through.
+  if (store.findPendingPolls(interaction.user.id).length) {
+    await interaction.editReply({
+      content: 'You already have a poll waiting for staff review. Wait for a decision before sending another.',
+    });
+    return;
+  }
   store.savePoll(poll);
   const review = new EmbedBuilder()
     .setTitle(`📊 ${poll.question}`)

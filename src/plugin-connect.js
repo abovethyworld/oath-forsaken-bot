@@ -34,8 +34,9 @@ const HELD_STATE_FILE = path.join(__dirname, '..', 'data', 'held-state.json');
 function loadCodes() {
   try {
     return JSON.parse(fs.readFileSync(CODES_FILE, 'utf8'));
-  } catch {
-    return {};
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return {};
+    throw err;
   }
 }
 

@@ -216,8 +216,8 @@ const KC_ACTIVITIES = {
 const KC_KEYS = { ...ACTIVITIES, ...KC_ACTIVITIES };
 
 function kcEntry(key) {
-  if (ACTIVITIES[key]) return { name: ACTIVITIES[key].name, cols: kcColumnsForTeam({ activity: key }) };
-  const extra = KC_ACTIVITIES[key];
+  if (Object.hasOwn(ACTIVITIES, key)) return { name: ACTIVITIES[key].name, cols: kcColumnsForTeam({ activity: key }) };
+  const extra = Object.hasOwn(KC_ACTIVITIES, key) ? KC_ACTIVITIES[key] : null;
   if (extra) return { name: extra.name, cols: extra.cols };
   return null;
 }
