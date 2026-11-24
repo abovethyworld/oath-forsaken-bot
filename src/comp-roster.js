@@ -1,12 +1,12 @@
-// Competition roster: the names staff trim from when they build a
+// Competition roster: the names staff use when they build a
 // competition on Wise Old Man.
-// Ruling (Nov 20, 2026): the clan is iron-first. Mains are full members
-// and stay in the Wise Old Man group (the website and DropTracker need
-// them there), but competitions and bingos are iron-only, so each
-// competition's player list is trimmed by hand. This module keeps the
-// trimming list current: it rebuilds data/comp-roster.csv and
-// data/comp-names.txt on every approval, on staff standing changes,
-// once a day, and on demand through /comp-roster.
+// Ruling (Nov 24, 2026): competitions are full open. Mains are full
+// members and stay in the Wise Old Man group (the website and
+// DropTracker need them there), and every name in the group goes on
+// a competition's player list. This module keeps the list current:
+// it rebuilds data/comp-roster.csv and data/comp-names.txt on every
+// approval, on staff standing changes, once a day, and on demand
+// through /comp-roster.
 // Types come from Wise Old Man per RSN, never from the application:
 // one member can hold both iron and main accounts.
 const fs = require('fs');
@@ -50,7 +50,7 @@ const BADGE_INFO = {
 };
 
 // Wise Old Man account type -> roster label and whether the account
-// may be entered in a competition.
+// is in the iron family.
 const TYPE_INFO = {
   regular: { label: 'Main', iron: false },
   ironman: { label: 'Ironman', iron: true },
@@ -62,7 +62,7 @@ const TYPE_INFO = {
   fresh_start_group_ironman: { label: 'Group ironman (fresh start)', iron: true },
 };
 
-const LIST_ORDER = ['Comp keep list', 'Untick from comps', 'Check first', 'Not in the WOM group'];
+const LIST_ORDER = ['Comp list', 'Check first', 'Not in the WOM group'];
 
 // OSRS names compare loosely: case, underscores, and spacing vary
 // between sources. Same rule as src/membership.js.
@@ -133,8 +133,7 @@ function buildRows(input) {
     let list;
     if (!inGroup) list = 'Not in the WOM group';
     else if (!info) list = 'Check first';
-    else if (info.iron) list = 'Comp keep list';
-    else list = 'Untick from comps';
+    else list = 'Comp list';
     const notes = [];
     if (info && info.override) notes.push('Type marked by staff: Wise Old Man cannot see group ironmen');
     if (info && info.badge) notes.push('Type from their application pick');
@@ -170,7 +169,7 @@ function toCsv(rows) {
 }
 
 function toNames(rows) {
-  return rows.filter((r) => r.list === 'Comp keep list').map((r) => r.rsn).join('\n') + '\n';
+  return rows.filter((r) => r.list === 'Comp list').map((r) => r.rsn).join('\n') + '\n';
 }
 
 // Temp file + rename, for the plain-text outputs (store.atomicWrite is
@@ -309,10 +308,9 @@ async function compRosterCommand(interaction) {
   for (const file of [CSV_FILE, NAMES_FILE]) {
     if (fs.existsSync(file)) files.push(new AttachmentBuilder(file));
   }
-  const keep = counts['Comp keep list'] || 0;
-  const untick = counts['Untick from comps'] || 0;
+  const count = counts['Comp list'] || 0;
   await interaction.editReply({
-    content: `Comp roster rebuilt. ${keep} iron name(s) on the keep list, ${untick} main name(s) to untick. The spreadsheet has every name; the text file is the keep list on its own.`,
+    content: `Comp roster rebuilt. ${count} name(s) on the comp list. The spreadsheet has every name; the text file is the comp list on its own.`,
     files,
   });
 }
