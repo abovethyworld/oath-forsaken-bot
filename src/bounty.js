@@ -62,8 +62,9 @@ loadPool();
 function loadState() {
   try {
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return { bounties: {}, claims: {} };
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { bounties: {}, claims: {} };
+    throw err;
   }
 }
 
@@ -533,9 +534,8 @@ async function handleClaim(interaction, bountyId) {
         reason: `Bounty proof by ${interaction.user.tag}`,
       });
     } catch {
-      thread = await contactChannel.threads
-        .create({ name, autoArchiveDuration: CLAIM_ARCHIVE_MIN })
-        .catch(() => null);
+      // No public fallback: proof must never land in a thread others can see.
+      thread = null;
     }
     if (!thread) {
       await interaction.editReply({ content: 'Could not open a proof thread. Tell staff.' }).catch(() => {});

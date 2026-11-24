@@ -68,7 +68,12 @@ const client = new Client({
     GatewayIntentBits.GuildMessages, // reading messages for the !kc / !clog commands
     GatewayIntentBits.MessageContent, // !-commands (portal toggle enabled 2026-10-19)
   ],
+  // Default: only user mentions resolve. Sends that pass their own allowedMentions override this.
+  allowedMentions: { parse: ['users'] },
 });
+
+// Log client errors instead of letting EventEmitter throw into uncaughtException.
+client.on(Events.Error, (e) => console.error('[client]', e));
 
 // Freeze watchdog: if the gateway has been logged in but not ready for 10
 // continuous minutes, exit so systemd restarts the bot. The first ready gets
@@ -344,14 +349,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // same note the command cooldown gives.
       const btnKey = `${interaction.user.id}:button`;
       const btnNow = Date.now();
-      if (!interaction.customId.startsWith('team:') && btnNow - (cooldowns.get(btnKey) || 0) < 2000) {
+      // Wizard steps are exempt; team join/leave stay under the standard cooldown.
+      const cooldownExempt = interaction.customId.startsWith('team:')
+        && !interaction.customId.startsWith('team:join:')
+        && !interaction.customId.startsWith('team:leave:');
+      if (!cooldownExempt && btnNow - (cooldowns.get(btnKey) || 0) < 2000) {
         await interaction.reply({
           content: 'Slow down a moment.',
           ephemeral: true,
         }).catch(() => {});
         return;
       }
-      cooldowns.set(btnKey, btnNow);
+      if (!cooldownExempt) cooldowns.set(btnKey, btnNow);
       await routeButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
       if (interaction.customId.startsWith('lbpick:')) {

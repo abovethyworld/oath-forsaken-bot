@@ -54,11 +54,9 @@ function loadJson(file) {
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (err) {
     if (err.code === 'ENOENT') return {};
-    console.error(`store: failed to parse ${file} (${err.message}); moving it aside and starting empty`);
-    try {
-      fs.renameSync(file, `${file}.corrupt-${Date.now()}`);
-    } catch {}
-    return {};
+    // Any other read/parse error: throw so the mutation aborts and the file on disk is untouched.
+    console.error(`store: failed to read ${file} (${err.message}); leaving it untouched`);
+    throw err;
   }
 }
 
@@ -350,6 +348,12 @@ module.exports = {
   findOpenPolls(authorId, channelId) {
     return Object.values(loadJson(POLLS_FILE)).filter(
       (p) => !p.closed && p.authorId === authorId && p.channelId === channelId
+    );
+  },
+  // Poll drafts still waiting on staff review for one author (one allowed at a time)
+  findPendingPolls(authorId) {
+    return Object.values(loadJson(POLLS_FILE)).filter(
+      (p) => p.pending && !p.closed && p.authorId === authorId
     );
   },
   closePoll(pollId) {

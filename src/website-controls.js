@@ -36,8 +36,9 @@ const STATE_FILE = path.join(__dirname, '..', 'data', 'website-controls-panel.js
 function loadState() {
   try {
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) || {};
-  } catch {
-    return {};
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return {};
+    throw err;
   }
 }
 

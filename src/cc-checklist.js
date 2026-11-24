@@ -386,6 +386,13 @@ async function handleCcButton(interaction) {
 }
 
 async function setupCommand(interaction) {
+  const canUse =
+    isStaff(interaction) ||
+    (CC_UPDATER_ROLE_ID && interaction.member?.roles?.cache?.has(CC_UPDATER_ROLE_ID));
+  if (!canUse) {
+    await interaction.reply({ content: 'Only staff and CC Updaters can use the checklist.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   await refreshChecklist(interaction.guild);
   await interaction.editReply('CC checklist posted/refreshed in #staff-chat.');

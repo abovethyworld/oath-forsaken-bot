@@ -12,7 +12,7 @@ const {
 } = require('discord.js');
 const crypto = require('node:crypto');
 const store = require('./store');
-const { ZAMORAK_RED, clampDesc } = require('./utils');
+const { ZAMORAK_RED, clampDesc, isStaff } = require('./utils');
 
 // Roster roles members can sign up for (OSRS group content)
 const ROSTER_ROLES = ['Tank', 'DPS', 'Learner'];
@@ -121,6 +121,10 @@ async function handleRosterButton(interaction) {
 }
 
 async function rosterCommand(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
   const eventName = interaction.options.getString('event');
   // Embed title limit is 256 chars — "⛧ {name} — Roster" prefix takes ~12
   if (eventName.length > 200) {

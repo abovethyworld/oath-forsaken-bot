@@ -5,11 +5,20 @@ set -u
 
 PIN_FILE=/opt/oath-forsaken-bot/image-pin
 PREV_FILE=/opt/oath-forsaken-bot/image-pin.prev
+BLOCKED_FILE=/opt/oath-forsaken-bot/image-blocked
+LOCK_FILE=/run/bot-deploy.lock
 SERVICE=oath-forsaken-bot
 CONTAINER=oath-forsaken-bot
 TIMEOUT=120
 
 log() { echo "bot-rollback: $*"; }
+
+# Share the deploy lock so a rollback cannot interleave with a timer deploy.
+exec 9>"$LOCK_FILE"
+if ! flock -w 300 9; then
+  log "could not get $LOCK_FILE within 300s; another deploy is running"
+  exit 1
+fi
 
 health_check() {
   local since=$1 waited=0
@@ -32,6 +41,22 @@ fi
 prev_ref=$(head -n 1 "$PREV_FILE" | tr -d '[:space:]')
 current_ref=""
 [ -s "$PIN_FILE" ] && current_ref=$(head -n 1 "$PIN_FILE" | tr -d '[:space:]')
+
+# Record the rejected digest so the autodeploy timer does not redeploy it.
+if [ -n "$current_ref" ]; then
+  rejected_digest=${current_ref#*@}
+  if ! grep -qxF "$rejected_digest" "$BLOCKED_FILE" 2>/dev/null; then
+    echo "$rejected_digest" >> "$BLOCKED_FILE"
+  fi
+  log "blocked $rejected_digest in $BLOCKED_FILE"
+fi
+
+# Deliberately pinning a digest unblocks it (running this script twice swaps back).
+prev_digest=${prev_ref#*@}
+if [ -s "$BLOCKED_FILE" ] && grep -qxF "$prev_digest" "$BLOCKED_FILE"; then
+  grep -vxF "$prev_digest" "$BLOCKED_FILE" > "$BLOCKED_FILE.tmp" || true
+  mv "$BLOCKED_FILE.tmp" "$BLOCKED_FILE"
+fi
 
 echo "$prev_ref" > "$PIN_FILE"
 if [ -n "$current_ref" ]; then

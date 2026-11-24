@@ -304,8 +304,10 @@ function activityRoleId(activityKey) {
 function loadState() {
   try {
     return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-  } catch {
-    return { teams: {} };
+  } catch (err) {
+    // Empty state only on first run. Anything else throws so a mutation aborts and the file stays intact.
+    if (err && err.code === 'ENOENT') return { teams: {} };
+    throw err;
   }
 }
 
@@ -337,8 +339,9 @@ const RSN_FILE = path.join(__dirname, '..', 'data', 'rsn-links.json');
 function loadRsnLinks() {
   try {
     return JSON.parse(fs.readFileSync(RSN_FILE, 'utf8'));
-  } catch {
-    return {};
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return {};
+    throw err;
   }
 }
 
@@ -3529,7 +3532,48 @@ async function handlePreChoice(interaction, activityKey, preId) {
 
 // ─── Listing interactions ───────────────────────────────────────────
 
-async function refreshListing(client, team) {
+// Coalesce renders per message: one in flight, at most one queued behind it.
+// Callers that arrive while one is already queued share that queued render,
+// which uses the newest team snapshot passed in.
+const listingRefresh = new Map(); // messageId -> { queued: { client, team, promise } | null }
+
+function refreshListing(client, team) {
+  const key = team.messageId;
+  let st = listingRefresh.get(key);
+  if (!st) {
+    st = { queued: null };
+    listingRefresh.set(key, st);
+    return runListingRefresh(key, st, client, team);
+  }
+  if (st.queued) {
+    st.queued.client = client;
+    st.queued.team = team;
+    return st.queued.promise;
+  }
+  const q = { client, team, promise: null };
+  q.promise = new Promise((resolve) => { q.resolve = resolve; });
+  st.queued = q;
+  return q.promise;
+}
+
+async function runListingRefresh(key, st, client, team) {
+  let result = null;
+  try {
+    result = await renderListing(client, team);
+  } catch (err) {
+    console.warn('Team refresh failed:', err.message);
+  }
+  const q = st.queued;
+  if (q) {
+    st.queued = null;
+    runListingRefresh(key, st, q.client, q.team).then(q.resolve, () => q.resolve(null));
+  } else {
+    listingRefresh.delete(key);
+  }
+  return result;
+}
+
+async function renderListing(client, team) {
   const channel = await client.channels.fetch(team.channelId).catch(() => null);
   const msg = channel && channel.isTextBased() ? await channel.messages.fetch(team.messageId).catch(() => null) : null;
   if (!msg) {
@@ -3582,7 +3626,10 @@ async function sendFillPing(client, team) {
     if (team.world) whereParts.push(`World ${team.world}`);
     if (team.hub) whereParts.push(`hub ${team.hub}`);
     const where = whereParts.length ? `${whereParts.join(', ')}. ` : '';
-    const msg = await channel.send(`${mentions} Team's full. ${where}`.trimEnd()).catch((err) => {
+    const msg = await channel.send({
+      content: `${mentions} Team's full. ${where}`.trimEnd(),
+      allowedMentions: { users: Object.keys(team.members) },
+    }).catch((err) => {
       console.warn('Fill ping send failed:', err.message);
       return null;
     });
@@ -3892,6 +3939,10 @@ async function sweepExpiredTeams(client) {
 // ─── Admin: post the panel ──────────────────────────────────────────
 
 async function postTeamPanel(interaction) {
+  if (!isStaff(interaction)) {
+    await interaction.reply({ content: 'Staff only.', ephemeral: true });
+    return;
+  }
   await interaction.deferReply({ ephemeral: true });
   const channelId = teamsChannelId();
   if (!channelId) {

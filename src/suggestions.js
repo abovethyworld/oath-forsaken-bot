@@ -82,6 +82,15 @@ async function handleSuggestModal(interaction) {
     return;
   }
 
+  // Recheck the cooldown here: the check at the button can be bypassed by
+  // opening several modals before the first one is submitted.
+  if (isOnCooldown(interaction.user.id)) {
+    await interaction
+      .reply({ content: 'You suggested something recently. Try again in a few minutes.', ephemeral: true })
+      .catch(() => {});
+    return;
+  }
+
   const channelId = suggestionsChannelId();
   if (!channelId) {
     await interaction

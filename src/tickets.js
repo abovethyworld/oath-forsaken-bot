@@ -76,7 +76,25 @@ async function setupTickets(interaction) {
   await interaction.editReply(`Ticket panel posted/refreshed in ${channel}.`);
 }
 
+// In-memory claim per user+guild while a thread is being created, so two
+// taps that land before store.setTicket cannot both open a ticket.
+const ticketClaims = new Set();
+
 async function createTicket(interaction, ticketType) {
+  const claimKey = `${interaction.guildId}:${interaction.user.id}`;
+  if (ticketClaims.has(claimKey)) {
+    await interaction.reply({ content: 'Your ticket is already being opened.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  ticketClaims.add(claimKey);
+  try {
+    await createTicketInner(interaction, ticketType);
+  } finally {
+    ticketClaims.delete(claimKey);
+  }
+}
+
+async function createTicketInner(interaction, ticketType) {
   const t = config.tickets;
   const theme = TICKET_TYPES[ticketType] || TICKET_TYPES.inquiry;
 

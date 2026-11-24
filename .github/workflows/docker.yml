@@ -1,46 +1,132 @@
 name: Build and push image
 
+# One workflow, three jobs: guards and smoke must both pass before the docker
+# job can build and push an image. The guards job keeps its old reach (every
+# push and pull request); smoke and docker run only on pushes to main and
+# manual dispatch, as before.
 on:
   push:
-    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
-
-concurrency:
-  group: docker-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   IMAGE: ghcr.io/abovethyworld/oath-forsaken-bot
 
 jobs:
-  build:
+  guards:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Write blocklist outside the checkout
+        env:
+          NAME_BLOCKLIST: ${{ secrets.NAME_BLOCKLIST }}
+        run: |
+          if [ -n "$NAME_BLOCKLIST" ]; then
+            printf '%s\n' "$NAME_BLOCKLIST" > "$RUNNER_TEMP/name-blocklist.txt"
+            echo "BLOCKLIST_FILE=$RUNNER_TEMP/name-blocklist.txt" >> "$GITHUB_ENV"
+          else
+            echo "::warning::NAME_BLOCKLIST secret not set; name scan will be skipped (degraded mode)"
+          fi
+
+      - name: Run privacy guards
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -eu
+          zeros=0000000000000000000000000000000000000000
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            range="$PR_BASE_SHA...$PR_HEAD_SHA"
+          else
+            before=$PUSH_BEFORE
+            if [ "$before" = "$zeros" ] || ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+              # New branch or rewritten history: compare against the default branch if possible.
+              if base=$(git merge-base "origin/$DEFAULT_BRANCH" "$PUSH_AFTER" 2>/dev/null); then
+                before=$base
+              else
+                before=$(git hash-object -t tree /dev/null)
+              fi
+            fi
+            range="$before..$PUSH_AFTER"
+          fi
+          echo "Scanning $range"
+          bash deploy/ci-guard.sh --range "$range"
+
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # The suite derives its test accounts from the files in
+      # data/. Production data is never committed, so CI stages
+      # the generated fake fixture set first.
+      - name: Stage fixture data
+        run: node tools/smoke-fixtures.js
+
+      # The suite renders dozens of cards in seconds. Against the
+      # production renderer that burst trips its rate limit and the
+      # run fails on cards that are fine in normal use, so CI renders
+      # against a local stub instead.
+      - name: Start stub card service
+        run: |
+          node tools/card-stub.js &
+          echo "CARD_API_URL=http://127.0.0.1:8799" >> "$GITHUB_ENV"
+
+      - name: Run the smoke suite
+        run: node tools/smoke-cards.js
+
+  docker:
+    needs: [guards, smoke]
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: docker-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       # cloud VPS is ARM, so build both architectures. The Dockerfile installs deps
       # natively and has no RUN steps in the per-arch stage, so no QEMU is needed.
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.IMAGE }}
           tags: |
             type=raw,value=latest
             type=sha
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
