@@ -30,13 +30,17 @@ function entryRsns(entry) {
 }
 
 // The set of Discord ids that are clan members, from link records and
-// a WOM group name list. Pure: callers pass data, tests pass fixtures.
+// a WOM group name list. Only plugin-verified RSNs count: an unverified
+// link is just a typed name, and counting it would let anyone accrue
+// membership and tenure off a clanmate's name. Pure: callers pass
+// data, tests pass fixtures.
 function computeMemberIds(links, groupNames) {
   const group = new Set((groupNames || []).map(normName).filter(Boolean));
   const out = new Set();
   if (!group.size) return out;
   for (const [userId, entry] of Object.entries(links || {})) {
-    if (entryRsns(entry).some((rsn) => group.has(normName(rsn)))) out.add(userId);
+    const verified = Array.isArray(entry?.verified) ? entry.verified : [];
+    if (verified.some((rsn) => typeof rsn === 'string' && rsn && group.has(normName(rsn)))) out.add(userId);
   }
   return out;
 }

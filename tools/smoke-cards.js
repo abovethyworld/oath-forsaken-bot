@@ -1280,11 +1280,11 @@ async function t(name, fn, needFile = true) {
         { rsn: 'Fake Asc' }, { rsn: 'Fake First' },
       ]);
       writeFixture('rsn-links.json', {
-        [U.womMember]: { rsns: ['Fake Wom'] },
-        [U.memberHigh]: { rsns: ['Fake High'] },
-        [U.memberLow]: { rsns: ['Fake Low'] },
+        [U.womMember]: { rsns: ['Fake Wom'], verified: ['Fake Wom'] },
+        [U.memberHigh]: { rsns: ['Fake High'], verified: ['Fake High'] },
+        [U.memberLow]: { rsns: ['Fake Low'], verified: ['Fake Low'] },
         [U.memberTop]: { rsns: ['Fake Top'] },
-        [U.memberFirst]: { rsns: ['Fake First'] },
+        [U.memberFirst]: { rsns: ['Fake First'], verified: ['Fake First'] },
       });
       writeFixture('seniority-holds.json', {});
       writeFixture('membership.json', {});
