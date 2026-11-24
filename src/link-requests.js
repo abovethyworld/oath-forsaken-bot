@@ -18,7 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { addRsn, linkRsnQuiet, verifiedOwnerOf } = require('./teams');
+const { addRsn, linkRsnQuiet, verifiedOwnerOf, otherLinkHolderOf } = require('./teams');
 
 const REQ_DIR = path.join(__dirname, '..', 'data', 'plugin-sync', 'link-requests');
 const RSN_RE = /^[A-Za-z0-9 ]{1,12}$/;
@@ -36,6 +36,7 @@ function mergeSiteLinkRequests(deps = {}) {
   const applyAdd = deps.addRsn || addRsn;
   const applyQuiet = deps.linkRsnQuiet || linkRsnQuiet;
   const ownerOf = deps.verifiedOwnerOf || verifiedOwnerOf;
+  const holderOf = deps.otherLinkHolderOf || otherLinkHolderOf;
   let names;
   try {
     names = fs.readdirSync(dir);
@@ -63,6 +64,10 @@ function mergeSiteLinkRequests(deps = {}) {
     const owner = ownerOf(rsn);
     if (owner && owner !== did) {
       drop(file, name, 'RSN is verified to another member');
+      continue;
+    }
+    if (holderOf(rsn, did)) {
+      drop(file, name, 'RSN is already linked to another member');
       continue;
     }
     try {

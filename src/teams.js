@@ -446,10 +446,29 @@ function verifiedOwnerOf(rsn) {
   return null;
 }
 
+// Any Discord user other than `userId` who has this RSN on their link
+// list, verified or not (security fix H1). Returns the id, or null.
+function otherLinkHolderOf(rsn, userId) {
+  const target = String(rsn).toLowerCase();
+  for (const [id, raw] of Object.entries(loadRsnLinks())) {
+    if (id === userId) continue;
+    const entry = normalizeRsnEntry(raw);
+    if (entry && entry.rsns.some((r) => r.toLowerCase() === target)) return id;
+  }
+  return null;
+}
+
 // Record an RSN as verified for a member (plugin synced it under their
 // code). Quiet-adds the link without moving the active name. Returns
-// true when anything changed.
+// true when anything changed. A name already on ANOTHER member's list
+// is never stamped verified here (security fix H2): the conflict is
+// logged and left for staff.
 function markVerified(userId, rsn, womId) {
+  const rival = otherLinkHolderOf(rsn, userId);
+  if (rival) {
+    console.error(`markVerified: skipping ${rsn} for ${userId}: already on ${rival}'s link list`);
+    return false;
+  }
   return mutateRsnLinks((links) => {
     const entry = normalizeRsnEntry(links[userId]) || { rsns: [], active: null, verified: [], womIds: {} };
     let changed = false;
@@ -4004,6 +4023,7 @@ module.exports = {
   addRsn,
   linkRsnQuiet,
   verifiedOwnerOf,
+  otherLinkHolderOf,
   markVerified,
   removeRsn,
   renameLinkedRsn,

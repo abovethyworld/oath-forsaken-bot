@@ -34,7 +34,7 @@ const { handleModalSubmit, youngAccountFlag } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
 const { sweepExpiredBounties } = require('./bounty');
 const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTeams, sweepPendingButtons } = require('./teams');
-const { reconcileVerifiedLinks, surfaceHeldPosts } = require('./plugin-connect');
+const { reconcileVerifiedLinks, surfaceHeldPosts, publishRolesSnapshot, revokeCodeFor } = require('./plugin-connect');
 const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
 const { refreshCompRoster } = require('./comp-roster');
@@ -188,6 +188,9 @@ client.once(Events.ClientReady, async (c) => {
       // bot was down (the minute loop below takes it from here).
       mergeSiteLinkRequests();
 
+      // Publish the guild roles snapshot the site API reads.
+      await publishRolesSnapshot(client);
+
       // Seed recorded membership standing once (WOM members + rank
       // holders), before the first sync reads the records.
       await seedMembership(client);
@@ -295,6 +298,7 @@ client.once(Events.ClientReady, async (c) => {
     if (lag > 3000) console.error(`[watchdog] Event loop lagged ${(lag / 1000).toFixed(1)}s`);
     lastTick = now;
   }, 30 * 1000);
+  setInterval(() => run('roles-snapshot', () => publishRolesSnapshot(client), 'Roles snapshot publish failed'), 5 * 60 * 1000);
   setInterval(() => run('teams-sweep', () => sweepExpiredTeams(client)), 3600 * 1000);
   setInterval(() => run('links-reconcile', () => reconcileVerifiedLinks().then(() => surfaceHeldPosts(client))), 3600 * 1000);
   setInterval(() => run('rename-watch', () => watchRenames(client), 'Rename watch failed'), 24 * 3600 * 1000);
@@ -459,6 +463,18 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
+// Republish the roles snapshot shortly after membership or role changes
+// (debounced; the 5-minute loop is the backstop).
+let snapshotTimer = null;
+function scheduleSnapshot() {
+  if (snapshotTimer) return;
+  snapshotTimer = setTimeout(() => {
+    snapshotTimer = null;
+    publishRolesSnapshot(client).catch((e) => console.error('Roles snapshot publish failed:', e.message));
+  }, 15 * 1000);
+  snapshotTimer.unref();
+}
+
 // Invalidate the member cache when roles change so syncs use fresh data.
 // Only on role changes — nicknames/avatar updates fire this event constantly
 // and would thrash the cache for no benefit.
@@ -468,6 +484,7 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
   if (oldRoles.size === newRoles.size && oldRoles.every((r) => newRoles.has(r.id))) return;
   const { invalidateCache } = require('./guild-cache');
   invalidateCache();
+  scheduleSnapshot();
   // Not in the Clan Yet watch: once any standing role lands (for
   // example a staff hand-grant), the waiting marker comes off.
   const { handleNotInClanUpdate } = require('./not-in-clan');
@@ -478,6 +495,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
   // Invalidate cached member list so syncs see the new member immediately
   const { invalidateCache } = require('./guild-cache');
   invalidateCache();
+  scheduleSnapshot();
   recordJoin(member.id, member.joinedAt);
   // Everyone-ping role: assign on join so announcements reach all members
   try {
@@ -511,6 +529,17 @@ client.on(Events.GuildMemberAdd, async (member) => {
     }
   } catch (e) {
     console.error('Under-30 join flag failed:', e.message);
+  }
+});
+
+// A member who leaves loses their plugin connect code.
+client.on(Events.GuildMemberRemove, (member) => {
+  try {
+    revokeCodeFor(member.id);
+    require('./guild-cache').invalidateCache();
+    scheduleSnapshot();
+  } catch (e) {
+    console.error('[leave] connect code revoke failed:', e.message);
   }
 });
 

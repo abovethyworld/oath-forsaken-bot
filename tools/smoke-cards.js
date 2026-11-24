@@ -1536,6 +1536,74 @@ async function t(name, fn, needFile = true) {
       !/^\s*entry\.active = rsn;/m.test(quietBody) && quietBody.includes('if (!entry.active) entry.active = rsn;'), quietBody.slice(0, 200));
     ok('stafflink: addRsn moves the active name', /^\s*entry\.active = rsn;/m.test(addBody));
     ok('stafflink: merge routes quiet in source', lrSrc.includes('req.quiet === true') && lrSrc.includes('applyQuiet(did, rsn)'));
+
+    // Security fix H1/H2 (Nov 24, 2026): the merge drops a request for a
+    // name linked (verified or not) to another member, and markVerified
+    // never stamps a name already on another member's list.
+    {
+      const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'smoke-linkreq2-'));
+      const calls2 = [];
+      const holders = { 'Held Name': '222222222', 'Own Name': '123456789' };
+      const deps2 = {
+        dir: dir2,
+        addRsn: (did, rsn) => calls2.push(['add', did, rsn]),
+        linkRsnQuiet: (did, rsn) => calls2.push(['quiet', did, rsn]),
+        verifiedOwnerOf: () => null,
+        otherLinkHolderOf: (rsn, did) => (holders[rsn] && holders[rsn] !== did ? holders[rsn] : null),
+      };
+      fs.writeFileSync(path.join(dir2, 'a.json'), JSON.stringify({ discordId: '123456789', rsn: 'Held Name' }));
+      fs.writeFileSync(path.join(dir2, 'b.json'), JSON.stringify({ discordId: '123456789', rsn: 'Held Name', quiet: true }));
+      fs.writeFileSync(path.join(dir2, 'c.json'), JSON.stringify({ discordId: '123456789', rsn: 'Own Name' }));
+      fs.writeFileSync(path.join(dir2, 'd.json'), JSON.stringify({ discordId: '123456789', rsn: 'Free Name' }));
+      const errs = console.error; console.error = () => {};
+      let merged2;
+      try { merged2 = LR.mergeSiteLinkRequests(deps2); } finally { console.error = errs; }
+      ok('h1: any-owner merge drops unverified-held names, keeps own and free',
+        merged2 === 2 && calls2.length === 2 && calls2[0][2] === 'Own Name' && calls2[1][2] === 'Free Name' && fs.readdirSync(dir2).length === 0,
+        JSON.stringify(calls2));
+      fs.rmSync(dir2, { recursive: true, force: true });
+
+      const tFile = path.join(DATA, 'rsn-links.json');
+      const tSaved = fs.existsSync(tFile) ? fs.readFileSync(tFile) : null;
+      const errs2 = console.error; console.error = () => {};
+      try {
+        fs.writeFileSync(tFile, JSON.stringify({
+          '990000000000000201': { rsns: ['Squat Name'] },
+          '990000000000000202': { rsns: ['Mine Name'] },
+        }));
+        ok('h2: otherLinkHolderOf finds an unverified holder',
+          T.otherLinkHolderOf('squat name', '990000000000000202') === '990000000000000201'
+          && T.otherLinkHolderOf('Squat Name', '990000000000000201') === null);
+        ok('h2: markVerified refuses a name on another member\'s list',
+          T.markVerified('990000000000000202', 'Squat Name', 5) === false
+          && !T.loadRsnLinks()['990000000000000202'].rsns.includes('Squat Name')
+          && !(T.loadRsnLinks()['990000000000000201'].verified || []).includes('Squat Name'));
+        ok('h2: markVerified still stamps a free name and the holder\'s own name',
+          T.markVerified('990000000000000202', 'Free Name', 6) === true
+          && T.markVerified('990000000000000202', 'Mine Name', 7) === true
+          && T.loadRsnLinks()['990000000000000202'].verified.includes('Mine Name'));
+      } finally {
+        console.error = errs2;
+        if (tSaved === null) { try { fs.unlinkSync(tFile); } catch {} } else fs.writeFileSync(tFile, tSaved);
+      }
+    }
+
+    // M1/M2.3: snapshot builder shape and the leave hook.
+    {
+      const PC = require(path.join(__dirname, '..', 'src', 'plugin-connect.js'));
+      const fakeGuild = {
+        id: 'G1',
+        roles: { cache: new Map([['G1', { id: 'G1', name: '@everyone' }], ['R1', { id: 'R1', name: 'Member' }]]) },
+      };
+      const fakeMembers = new Map([['U1', { id: 'U1', roles: { cache: new Map([['G1', {}], ['R1', {}]]) } }]]);
+      const snap = PC.buildRolesSnapshot(fakeGuild, fakeMembers);
+      ok('m1: snapshot has generatedAt, members->role ids, role names',
+        typeof snap.generatedAt === 'string' && JSON.stringify(snap.members) === '{"U1":["R1"]}' && snap.roles.R1 === 'Member');
+      const idxSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+      ok('m2: guildMemberRemove revokes the connect code', /GuildMemberRemove[\s\S]{0,200}revokeCodeFor\(member\.id\)/.test(idxSrc));
+      ok('m1: snapshot published at startup and on a 5-minute loop',
+        idxSrc.includes('await publishRolesSnapshot(client)') && /roles-snapshot[^\n]*5 \* 60 \* 1000/.test(idxSrc));
+    }
   }
 
   // Not in the Clan Yet marker (Nov 6, 2026): granted on join beside

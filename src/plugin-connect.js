@@ -137,6 +137,30 @@ async function reconcileVerifiedLinks() {
   return changed;
 }
 
+// ─── Guild snapshot for the site API (security fix M1) ───────────────
+// The API no longer holds the bot token. It reads this file for member
+// roles and role names. Atomic write, same store style as the rest.
+const ROLES_SNAPSHOT_FILE = path.join(SYNC_DIR, 'roles-snapshot.json');
+
+function buildRolesSnapshot(guild, members) {
+  const out = { generatedAt: new Date().toISOString(), members: {}, roles: {} };
+  for (const role of guild.roles.cache.values()) out.roles[role.id] = role.name;
+  for (const m of members.values()) {
+    out.members[m.id] = [...m.roles.cache.keys()].filter((id) => id !== guild.id);
+  }
+  return out;
+}
+
+async function publishRolesSnapshot(client) {
+  const guild = client.guilds.cache.get(config.guildId);
+  if (!guild) return false;
+  const { getMembers } = require('./guild-cache');
+  const members = await getMembers(guild, true);
+  if (!members) return false; // fetch failed: keep the old file, it ages out
+  atomicWrite(ROLES_SNAPSHOT_FILE, buildRolesSnapshot(guild, members));
+  return true;
+}
+
 // ─── Staff log ────────────────────────────────────────────────────────
 async function staffLog(client, text) {
   try {
@@ -285,4 +309,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, clearRecordOwner, slugOf, readRecord, recordPath, loadFlags };
+module.exports = { commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, publishRolesSnapshot, buildRolesSnapshot, clearRecordOwner, slugOf, readRecord, recordPath, loadFlags };
