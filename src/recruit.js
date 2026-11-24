@@ -686,10 +686,13 @@ async function finalizeApplication(interaction, p) {
     .catch(() => null);
 
   if (thread) {
-    // Staff ping on new applications: the role mention notifies for real (live since launch).
+    // Staff ping on new applications: the Doorman role mention
+    // notifies whoever holds door duty (the first staff role is
+    // the fallback when no ping role is configured).
+    const pingRoleId = config.tickets.applyPingRoleId || config.tickets.staffRoleIds[0];
     await thread.send({
-      content: `<@&${config.tickets.staffRoleIds[0]}> New ${t.label} application from ${interaction.user}.`,
-      allowedMentions: { users: [interaction.user.id], roles: [config.tickets.staffRoleIds[0]] },
+      content: `<@&${pingRoleId}> New ${t.label} application from ${interaction.user}.`,
+      allowedMentions: { users: [interaction.user.id], roles: [pingRoleId] },
     }).catch((e) => console.error("[recruit.js] Non-fatal error:", e.message));
     // Fail safe: the owner asked to be told personally when an
     // application comes through on the fail safe, with the issue.
