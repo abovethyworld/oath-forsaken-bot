@@ -2133,6 +2133,179 @@ async function t(name, fn, needFile = true) {
       && !deniedIx.replied.embeds,
     JSON.stringify(deniedIx.replied));
 
+  // WOM sync alerts (Nov 25, 2026): the bot watches for drift
+  // between the Wise Old Man group and Discord and posts plain lines
+  // to the CC checklist thread (leaves with RSNs still in the group,
+  // members not in the group yet, group names matching no member).
+  // The pure sweep runs on fake records here; the wrappers run
+  // against fixture data files with a stubbed group fetch and a fake
+  // checklist channel. Every file the fixtures touch is restored
+  // byte for byte afterwards.
+  {
+    const ws = require(path.join(__dirname, '..', 'src', 'wom-sync-alerts.js'));
+    const womM = require(path.join(__dirname, '..', 'src', 'wom.js'));
+    const guildCacheM = require(path.join(__dirname, '..', 'src', 'guild-cache.js'));
+    const cfgW = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const indexSrcW = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const GIDW = cfgW.guildId;
+    const HOURW = 3600 * 1000;
+    const NOWW = Date.now();
+
+    // Wiring: the leave hook sits in the GuildMemberRemove handler
+    // after the connect-code revoke; the sweep timer starts on ready.
+    const revokeAtW = indexSrcW.indexOf('revokeCodeFor(member.id)');
+    const leaveHookAtW = indexSrcW.indexOf('onWomSyncLeave(client, member)', revokeAtW);
+    ok('womsync: index imports the module', indexSrcW.includes("require('./wom-sync-alerts')"));
+    ok('womsync: leave hook runs after the connect-code revoke', revokeAtW >= 0 && leaveHookAtW > revokeAtW);
+    ok('womsync: daily sweep timer starts on ready', indexSrcW.includes('startWomSyncAlerts(client)'));
+
+    // Name matching: case and underscores fold; alt notations split.
+    ok('womsync: name keys fold case and underscores', ws.nameKeys('Fake_Name').includes('fake name'));
+    ok('womsync: name keys split alt notations',
+      ws.nameKeys('Main Name | Alt_Name').includes('alt name')
+      && ws.nameKeys('Main Name / Alt Name').includes('main name'));
+
+    // Pure sweep over fake records.
+    const sweepArgs = {
+      membership: {
+        'u-old': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        'u-new': { standing: 'member', at: NOWW - 1 * HOURW, via: 'approval' },
+        'u-guest': { standing: 'guest', at: NOWW - 48 * HOURW, via: 'approval' },
+        'u-gone': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+      },
+      links: {
+        'u-old': { rsns: ['Missing Rsn'] },
+        'u-new': { rsns: ['Newbie Rsn'] },
+        'u-guest': { rsns: ['Guest Rsn'] },
+        'u-gone': { rsns: ['Gone Rsn'], verified: ['Gone Rsn'] },
+      },
+      groupNames: ['Gone Rsn', 'Mystery Name'],
+      inGuild: new Set(['u-old', 'u-new', 'u-guest']),
+      nameOf: (id) => ({ 'u-old': 'Old Member', 'u-gone': 'Gone Member' })[id] || `user ${id}`,
+      now: NOWW,
+    };
+    const sweepIssues = ws.computeSweep(sweepArgs);
+    const kindOf = (k) => sweepIssues.filter((i) => i.key.startsWith(k));
+    ok('womsync: sweep flags the departed member for removal',
+      kindOf('remove:').length === 1 && kindOf('remove:')[0].text === ws.TEXT.leave('Gone Member', 'Gone Rsn'),
+      JSON.stringify(sweepIssues));
+    ok('womsync: sweep flags a member missing from the group',
+      kindOf('missing:').length === 1 && kindOf('missing:')[0].text === ws.TEXT.missing('Old Member', 'Missing Rsn'));
+    ok('womsync: sweep skips new approvals and guests for the missing check',
+      !sweepIssues.some((i) => i.key.includes('u-new')) && !sweepIssues.some((i) => i.key.startsWith('missing:u-guest')));
+    ok('womsync: sweep lists group names that match no member',
+      kindOf('unknown:').length === 1 && kindOf('unknown:')[0].text === ws.TEXT.unknown('Mystery Name'));
+    ok('womsync: sweep is empty when the lists agree',
+      ws.computeSweep({
+        ...sweepArgs,
+        groupNames: ['Gone Rsn', 'Missing Rsn', 'Newbie Rsn', 'Guest Rsn'],
+        inGuild: new Set(['u-old', 'u-new', 'u-guest', 'u-gone']),
+      }).length === 0);
+
+    // Sweep timing: next run is the coming 14:00 UTC.
+    ok('womsync: sweep timer targets 14:00 UTC',
+      ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 13, 0, 0))) === HOURW
+      && ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 15, 0, 0))) === 23 * HOURW);
+
+    // Wrappers against fixture files, a stubbed fetch, a fake thread.
+    const touchedW = ['membership.json', 'rsn-links.json', 'wom-sync-alerts.json'];
+    const savedW = {};
+    for (const name of touchedW) {
+      const p = path.join(DATA, name);
+      savedW[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const writeFixtureW = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreW = () => {
+      for (const name of touchedW) {
+        const p = path.join(DATA, name);
+        if (savedW[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedW[name]);
+      }
+    };
+    const UW = { leaver: '990000000000000201', quiet: '990000000000000202', stayer: '990000000000000203' };
+    writeFixtureW('membership.json', {
+      [GIDW]: {
+        [UW.leaver]: { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        [UW.quiet]: { standing: 'guest', at: NOWW - 48 * HOURW, via: 'approval' },
+        [UW.stayer]: { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+      },
+    });
+    writeFixtureW('rsn-links.json', {
+      [UW.leaver]: { rsns: ['Leaver Rsn'], verified: ['Leaver Rsn'] },
+      [UW.quiet]: { rsns: ['Quiet Rsn'] },
+      [UW.stayer]: { rsns: ['Stayer Rsn'] },
+    });
+    try { fs.unlinkSync(path.join(DATA, 'wom-sync-alerts.json')); } catch {}
+
+    const sentW = [];
+    const fakeChannelW = { send: async (opts) => { sentW.push(opts); return { id: 'womsync-fake' }; } };
+    const guildMembersW = new Map([
+      [UW.stayer, { id: UW.stayer, displayName: 'Stayer', user: { username: 'stayer' } }],
+    ]);
+    const fakeGuildW = { id: GIDW, members: { fetch: async () => guildMembersW, cache: guildMembersW } };
+    const fakeClientW = {
+      channels: { fetch: async () => fakeChannelW },
+      guilds: { cache: new Map([[GIDW, fakeGuildW]]) },
+    };
+    const realGroupFetch = womM.getGroupMembers;
+    let groupStub = ['Leaver Rsn', 'Stayer Rsn', 'Mystery Name'];
+    womM.getGroupMembers = async () => groupStub;
+    guildCacheM.invalidateCache();
+    try {
+      const leaverMember = { id: UW.leaver, displayName: 'Leaver', user: { username: 'leaver' }, guild: { id: GIDW } };
+      const postedLeave = await ws.onMemberLeave(fakeClientW, leaverMember);
+      ok('womsync: leave with RSNs in the group posts one ping-free line',
+        postedLeave === true && sentW.length === 1
+        && sentW[0].content === ws.TEXT.leave('Leaver', 'Leaver Rsn')
+        && JSON.stringify(sentW[0].allowedMentions) === JSON.stringify({ parse: [] }),
+        JSON.stringify(sentW));
+      const postedLeaveAgain = await ws.onMemberLeave(fakeClientW, leaverMember);
+      ok('womsync: the same leave never alerts twice', postedLeaveAgain === false && sentW.length === 1);
+      const quietMember = { id: UW.quiet, displayName: 'Quiet', user: { username: 'quiet' }, guild: { id: GIDW } };
+      const postedQuiet = await ws.onMemberLeave(fakeClientW, quietMember);
+      ok('womsync: leave with no RSNs in the group stays silent', postedQuiet === false && sentW.length === 1);
+
+      // Sweep: the leaver's removal is already recorded by the leave
+      // alert, so only the unknown name is fresh.
+      const sweptOnce = await ws.runSweep(fakeClientW);
+      ok('womsync: sweep posts fresh drift as one message and does not repeat the leave alert',
+        sweptOnce === true && sentW.length === 2 && sentW[1].content === ws.TEXT.unknown('Mystery Name'),
+        JSON.stringify(sentW.map((s) => s.content)));
+
+      // Stayer drops out of the group: one missing line, nothing else.
+      groupStub = ['Leaver Rsn', 'Mystery Name'];
+      const sweptTwice = await ws.runSweep(fakeClientW);
+      ok('womsync: sweep flags a member who fell out of the group',
+        sweptTwice === true && sentW.length === 3 && sentW[2].content === ws.TEXT.missing('Stayer', 'Stayer Rsn'),
+        JSON.stringify(sentW.map((s) => s.content)));
+      const sweptThrice = await ws.runSweep(fakeClientW);
+      ok('womsync: a repeat sweep with the same drift stays silent', sweptThrice === false && sentW.length === 3);
+
+      // WOM unreachable: no alerts, no crash, from either trigger.
+      womM.getGroupMembers = async () => null;
+      const failLeave = await ws.onMemberLeave(fakeClientW, { id: UW.stayer, displayName: 'Stayer', user: { username: 'stayer' }, guild: { id: GIDW } });
+      const failSweep = await ws.runSweep(fakeClientW);
+      ok('womsync: a failed WOM fetch stays silent', failLeave === false && failSweep === false && sentW.length === 3);
+
+      // Drift resolved (stayer back in, mystery name gone): the
+      // sweep posts nothing and the resolved keys clear, leaving
+      // only the leaver's still-open removal key.
+      womM.getGroupMembers = async () => groupStub;
+      groupStub = ['Leaver Rsn', 'Stayer Rsn'];
+      const sweptClean = await ws.runSweep(fakeClientW);
+      const stateAfter = JSON.parse(fs.readFileSync(path.join(DATA, 'wom-sync-alerts.json'), 'utf8'));
+      ok('womsync: resolved issues clear their dedup keys',
+        sweptClean === false && sentW.length === 3
+        && Object.keys(stateAfter.sent).length === 1
+        && Object.keys(stateAfter.sent)[0].startsWith(`remove:${UW.leaver}:`),
+        JSON.stringify(stateAfter));
+    } finally {
+      womM.getGroupMembers = realGroupFetch;
+      guildCacheM.invalidateCache();
+      restoreW();
+    }
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
