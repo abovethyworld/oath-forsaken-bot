@@ -15,6 +15,9 @@
 //    not in the group yet, group names that match no member's links
 //    (possible renames), and a backstop removal pass for members no
 //    longer in the guild whose RSNs are still in the group.
+// The same 14:00 UTC pass also runs the role watch sweep
+// (src/role-watch.js): one daily membership-sync pass, two checks,
+// each module keeping its own alert state.
 // Sent alerts are remembered in data/wom-sync-alerts.json so the same
 // unresolved issue is never posted twice; a key clears when the sweep
 // sees the issue is gone.
@@ -26,6 +29,7 @@ const { atomicWrite } = require('./store');
 const { safeFetch } = require('./utils');
 const { normName, entryRsns, loadLinks } = require('./membership');
 const wom = require('./wom');
+const roleWatch = require('./role-watch');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'wom-sync-alerts.json');
 const SNAPSHOT_FILE = path.join(__dirname, '..', 'data', 'plugin-sync', 'roles-snapshot.json');
@@ -350,9 +354,15 @@ function msUntilNextSweep(now = new Date()) {
 }
 
 function startWomSyncAlerts(client) {
-  const timer = setTimeout(() => {
+  // One daily pass for both membership-sync sweeps: the WOM drift
+  // check above and the role watch in src/role-watch.js.
+  const runDailyPass = () => {
     runSweep(client);
-    const daily = setInterval(() => runSweep(client), 24 * 3600 * 1000);
+    roleWatch.runSweep(client);
+  };
+  const timer = setTimeout(() => {
+    runDailyPass();
+    const daily = setInterval(runDailyPass, 24 * 3600 * 1000);
     if (typeof daily.unref === 'function') daily.unref();
   }, msUntilNextSweep());
   if (typeof timer.unref === 'function') timer.unref();

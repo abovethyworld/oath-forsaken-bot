@@ -493,6 +493,11 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
   // example a staff hand-grant), the waiting marker comes off.
   const { handleNotInClanUpdate } = require('./not-in-clan');
   handleNotInClanUpdate(newMember);
+  // Role watch: staff promote guests by editing roles by hand, so
+  // when an access role changes the watcher lines the membership
+  // records up behind the move (src/role-watch.js).
+  const { onMemberUpdate: onRoleWatchUpdate } = require('./role-watch');
+  onRoleWatchUpdate(client, oldMember, newMember).catch((e) => console.error('[role-watch] update failed:', e.message));
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
