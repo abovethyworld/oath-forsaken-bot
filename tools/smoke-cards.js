@@ -2306,6 +2306,309 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // Role watch (Nov 25, 2026): staff promote guests to members by
+  // editing Discord roles by hand, and the watcher lines the
+  // records up behind the move (standing flip, Initiate, CC
+  // checklist entry, comp roster refresh, welcome, one staff line)
+  // and flags the two cases staff must decide. The pure classifier
+  // runs on fake role sets here; the wrappers run against fixture
+  // data files with fake members. Every file the fixtures touch is
+  // restored byte for byte afterwards.
+  {
+    const rw = require(path.join(__dirname, '..', 'src', 'role-watch.js'));
+    const cfgR = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const guildCacheR = require(path.join(__dirname, '..', 'src', 'guild-cache.js'));
+    const compRosterM = require(path.join(__dirname, '..', 'src', 'comp-roster.js'));
+    const womWarmM = require(path.join(__dirname, '..', 'src', 'wom-warm.js'));
+    const indexSrcR = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const womSyncSrcR = fs.readFileSync(path.join(__dirname, '..', 'src', 'wom-sync-alerts.js'), 'utf8');
+    const GIDR = cfgR.guildId;
+    const IRON = cfgR.teams.ironSwornRoleId;
+    const UNBOUND = cfgR.recruit.types.main.roleId;
+    const GUEST = cfgR.recruit.types.guest.roleId;
+    const FRIEND = cfgR.seniority.friendOfClanRoleId;
+    const INITIATE = cfgR.seniorityRanks.find((r) => r.minMonths === 0).roleId;
+    const PING = '1558000000000000001'; // a non-access role stand-in
+    const asSet = (...ids) => new Set(ids);
+
+    // Wiring: the live hook sits in the GuildMemberUpdate handler,
+    // the sweep rides the WOM module's daily 14:00 UTC pass, and
+    // the old weekly uncovered-members report is no longer called
+    // (its module and its other functions stay in place).
+    ok('rolewatch: index hooks the watcher into GuildMemberUpdate',
+      indexSrcR.includes("require('./role-watch')")
+      && indexSrcR.includes('onRoleWatchUpdate(client, oldMember, newMember)'));
+    ok('rolewatch: the role sweep rides the daily WOM pass',
+      womSyncSrcR.includes('roleWatch.runSweep(client)'));
+    ok('rolewatch: the old weekly WOM report is retired',
+      !indexSrcR.includes('reportUncoveredMembers')
+      && typeof womWarmM.warmMemberStats === 'function'
+      && typeof womWarmM.reportUncoveredMembers === 'function');
+
+    // Staff lines, word for word.
+    ok('rolewatch: promotion line wording',
+      rw.TEXT.promotion('Pat', ['Pat Rsn']) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added. RSNs: Pat Rsn.');
+    ok('rolewatch: promotion line without RSNs ends at added.',
+      rw.TEXT.promotion('Pat', []) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added.');
+    ok('rolewatch: repair line wording',
+      rw.TEXT.repair('Pat', ['Pat Rsn']) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added. RSNs: Pat Rsn.');
+    ok('rolewatch: repair line without RSNs ends at added.',
+      rw.TEXT.repair('Pat', []) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added.');
+    ok('rolewatch: demotion line wording',
+      rw.TEXT.demotion('Pat') === 'Role sync: Pat is a member on record but holds no member role in Discord. Nothing changed - staff call.');
+    ok('rolewatch: no-record line wording',
+      rw.TEXT.norecord('Pat') === 'Role sync: Pat holds a member role in Discord but has no membership record. Nothing changed - staff call.');
+
+    // The classifier, case by case.
+    const cls = (standing, roleIds, isBot = false) => rw.classify({ standing, roleIds, isBot });
+    ok('rolewatch: guest with Iron Sworn promotes', cls('guest', asSet(IRON, GUEST)) === 'promote');
+    ok('rolewatch: guest with Unbound promotes', cls('guest', asSet(UNBOUND)) === 'promote');
+    ok('rolewatch: guest with no member role is left alone', cls('guest', asSet(GUEST)) === null);
+    ok('rolewatch: member with a member role is consistent', cls('member', asSet(IRON)) === null);
+    ok('rolewatch: member holding only Guest flags demotion drift', cls('member', asSet(GUEST)) === 'demotion');
+    ok('rolewatch: member with no access role flags demotion drift', cls('member', asSet(PING)) === 'demotion');
+    ok('rolewatch: no record with a member role flags for staff', cls(null, asSet(IRON)) === 'norecord');
+    ok('rolewatch: no record with only a non-access role is untouched', cls(null, asSet(PING)) === null);
+    ok('rolewatch: Friend holders are exempt in every state',
+      cls('guest', asSet(IRON, FRIEND)) === null
+      && cls('member', asSet(FRIEND)) === null
+      && cls(null, asSet(IRON, FRIEND)) === null);
+    ok('rolewatch: bots are exempt', cls('guest', asSet(IRON), true) === null && cls(null, asSet(IRON), true) === null);
+    ok('rolewatch: an unrecognised standing is left alone', cls('weird', asSet(IRON)) === null);
+
+    // The access gate: only access-role changes wake the watcher.
+    ok('rolewatch: access gate sees member and guest changes',
+      rw.accessChanged(asSet(GUEST), asSet(IRON)) === true
+      && rw.accessChanged(asSet(), asSet(GUEST)) === true);
+    ok('rolewatch: access gate ignores cosmetic changes',
+      rw.accessChanged(asSet(IRON), asSet(IRON, INITIATE)) === false
+      && rw.accessChanged(asSet(IRON), asSet(IRON)) === false);
+
+    // Wrappers against fixture files and fake members.
+    const touchedR = ['membership.json', 'rsn-links.json', 'cc-checklist.json', 'role-watch.json'];
+    const savedR = {};
+    for (const name of touchedR) {
+      const p = path.join(DATA, name);
+      savedR[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const snapPathR = path.join(DATA, 'plugin-sync', 'roles-snapshot.json');
+    const savedSnapR = fs.existsSync(snapPathR) ? fs.readFileSync(snapPathR) : null;
+    const writeFixtureR = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreR = () => {
+      for (const name of touchedR) {
+        const p = path.join(DATA, name);
+        if (savedR[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedR[name]);
+      }
+      if (savedSnapR === null) { try { fs.unlinkSync(snapPathR); } catch {} }
+      else fs.writeFileSync(snapPathR, savedSnapR);
+    };
+    const readMembershipR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'membership.json'), 'utf8'))[GIDR];
+    const readCcR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'cc-checklist.json'), 'utf8'));
+    const readStateR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'role-watch.json'), 'utf8'));
+
+    const UR = {
+      promo: '990000000000000301', demoted: '990000000000000302', stray: '990000000000000303',
+      friend: '990000000000000304', quiet: '990000000000000305', repair: '990000000000000306',
+      sweepDemoted: '990000000000000307', stray2: '990000000000000308', turtle: '990000000000000309',
+      snapStray: '990000000000000310', bot: '990000000000000311',
+    };
+    writeFixtureR('membership.json', {
+      [GIDR]: {
+        [UR.promo]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.demoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+        [UR.friend]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' },
+        [UR.repair]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.sweepDemoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+      },
+    });
+    const linkR = (rsn) => ({ rsns: [rsn], active: rsn, verified: [] });
+    writeFixtureR('rsn-links.json', {
+      [UR.promo]: linkR('Promo Rsn'),
+      [UR.demoted]: linkR('Demoted Rsn'),
+      [UR.friend]: linkR('Friend Rsn'),
+      [UR.quiet]: linkR('Quiet Rsn'),
+      [UR.repair]: linkR('Repair Rsn'),
+    });
+    writeFixtureR('cc-checklist.json', { entries: [], messageId: null, page: 0 });
+    try { fs.unlinkSync(path.join(DATA, 'role-watch.json')); } catch {}
+
+    const sentR = [];
+    const generalSentR = [];
+    const fakeChecklistR = { send: async (opts) => { sentR.push(opts); return { id: 'rolewatch-fake' }; } };
+    const fakeGeneralR = { send: async (opts) => { generalSentR.push(opts); return { id: 'rolewatch-general' }; } };
+    const fakeMemberR = (id, name, roleIds, isBot = false) => {
+      const cache = new Map(roleIds.map((r) => [r, { id: r }]));
+      return {
+        id, displayName: name, user: { username: name.toLowerCase(), bot: isBot },
+        roles: { cache, add: async (roleId) => { cache.set(roleId, { id: roleId }); return {}; } },
+      };
+    };
+    const liveGuildR = (members) => ({
+      id: GIDR,
+      members: { cache: new Map(members.map((m) => [m.id, m])) },
+      channels: { cache: new Map([[cfgR.recruit.generalChannelId, fakeGeneralR]]) },
+    });
+    const liveClientR = (guild) => ({
+      channels: { fetch: async () => fakeChecklistR },
+      guilds: { cache: new Map([[GIDR, guild]]) },
+    });
+
+    let rosterRefreshes = 0;
+    const realScheduleRefresh = compRosterM.scheduleRefresh;
+    compRosterM.scheduleRefresh = () => { rosterRefreshes++; };
+    guildCacheR.invalidateCache();
+    try {
+      // Live promotion: a guest gains Iron Sworn by hand.
+      const promoNew = fakeMemberR(UR.promo, 'Promo', [GUEST, IRON, PING]);
+      const promoOld = fakeMemberR(UR.promo, 'Promo', [GUEST, PING]);
+      const promoGuild = liveGuildR([promoNew]);
+      promoNew.guild = promoGuild; promoOld.guild = promoGuild;
+      const promoted = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
+      ok('rolewatch: a hand promotion lines everything up',
+        promoted === true
+        && readMembershipR()[UR.promo].standing === 'member'
+        && readMembershipR()[UR.promo].via === 'role-watch'
+        && promoNew.roles.cache.has(INITIATE)
+        && readCcR().entries.some((e) => e.userId === UR.promo && e.oldRank === 'None' && e.newRank === 'Initiate')
+        && rosterRefreshes >= 1
+        && generalSentR.length === 1 && generalSentR[0].content.includes(`<@${UR.promo}> has joined Oath Forsaken.`)
+        && sentR.length === 1 && sentR[0].content === rw.TEXT.promotion('Promo', ['Promo Rsn'])
+        && JSON.stringify(sentR[0].allowedMentions) === JSON.stringify({ parse: [] }),
+        JSON.stringify({ sent: sentR.map((s) => s.content), general: generalSentR.length }));
+      const promotedAgain = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
+      ok('rolewatch: a repeat promotion event does nothing twice',
+        promotedAgain === false && sentR.length === 1 && generalSentR.length === 1);
+
+      // A cosmetic change (Initiate lands on a settled member) is ignored.
+      const cosOld = fakeMemberR(UR.quiet, 'Quiet', [IRON]);
+      const cosNew = fakeMemberR(UR.quiet, 'Quiet', [IRON, INITIATE]);
+      cosOld.guild = promoGuild; cosNew.guild = promoGuild;
+      const cosmetic = await rw.onMemberUpdate(liveClientR(promoGuild), cosOld, cosNew, { settleMs: 0 });
+      ok('rolewatch: a cosmetic role change is ignored', cosmetic === false && sentR.length === 1);
+
+      // A bot gaining a member role is ignored.
+      const botOld = fakeMemberR(UR.bot, 'Botty', [], true);
+      const botNew = fakeMemberR(UR.bot, 'Botty', [IRON], true);
+      botOld.guild = promoGuild; botNew.guild = promoGuild;
+      const botSeen = await rw.onMemberUpdate(liveClientR(promoGuild), botOld, botNew, { settleMs: 0 });
+      ok('rolewatch: a bot role change is ignored', botSeen === false && sentR.length === 1);
+
+      // Demotion drift: one staff line, no record change, no repeat.
+      const demOld = fakeMemberR(UR.demoted, 'Demoted', [IRON]);
+      const demNew = fakeMemberR(UR.demoted, 'Demoted', [PING]);
+      const demGuild = liveGuildR([demNew]);
+      demOld.guild = demGuild; demNew.guild = demGuild;
+      const demotedOnce = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
+      ok('rolewatch: losing the last member role posts one staff line and changes nothing',
+        demotedOnce === true && sentR.length === 2 && sentR[1].content === rw.TEXT.demotion('Demoted')
+        && readMembershipR()[UR.demoted].standing === 'member');
+      const demotedTwice = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
+      ok('rolewatch: the same demotion drift never posts twice', demotedTwice === false && sentR.length === 2);
+
+      // No record: one staff line, and no standing is created.
+      const strayOld = fakeMemberR(UR.stray, 'Stray', [PING]);
+      const strayNew = fakeMemberR(UR.stray, 'Stray', [PING, UNBOUND]);
+      const strayGuild = liveGuildR([strayNew]);
+      strayOld.guild = strayGuild; strayNew.guild = strayGuild;
+      const straySeen = await rw.onMemberUpdate(liveClientR(strayGuild), strayOld, strayNew, { settleMs: 0 });
+      ok('rolewatch: a member role with no record posts one staff line and creates nothing',
+        straySeen === true && sentR.length === 3 && sentR[2].content === rw.TEXT.norecord('Stray')
+        && !readMembershipR()[UR.stray]);
+
+      // Friend holder gaining a member role: exempt, untouched.
+      const frOld = fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND]);
+      const frNew = fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND, IRON]);
+      const frGuild = liveGuildR([frNew]);
+      frOld.guild = frGuild; frNew.guild = frGuild;
+      const friendSeen = await rw.onMemberUpdate(liveClientR(frGuild), frOld, frNew, { settleMs: 0 });
+      ok('rolewatch: a Friend holder is exempt from the live watch',
+        friendSeen === false && sentR.length === 3 && readMembershipR()[UR.friend].standing === 'guest');
+
+      // The sweep: one repair, two flags, one combined message, no
+      // welcome. The stray and demoted members from the live tests
+      // are absent here, so their live dedup keys prune away.
+      const sweepMembersR = new Map();
+      const sweepGuildR = {
+        id: GIDR,
+        members: { fetch: async () => sweepMembersR, cache: sweepMembersR },
+        channels: { cache: new Map() },
+      };
+      const addSweepMember = (m) => { m.guild = sweepGuildR; sweepMembersR.set(m.id, m); return m; };
+      const repairMember = fakeMemberR(UR.repair, 'Repair', [GUEST, IRON]);
+      addSweepMember(repairMember);
+      addSweepMember(fakeMemberR(UR.sweepDemoted, 'SweepDemoted', [GUEST]));
+      addSweepMember(fakeMemberR(UR.stray2, 'StrayTwo', [UNBOUND]));
+      addSweepMember(fakeMemberR(UR.quiet, 'Quiet', [IRON]));
+      addSweepMember(fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND, IRON]));
+      addSweepMember(fakeMemberR(UR.turtle, 'Turtle', [PING]));
+      addSweepMember(fakeMemberR(UR.bot, 'Botty', [IRON], true));
+      const sweepClientR = liveClientR(sweepGuildR);
+      guildCacheR.invalidateCache();
+      const sweptOnce = await rw.runSweep(sweepClientR);
+      ok('rolewatch: the sweep repairs and flags in one message, with no welcome',
+        sweptOnce === true && sentR.length === 4
+        && sentR[3].content === [
+          rw.TEXT.repair('Repair', ['Repair Rsn']),
+          rw.TEXT.demotion('SweepDemoted'),
+          rw.TEXT.norecord('StrayTwo'),
+        ].join('\n')
+        && generalSentR.length === 1
+        && readMembershipR()[UR.repair].standing === 'member'
+        && repairMember.roles.cache.has(INITIATE)
+        && readCcR().entries.some((e) => e.userId === UR.repair && e.newRank === 'Initiate'),
+        JSON.stringify(sentR.map((s) => s.content)));
+      const sweptTwice = await rw.runSweep(sweepClientR);
+      ok('rolewatch: a repeat sweep with the same drift stays silent',
+        sweptTwice === false && sentR.length === 4);
+
+      // The demotion resolves (the role comes back): the next
+      // sweep posts nothing and the resolved key clears, while the
+      // still-open no-record key stays.
+      sweepMembersR.get(UR.sweepDemoted).roles.cache.set(IRON, { id: IRON });
+      const sweptThrice = await rw.runSweep(sweepClientR);
+      const stateAfterR = readStateR();
+      ok('rolewatch: resolved issues clear their dedup keys',
+        sweptThrice === false && sentR.length === 4
+        && !stateAfterR.sent[`demotion:${UR.sweepDemoted}`]
+        && !!stateAfterR.sent[`norecord:${UR.stray2}`],
+        JSON.stringify(stateAfterR));
+
+      // Snapshot fallback: the member fetch fails, the roles
+      // snapshot still answers, and the sweep flags from it.
+      guildCacheR.invalidateCache();
+      writeFixtureR('membership.json', {
+        [GIDR]: { [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' } },
+      });
+      fs.writeFileSync(snapPathR, JSON.stringify({
+        generatedAt: new Date().toISOString(), roles: {},
+        members: { [UR.snapStray]: [IRON], [UR.quiet]: [IRON] },
+      }));
+      const snapGuildR = {
+        id: GIDR,
+        members: { fetch: async () => { throw new Error('fetch down'); }, cache: new Map() },
+        channels: { cache: new Map() },
+      };
+      const snapSwept = await rw.runSweep(liveClientR(snapGuildR));
+      ok('rolewatch: the sweep falls back to the roles snapshot',
+        snapSwept === true && sentR.length === 5
+        && sentR[4].content === rw.TEXT.norecord(`user ${UR.snapStray}`),
+        JSON.stringify(sentR.map((s) => s.content)));
+
+      // Neither source answers: silence, no crash.
+      try { fs.unlinkSync(snapPathR); } catch {}
+      guildCacheR.invalidateCache();
+      const noSource = await rw.runSweep(liveClientR(snapGuildR));
+      ok('rolewatch: with no member source the sweep stays silent',
+        noSource === false && sentR.length === 5);
+    } finally {
+      compRosterM.scheduleRefresh = realScheduleRefresh;
+      guildCacheR.invalidateCache();
+      restoreR();
+    }
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
