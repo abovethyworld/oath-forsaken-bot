@@ -2133,6 +2133,482 @@ async function t(name, fn, needFile = true) {
       && !deniedIx.replied.embeds,
     JSON.stringify(deniedIx.replied));
 
+  // WOM sync alerts (Nov 25, 2026): the bot watches for drift
+  // between the Wise Old Man group and Discord and posts plain lines
+  // to the CC checklist thread (leaves with RSNs still in the group,
+  // members not in the group yet, group names matching no member).
+  // The pure sweep runs on fake records here; the wrappers run
+  // against fixture data files with a stubbed group fetch and a fake
+  // checklist channel. Every file the fixtures touch is restored
+  // byte for byte afterwards.
+  {
+    const ws = require(path.join(__dirname, '..', 'src', 'wom-sync-alerts.js'));
+    const womM = require(path.join(__dirname, '..', 'src', 'wom.js'));
+    const guildCacheM = require(path.join(__dirname, '..', 'src', 'guild-cache.js'));
+    const cfgW = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const indexSrcW = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const GIDW = cfgW.guildId;
+    const HOURW = 3600 * 1000;
+    const NOWW = Date.now();
+
+    // Wiring: the leave hook sits in the GuildMemberRemove handler
+    // after the connect-code revoke; the sweep timer starts on ready.
+    const revokeAtW = indexSrcW.indexOf('revokeCodeFor(member.id)');
+    const leaveHookAtW = indexSrcW.indexOf('onWomSyncLeave(client, member)', revokeAtW);
+    ok('womsync: index imports the module', indexSrcW.includes("require('./wom-sync-alerts')"));
+    ok('womsync: leave hook runs after the connect-code revoke', revokeAtW >= 0 && leaveHookAtW > revokeAtW);
+    ok('womsync: daily sweep timer starts on ready', indexSrcW.includes('startWomSyncAlerts(client)'));
+
+    // Name matching: case and underscores fold; alt notations split.
+    ok('womsync: name keys fold case and underscores', ws.nameKeys('Fake_Name').includes('fake name'));
+    ok('womsync: name keys split alt notations',
+      ws.nameKeys('Main Name | Alt_Name').includes('alt name')
+      && ws.nameKeys('Main Name / Alt Name').includes('main name'));
+
+    // Pure sweep over fake records.
+    const sweepArgs = {
+      membership: {
+        'u-old': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        'u-new': { standing: 'member', at: NOWW - 1 * HOURW, via: 'approval' },
+        'u-guest': { standing: 'guest', at: NOWW - 48 * HOURW, via: 'approval' },
+        'u-gone': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+      },
+      links: {
+        'u-old': { rsns: ['Missing Rsn'] },
+        'u-new': { rsns: ['Newbie Rsn'] },
+        'u-guest': { rsns: ['Guest Rsn'] },
+        'u-gone': { rsns: ['Gone Rsn'], verified: ['Gone Rsn'] },
+      },
+      groupNames: ['Gone Rsn', 'Mystery Name'],
+      inGuild: new Set(['u-old', 'u-new', 'u-guest']),
+      nameOf: (id) => ({ 'u-old': 'Old Member', 'u-gone': 'Gone Member' })[id] || `user ${id}`,
+      now: NOWW,
+    };
+    const sweepIssues = ws.computeSweep(sweepArgs);
+    const kindOf = (k) => sweepIssues.filter((i) => i.key.startsWith(k));
+    ok('womsync: sweep flags the departed member for removal',
+      kindOf('remove:').length === 1 && kindOf('remove:')[0].text === ws.TEXT.leave('Gone Member', 'Gone Rsn'),
+      JSON.stringify(sweepIssues));
+    ok('womsync: sweep flags a member missing from the group',
+      kindOf('missing:').length === 1 && kindOf('missing:')[0].text === ws.TEXT.missing('Old Member', 'Missing Rsn'));
+    ok('womsync: sweep skips new approvals and guests for the missing check',
+      !sweepIssues.some((i) => i.key.includes('u-new')) && !sweepIssues.some((i) => i.key.startsWith('missing:u-guest')));
+    ok('womsync: sweep lists group names that match no member',
+      kindOf('unknown:').length === 1 && kindOf('unknown:')[0].text === ws.TEXT.unknown('Mystery Name'));
+    ok('womsync: sweep is empty when the lists agree',
+      ws.computeSweep({
+        ...sweepArgs,
+        groupNames: ['Gone Rsn', 'Missing Rsn', 'Newbie Rsn', 'Guest Rsn'],
+        inGuild: new Set(['u-old', 'u-new', 'u-guest', 'u-gone']),
+      }).length === 0);
+
+    // Sweep timing: next run is the coming 14:00 UTC.
+    ok('womsync: sweep timer targets 14:00 UTC',
+      ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 13, 0, 0))) === HOURW
+      && ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 15, 0, 0))) === 23 * HOURW);
+
+    // Wrappers against fixture files, a stubbed fetch, a fake thread.
+    const touchedW = ['membership.json', 'rsn-links.json', 'wom-sync-alerts.json'];
+    const savedW = {};
+    for (const name of touchedW) {
+      const p = path.join(DATA, name);
+      savedW[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const writeFixtureW = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreW = () => {
+      for (const name of touchedW) {
+        const p = path.join(DATA, name);
+        if (savedW[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedW[name]);
+      }
+    };
+    const UW = { leaver: '990000000000000201', quiet: '990000000000000202', stayer: '990000000000000203' };
+    writeFixtureW('membership.json', {
+      [GIDW]: {
+        [UW.leaver]: { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        [UW.quiet]: { standing: 'guest', at: NOWW - 48 * HOURW, via: 'approval' },
+        [UW.stayer]: { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+      },
+    });
+    writeFixtureW('rsn-links.json', {
+      [UW.leaver]: { rsns: ['Leaver Rsn'], verified: ['Leaver Rsn'] },
+      [UW.quiet]: { rsns: ['Quiet Rsn'] },
+      [UW.stayer]: { rsns: ['Stayer Rsn'] },
+    });
+    try { fs.unlinkSync(path.join(DATA, 'wom-sync-alerts.json')); } catch {}
+
+    const sentW = [];
+    const fakeChannelW = { send: async (opts) => { sentW.push(opts); return { id: 'womsync-fake' }; } };
+    const guildMembersW = new Map([
+      [UW.stayer, { id: UW.stayer, displayName: 'Stayer', user: { username: 'stayer' } }],
+    ]);
+    const fakeGuildW = { id: GIDW, members: { fetch: async () => guildMembersW, cache: guildMembersW } };
+    const fakeClientW = {
+      channels: { fetch: async () => fakeChannelW },
+      guilds: { cache: new Map([[GIDW, fakeGuildW]]) },
+    };
+    const realGroupFetch = womM.getGroupMembers;
+    let groupStub = ['Leaver Rsn', 'Stayer Rsn', 'Mystery Name'];
+    womM.getGroupMembers = async () => groupStub;
+    guildCacheM.invalidateCache();
+    try {
+      const leaverMember = { id: UW.leaver, displayName: 'Leaver', user: { username: 'leaver' }, guild: { id: GIDW } };
+      const postedLeave = await ws.onMemberLeave(fakeClientW, leaverMember);
+      ok('womsync: leave with RSNs in the group posts one ping-free line',
+        postedLeave === true && sentW.length === 1
+        && sentW[0].content === ws.TEXT.leave('Leaver', 'Leaver Rsn')
+        && JSON.stringify(sentW[0].allowedMentions) === JSON.stringify({ parse: [] }),
+        JSON.stringify(sentW));
+      const postedLeaveAgain = await ws.onMemberLeave(fakeClientW, leaverMember);
+      ok('womsync: the same leave never alerts twice', postedLeaveAgain === false && sentW.length === 1);
+      const quietMember = { id: UW.quiet, displayName: 'Quiet', user: { username: 'quiet' }, guild: { id: GIDW } };
+      const postedQuiet = await ws.onMemberLeave(fakeClientW, quietMember);
+      ok('womsync: leave with no RSNs in the group stays silent', postedQuiet === false && sentW.length === 1);
+
+      // Sweep: the leaver's removal is already recorded by the leave
+      // alert, so only the unknown name is fresh.
+      const sweptOnce = await ws.runSweep(fakeClientW);
+      ok('womsync: sweep posts fresh drift as one message and does not repeat the leave alert',
+        sweptOnce === true && sentW.length === 2 && sentW[1].content === ws.TEXT.unknown('Mystery Name'),
+        JSON.stringify(sentW.map((s) => s.content)));
+
+      // Stayer drops out of the group: one missing line, nothing else.
+      groupStub = ['Leaver Rsn', 'Mystery Name'];
+      const sweptTwice = await ws.runSweep(fakeClientW);
+      ok('womsync: sweep flags a member who fell out of the group',
+        sweptTwice === true && sentW.length === 3 && sentW[2].content === ws.TEXT.missing('Stayer', 'Stayer Rsn'),
+        JSON.stringify(sentW.map((s) => s.content)));
+      const sweptThrice = await ws.runSweep(fakeClientW);
+      ok('womsync: a repeat sweep with the same drift stays silent', sweptThrice === false && sentW.length === 3);
+
+      // WOM unreachable: no alerts, no crash, from either trigger.
+      womM.getGroupMembers = async () => null;
+      const failLeave = await ws.onMemberLeave(fakeClientW, { id: UW.stayer, displayName: 'Stayer', user: { username: 'stayer' }, guild: { id: GIDW } });
+      const failSweep = await ws.runSweep(fakeClientW);
+      ok('womsync: a failed WOM fetch stays silent', failLeave === false && failSweep === false && sentW.length === 3);
+
+      // Drift resolved (stayer back in, mystery name gone): the
+      // sweep posts nothing and the resolved keys clear, leaving
+      // only the leaver's still-open removal key.
+      womM.getGroupMembers = async () => groupStub;
+      groupStub = ['Leaver Rsn', 'Stayer Rsn'];
+      const sweptClean = await ws.runSweep(fakeClientW);
+      const stateAfter = JSON.parse(fs.readFileSync(path.join(DATA, 'wom-sync-alerts.json'), 'utf8'));
+      ok('womsync: resolved issues clear their dedup keys',
+        sweptClean === false && sentW.length === 3
+        && Object.keys(stateAfter.sent).length === 1
+        && Object.keys(stateAfter.sent)[0].startsWith(`remove:${UW.leaver}:`),
+        JSON.stringify(stateAfter));
+    } finally {
+      womM.getGroupMembers = realGroupFetch;
+      guildCacheM.invalidateCache();
+      restoreW();
+    }
+  }
+
+  // Role watch (Nov 25, 2026): staff promote guests to members by
+  // editing Discord roles by hand, and the watcher lines the
+  // records up behind the move (standing flip, Initiate, CC
+  // checklist entry, comp roster refresh, welcome, one staff line)
+  // and flags the two cases staff must decide. The pure classifier
+  // runs on fake role sets here; the wrappers run against fixture
+  // data files with fake members. Every file the fixtures touch is
+  // restored byte for byte afterwards.
+  {
+    const rw = require(path.join(__dirname, '..', 'src', 'role-watch.js'));
+    const cfgR = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const guildCacheR = require(path.join(__dirname, '..', 'src', 'guild-cache.js'));
+    const compRosterM = require(path.join(__dirname, '..', 'src', 'comp-roster.js'));
+    const womWarmM = require(path.join(__dirname, '..', 'src', 'wom-warm.js'));
+    const indexSrcR = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const womSyncSrcR = fs.readFileSync(path.join(__dirname, '..', 'src', 'wom-sync-alerts.js'), 'utf8');
+    const GIDR = cfgR.guildId;
+    const IRON = cfgR.teams.ironSwornRoleId;
+    const UNBOUND = cfgR.recruit.types.main.roleId;
+    const GUEST = cfgR.recruit.types.guest.roleId;
+    const FRIEND = cfgR.seniority.friendOfClanRoleId;
+    const INITIATE = cfgR.seniorityRanks.find((r) => r.minMonths === 0).roleId;
+    const PING = '1558000000000000001'; // a non-access role stand-in
+    const asSet = (...ids) => new Set(ids);
+
+    // Wiring: the live hook sits in the GuildMemberUpdate handler,
+    // the sweep rides the WOM module's daily 14:00 UTC pass, and
+    // the old weekly uncovered-members report is no longer called
+    // (its module and its other functions stay in place).
+    ok('rolewatch: index hooks the watcher into GuildMemberUpdate',
+      indexSrcR.includes("require('./role-watch')")
+      && indexSrcR.includes('onRoleWatchUpdate(client, oldMember, newMember)'));
+    ok('rolewatch: the role sweep rides the daily WOM pass',
+      womSyncSrcR.includes('roleWatch.runSweep(client)'));
+    ok('rolewatch: the old weekly WOM report is retired',
+      !indexSrcR.includes('reportUncoveredMembers')
+      && typeof womWarmM.warmMemberStats === 'function'
+      && typeof womWarmM.reportUncoveredMembers === 'function');
+
+    // Staff lines, word for word.
+    ok('rolewatch: promotion line wording',
+      rw.TEXT.promotion('Pat', ['Pat Rsn']) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added. RSNs: Pat Rsn.');
+    ok('rolewatch: promotion line without RSNs ends at added.',
+      rw.TEXT.promotion('Pat', []) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added.');
+    ok('rolewatch: repair line wording',
+      rw.TEXT.repair('Pat', ['Pat Rsn']) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added. RSNs: Pat Rsn.');
+    ok('rolewatch: repair line without RSNs ends at added.',
+      rw.TEXT.repair('Pat', []) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added.');
+    ok('rolewatch: demotion line wording',
+      rw.TEXT.demotion('Pat') === 'Role sync: Pat is a member on record but holds no member role in Discord. Nothing changed - staff call.');
+    ok('rolewatch: no-record line wording',
+      rw.TEXT.norecord('Pat') === 'Role sync: Pat holds a member role in Discord but has no membership record. Nothing changed - staff call.');
+
+    // The classifier, case by case.
+    const cls = (standing, roleIds, isBot = false) => rw.classify({ standing, roleIds, isBot });
+    ok('rolewatch: guest with Iron Sworn promotes', cls('guest', asSet(IRON, GUEST)) === 'promote');
+    ok('rolewatch: guest with Unbound promotes', cls('guest', asSet(UNBOUND)) === 'promote');
+    ok('rolewatch: guest with no member role is left alone', cls('guest', asSet(GUEST)) === null);
+    ok('rolewatch: member with a member role is consistent', cls('member', asSet(IRON)) === null);
+    ok('rolewatch: member holding only Guest flags demotion drift', cls('member', asSet(GUEST)) === 'demotion');
+    ok('rolewatch: member with no access role flags demotion drift', cls('member', asSet(PING)) === 'demotion');
+    ok('rolewatch: no record with a member role flags for staff', cls(null, asSet(IRON)) === 'norecord');
+    ok('rolewatch: no record with only a non-access role is untouched', cls(null, asSet(PING)) === null);
+    ok('rolewatch: Friend holders are exempt in every state',
+      cls('guest', asSet(IRON, FRIEND)) === null
+      && cls('member', asSet(FRIEND)) === null
+      && cls(null, asSet(IRON, FRIEND)) === null);
+    ok('rolewatch: bots are exempt', cls('guest', asSet(IRON), true) === null && cls(null, asSet(IRON), true) === null);
+    ok('rolewatch: an unrecognised standing is left alone', cls('weird', asSet(IRON)) === null);
+
+    // The access gate: only access-role changes wake the watcher.
+    ok('rolewatch: access gate sees member and guest changes',
+      rw.accessChanged(asSet(GUEST), asSet(IRON)) === true
+      && rw.accessChanged(asSet(), asSet(GUEST)) === true);
+    ok('rolewatch: access gate ignores cosmetic changes',
+      rw.accessChanged(asSet(IRON), asSet(IRON, INITIATE)) === false
+      && rw.accessChanged(asSet(IRON), asSet(IRON)) === false);
+
+    // Wrappers against fixture files and fake members.
+    const touchedR = ['membership.json', 'rsn-links.json', 'cc-checklist.json', 'role-watch.json'];
+    const savedR = {};
+    for (const name of touchedR) {
+      const p = path.join(DATA, name);
+      savedR[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const snapPathR = path.join(DATA, 'plugin-sync', 'roles-snapshot.json');
+    const savedSnapR = fs.existsSync(snapPathR) ? fs.readFileSync(snapPathR) : null;
+    const writeFixtureR = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreR = () => {
+      for (const name of touchedR) {
+        const p = path.join(DATA, name);
+        if (savedR[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedR[name]);
+      }
+      if (savedSnapR === null) { try { fs.unlinkSync(snapPathR); } catch {} }
+      else fs.writeFileSync(snapPathR, savedSnapR);
+    };
+    const readMembershipR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'membership.json'), 'utf8'))[GIDR];
+    const readCcR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'cc-checklist.json'), 'utf8'));
+    const readStateR = () => JSON.parse(fs.readFileSync(path.join(DATA, 'role-watch.json'), 'utf8'));
+
+    const UR = {
+      promo: '990000000000000301', demoted: '990000000000000302', stray: '990000000000000303',
+      friend: '990000000000000304', quiet: '990000000000000305', repair: '990000000000000306',
+      sweepDemoted: '990000000000000307', stray2: '990000000000000308', turtle: '990000000000000309',
+      snapStray: '990000000000000310', bot: '990000000000000311',
+    };
+    writeFixtureR('membership.json', {
+      [GIDR]: {
+        [UR.promo]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.demoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+        [UR.friend]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' },
+        [UR.repair]: { standing: 'guest', at: Date.now(), via: 'approval' },
+        [UR.sweepDemoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+      },
+    });
+    const linkR = (rsn) => ({ rsns: [rsn], active: rsn, verified: [] });
+    writeFixtureR('rsn-links.json', {
+      [UR.promo]: linkR('Promo Rsn'),
+      [UR.demoted]: linkR('Demoted Rsn'),
+      [UR.friend]: linkR('Friend Rsn'),
+      [UR.quiet]: linkR('Quiet Rsn'),
+      [UR.repair]: linkR('Repair Rsn'),
+    });
+    writeFixtureR('cc-checklist.json', { entries: [], messageId: null, page: 0 });
+    try { fs.unlinkSync(path.join(DATA, 'role-watch.json')); } catch {}
+
+    const sentR = [];
+    const generalSentR = [];
+    const fakeChecklistR = { send: async (opts) => { sentR.push(opts); return { id: 'rolewatch-fake' }; } };
+    const fakeGeneralR = { send: async (opts) => { generalSentR.push(opts); return { id: 'rolewatch-general' }; } };
+    const fakeMemberR = (id, name, roleIds, isBot = false) => {
+      const cache = new Map(roleIds.map((r) => [r, { id: r }]));
+      return {
+        id, displayName: name, user: { username: name.toLowerCase(), bot: isBot },
+        roles: { cache, add: async (roleId) => { cache.set(roleId, { id: roleId }); return {}; } },
+      };
+    };
+    const liveGuildR = (members) => ({
+      id: GIDR,
+      members: { cache: new Map(members.map((m) => [m.id, m])) },
+      channels: { cache: new Map([[cfgR.recruit.generalChannelId, fakeGeneralR]]) },
+    });
+    const liveClientR = (guild) => ({
+      channels: { fetch: async () => fakeChecklistR },
+      guilds: { cache: new Map([[GIDR, guild]]) },
+    });
+
+    let rosterRefreshes = 0;
+    const realScheduleRefresh = compRosterM.scheduleRefresh;
+    compRosterM.scheduleRefresh = () => { rosterRefreshes++; };
+    guildCacheR.invalidateCache();
+    try {
+      // Live promotion: a guest gains Iron Sworn by hand.
+      const promoNew = fakeMemberR(UR.promo, 'Promo', [GUEST, IRON, PING]);
+      const promoOld = fakeMemberR(UR.promo, 'Promo', [GUEST, PING]);
+      const promoGuild = liveGuildR([promoNew]);
+      promoNew.guild = promoGuild; promoOld.guild = promoGuild;
+      const promoted = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
+      ok('rolewatch: a hand promotion lines everything up',
+        promoted === true
+        && readMembershipR()[UR.promo].standing === 'member'
+        && readMembershipR()[UR.promo].via === 'role-watch'
+        && promoNew.roles.cache.has(INITIATE)
+        && readCcR().entries.some((e) => e.userId === UR.promo && e.oldRank === 'None' && e.newRank === 'Initiate')
+        && rosterRefreshes >= 1
+        && generalSentR.length === 1 && generalSentR[0].content.includes(`<@${UR.promo}> has joined Oath Forsaken.`)
+        && sentR.length === 1 && sentR[0].content === rw.TEXT.promotion('Promo', ['Promo Rsn'])
+        && JSON.stringify(sentR[0].allowedMentions) === JSON.stringify({ parse: [] }),
+        JSON.stringify({ sent: sentR.map((s) => s.content), general: generalSentR.length }));
+      const promotedAgain = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
+      ok('rolewatch: a repeat promotion event does nothing twice',
+        promotedAgain === false && sentR.length === 1 && generalSentR.length === 1);
+
+      // A cosmetic change (Initiate lands on a settled member) is ignored.
+      const cosOld = fakeMemberR(UR.quiet, 'Quiet', [IRON]);
+      const cosNew = fakeMemberR(UR.quiet, 'Quiet', [IRON, INITIATE]);
+      cosOld.guild = promoGuild; cosNew.guild = promoGuild;
+      const cosmetic = await rw.onMemberUpdate(liveClientR(promoGuild), cosOld, cosNew, { settleMs: 0 });
+      ok('rolewatch: a cosmetic role change is ignored', cosmetic === false && sentR.length === 1);
+
+      // A bot gaining a member role is ignored.
+      const botOld = fakeMemberR(UR.bot, 'Botty', [], true);
+      const botNew = fakeMemberR(UR.bot, 'Botty', [IRON], true);
+      botOld.guild = promoGuild; botNew.guild = promoGuild;
+      const botSeen = await rw.onMemberUpdate(liveClientR(promoGuild), botOld, botNew, { settleMs: 0 });
+      ok('rolewatch: a bot role change is ignored', botSeen === false && sentR.length === 1);
+
+      // Demotion drift: one staff line, no record change, no repeat.
+      const demOld = fakeMemberR(UR.demoted, 'Demoted', [IRON]);
+      const demNew = fakeMemberR(UR.demoted, 'Demoted', [PING]);
+      const demGuild = liveGuildR([demNew]);
+      demOld.guild = demGuild; demNew.guild = demGuild;
+      const demotedOnce = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
+      ok('rolewatch: losing the last member role posts one staff line and changes nothing',
+        demotedOnce === true && sentR.length === 2 && sentR[1].content === rw.TEXT.demotion('Demoted')
+        && readMembershipR()[UR.demoted].standing === 'member');
+      const demotedTwice = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
+      ok('rolewatch: the same demotion drift never posts twice', demotedTwice === false && sentR.length === 2);
+
+      // No record: one staff line, and no standing is created.
+      const strayOld = fakeMemberR(UR.stray, 'Stray', [PING]);
+      const strayNew = fakeMemberR(UR.stray, 'Stray', [PING, UNBOUND]);
+      const strayGuild = liveGuildR([strayNew]);
+      strayOld.guild = strayGuild; strayNew.guild = strayGuild;
+      const straySeen = await rw.onMemberUpdate(liveClientR(strayGuild), strayOld, strayNew, { settleMs: 0 });
+      ok('rolewatch: a member role with no record posts one staff line and creates nothing',
+        straySeen === true && sentR.length === 3 && sentR[2].content === rw.TEXT.norecord('Stray')
+        && !readMembershipR()[UR.stray]);
+
+      // Friend holder gaining a member role: exempt, untouched.
+      const frOld = fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND]);
+      const frNew = fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND, IRON]);
+      const frGuild = liveGuildR([frNew]);
+      frOld.guild = frGuild; frNew.guild = frGuild;
+      const friendSeen = await rw.onMemberUpdate(liveClientR(frGuild), frOld, frNew, { settleMs: 0 });
+      ok('rolewatch: a Friend holder is exempt from the live watch',
+        friendSeen === false && sentR.length === 3 && readMembershipR()[UR.friend].standing === 'guest');
+
+      // The sweep: one repair, two flags, one combined message, no
+      // welcome. The stray and demoted members from the live tests
+      // are absent here, so their live dedup keys prune away.
+      const sweepMembersR = new Map();
+      const sweepGuildR = {
+        id: GIDR,
+        members: { fetch: async () => sweepMembersR, cache: sweepMembersR },
+        channels: { cache: new Map() },
+      };
+      const addSweepMember = (m) => { m.guild = sweepGuildR; sweepMembersR.set(m.id, m); return m; };
+      const repairMember = fakeMemberR(UR.repair, 'Repair', [GUEST, IRON]);
+      addSweepMember(repairMember);
+      addSweepMember(fakeMemberR(UR.sweepDemoted, 'SweepDemoted', [GUEST]));
+      addSweepMember(fakeMemberR(UR.stray2, 'StrayTwo', [UNBOUND]));
+      addSweepMember(fakeMemberR(UR.quiet, 'Quiet', [IRON]));
+      addSweepMember(fakeMemberR(UR.friend, 'Friend', [GUEST, FRIEND, IRON]));
+      addSweepMember(fakeMemberR(UR.turtle, 'Turtle', [PING]));
+      addSweepMember(fakeMemberR(UR.bot, 'Botty', [IRON], true));
+      const sweepClientR = liveClientR(sweepGuildR);
+      guildCacheR.invalidateCache();
+      const sweptOnce = await rw.runSweep(sweepClientR);
+      ok('rolewatch: the sweep repairs and flags in one message, with no welcome',
+        sweptOnce === true && sentR.length === 4
+        && sentR[3].content === [
+          rw.TEXT.repair('Repair', ['Repair Rsn']),
+          rw.TEXT.demotion('SweepDemoted'),
+          rw.TEXT.norecord('StrayTwo'),
+        ].join('\n')
+        && generalSentR.length === 1
+        && readMembershipR()[UR.repair].standing === 'member'
+        && repairMember.roles.cache.has(INITIATE)
+        && readCcR().entries.some((e) => e.userId === UR.repair && e.newRank === 'Initiate'),
+        JSON.stringify(sentR.map((s) => s.content)));
+      const sweptTwice = await rw.runSweep(sweepClientR);
+      ok('rolewatch: a repeat sweep with the same drift stays silent',
+        sweptTwice === false && sentR.length === 4);
+
+      // The demotion resolves (the role comes back): the next
+      // sweep posts nothing and the resolved key clears, while the
+      // still-open no-record key stays.
+      sweepMembersR.get(UR.sweepDemoted).roles.cache.set(IRON, { id: IRON });
+      const sweptThrice = await rw.runSweep(sweepClientR);
+      const stateAfterR = readStateR();
+      ok('rolewatch: resolved issues clear their dedup keys',
+        sweptThrice === false && sentR.length === 4
+        && !stateAfterR.sent[`demotion:${UR.sweepDemoted}`]
+        && !!stateAfterR.sent[`norecord:${UR.stray2}`],
+        JSON.stringify(stateAfterR));
+
+      // Snapshot fallback: the member fetch fails, the roles
+      // snapshot still answers, and the sweep flags from it.
+      guildCacheR.invalidateCache();
+      writeFixtureR('membership.json', {
+        [GIDR]: { [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' } },
+      });
+      fs.writeFileSync(snapPathR, JSON.stringify({
+        generatedAt: new Date().toISOString(), roles: {},
+        members: { [UR.snapStray]: [IRON], [UR.quiet]: [IRON] },
+      }));
+      const snapGuildR = {
+        id: GIDR,
+        members: { fetch: async () => { throw new Error('fetch down'); }, cache: new Map() },
+        channels: { cache: new Map() },
+      };
+      const snapSwept = await rw.runSweep(liveClientR(snapGuildR));
+      ok('rolewatch: the sweep falls back to the roles snapshot',
+        snapSwept === true && sentR.length === 5
+        && sentR[4].content === rw.TEXT.norecord(`user ${UR.snapStray}`),
+        JSON.stringify(sentR.map((s) => s.content)));
+
+      // Neither source answers: silence, no crash.
+      try { fs.unlinkSync(snapPathR); } catch {}
+      guildCacheR.invalidateCache();
+      const noSource = await rw.runSweep(liveClientR(snapGuildR));
+      ok('rolewatch: with no member source the sweep stays silent',
+        noSource === false && sentR.length === 5);
+    } finally {
+      compRosterM.scheduleRefresh = realScheduleRefresh;
+      guildCacheR.invalidateCache();
+      restoreR();
+    }
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown

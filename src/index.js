@@ -45,7 +45,8 @@ const { refreshChecklist } = require('./cc-checklist');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
-const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
+const { warmMemberStats } = require('./wom-warm');
+const { onMemberLeave: onWomSyncLeave, startWomSyncAlerts } = require('./wom-sync-alerts');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 const { handleBoostMessage } = require('./boost-thanks');
 const { ensureBumpTool, checkBumpTool } = require('./bump-tool');
@@ -269,7 +270,6 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('champions', () => syncChampions(client)), 24 * 3600 * 1000);
   setInterval(() => run('competitions', () => syncCompetitions()), 24 * 3600 * 1000);
   setInterval(() => run('wom-warm', () => warmMemberStats(), 'WOM member warm failed'), 24 * 3600 * 1000);
-  setInterval(() => run('wom-report', () => reportUncoveredMembers(client), 'WOM group staff report failed'), 7 * 24 * 3600 * 1000);
   setInterval(() => run('profiles', () => warmProfiles()), 24 * 3600 * 1000);
   setInterval(() => runSync('gains-snapshot', () => snapshotToday(), 'Gains snapshot failed'), 6 * 3600 * 1000);
   setInterval(() => run('drift', () => syncDrift(client)), 24 * 3600 * 1000);
@@ -303,6 +303,9 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('links-reconcile', () => reconcileVerifiedLinks().then(() => surfaceHeldPosts(client))), 3600 * 1000);
   setInterval(() => run('rename-watch', () => watchRenames(client), 'Rename watch failed'), 24 * 3600 * 1000);
   setInterval(() => runSync('housekeeping', () => { store.prunePolls(); store.pruneStrikes(); }, 'Housekeeping prune failed'), 24 * 3600 * 1000);
+  // WOM sync alerts: daily 14:00 UTC sweep of WOM group vs Discord
+  // drift, posted to the CC checklist thread (self-scheduling module).
+  startWomSyncAlerts(client);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -489,6 +492,11 @@ client.on(Events.GuildMemberUpdate, (oldMember, newMember) => {
   // example a staff hand-grant), the waiting marker comes off.
   const { handleNotInClanUpdate } = require('./not-in-clan');
   handleNotInClanUpdate(newMember);
+  // Role watch: staff promote guests by editing roles by hand, so
+  // when an access role changes the watcher lines the membership
+  // records up behind the move (src/role-watch.js).
+  const { onMemberUpdate: onRoleWatchUpdate } = require('./role-watch');
+  onRoleWatchUpdate(client, oldMember, newMember).catch((e) => console.error('[role-watch] update failed:', e.message));
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
@@ -541,6 +549,10 @@ client.on(Events.GuildMemberRemove, (member) => {
   } catch (e) {
     console.error('[leave] connect code revoke failed:', e.message);
   }
+  // WOM sync: if the departed member's RSNs are still in the Wise
+  // Old Man group, alert the CC checklist thread so staff can remove
+  // them by hand. Runs after (and never disturbs) the revoke above.
+  onWomSyncLeave(client, member).catch((e) => console.error('[leave] WOM sync alert failed:', e.message));
 });
 
 // Member leave logging handled by Sapphire (2026-10-11)

@@ -87,6 +87,15 @@ function bountyConfig() {
   return config.bounty || {};
 }
 
+// The owner asked to be pinged personally when a bounty is claimed
+// (ruling 2026-11-24): he is added to the proof thread and mentioned
+// in its first message, and mentioned again when the proof check
+// posts. His user ID lives in the FAILSAFE_PING_USER_ID env var,
+// never in code or config (same pattern as recruit.js).
+function claimPingUserId() {
+  return process.env.FAILSAFE_PING_USER_ID || null;
+}
+
 // The title role for a lane. PvM falls back to the legacy bounty role
 // config (the original champion role, renamed Reaper of Chaos).
 function laneRole(guild, lane) {
@@ -542,6 +551,12 @@ async function handleClaim(interaction, bountyId) {
       return;
     }
     await thread.members.add(interaction.user.id).catch(() => {});
+    const pingUserId = claimPingUserId();
+    if (pingUserId) {
+      await thread.members.add(pingUserId).catch(() => {});
+    } else {
+      console.warn('[bounty] claim opened but FAILSAFE_PING_USER_ID is not set; the owner was not pinged');
+    }
 
     const claim = { bountyId, claimerId: interaction.user.id, status: 'pending', createdAt: Date.now() };
     state.claims[thread.id] = claim;
@@ -553,7 +568,9 @@ async function handleClaim(interaction, bountyId) {
           `<@${interaction.user.id}> is submitting proof for **${bounty.target}**.\n` +
           `Post your screenshot here. The drop has to be from after the contract was posted.` +
           (pl ? `\n${pl.replace(/\*\*/g, '')}` : '') +
-          `\nPress Done - Check My Proof and the bot checks the clan feeds for the drop. Staff cross-check and make the final call.`,
+          `\nPress Done - Check My Proof and the bot checks the clan feeds for the drop. Staff cross-check and make the final call.` +
+          (pingUserId ? `\n<@${pingUserId}> New bounty claim.` : ''),
+        allowedMentions: { users: pingUserId ? [interaction.user.id, pingUserId] : [interaction.user.id] },
         components: reviewButtons(thread.id),
       });
     } catch {
@@ -855,6 +872,18 @@ async function handleDone(interaction, threadId) {
   await interaction
     .editReply({ content: `${header}\n${result.lines.join('\n')}\nStaff cross-check and make the final call.` })
     .catch(() => {});
+  // Ping the owner that a proof check has landed (ruling 2026-11-24).
+  // A plain thread message: an interaction reply does not reliably
+  // notify, and he is already a member of the claim thread.
+  const donePingUserId = claimPingUserId();
+  if (donePingUserId && interaction.channel && interaction.channel.isThread()) {
+    await interaction.channel
+      .send({
+        content: `<@${donePingUserId}> Proof check posted for **${bounty.target}**.`,
+        allowedMentions: { users: [donePingUserId] },
+      })
+      .catch(() => {});
+  }
 }
 
 async function handleReject(interaction, threadId) {
