@@ -45,7 +45,7 @@ const { refreshChecklist } = require('./cc-checklist');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
-const { warmMemberStats, reportUncoveredMembers } = require('./wom-warm');
+const { warmMemberStats } = require('./wom-warm');
 const { onMemberLeave: onWomSyncLeave, startWomSyncAlerts } = require('./wom-sync-alerts');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 const { handleBoostMessage } = require('./boost-thanks');
@@ -270,7 +270,6 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('champions', () => syncChampions(client)), 24 * 3600 * 1000);
   setInterval(() => run('competitions', () => syncCompetitions()), 24 * 3600 * 1000);
   setInterval(() => run('wom-warm', () => warmMemberStats(), 'WOM member warm failed'), 24 * 3600 * 1000);
-  setInterval(() => run('wom-report', () => reportUncoveredMembers(client), 'WOM group staff report failed'), 7 * 24 * 3600 * 1000);
   setInterval(() => run('profiles', () => warmProfiles()), 24 * 3600 * 1000);
   setInterval(() => runSync('gains-snapshot', () => snapshotToday(), 'Gains snapshot failed'), 6 * 3600 * 1000);
   setInterval(() => run('drift', () => syncDrift(client)), 24 * 3600 * 1000);
