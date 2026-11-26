@@ -30,6 +30,7 @@ const pluginConnect = require('./plugin-connect');
 const guide = require('./guide');
 const staffLink = require('./staff-link');
 const websiteControls = require('./website-controls');
+const roleSyncPanel = require('./role-sync-panel');
 const { postOrEdit, postOrEditMany } = require('./panel-store');
 
 const STYLE_MAP = {
@@ -540,6 +541,7 @@ const commands = [
   ...guide.commands,
   ...staffLink.commands,
   ...websiteControls.commands,
+  ...roleSyncPanel.commands,
 ];
 
 async function handleCommand(interaction) {

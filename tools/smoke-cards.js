@@ -2689,23 +2689,27 @@ async function t(name, fn, needFile = true) {
       && typeof womWarmM.warmMemberStats === 'function'
       && typeof womWarmM.reportUncoveredMembers === 'function');
 
-    // Staff lines, word for word.
-    ok('rolewatch: promotion line wording',
-      rw.TEXT.promotion('Pat', ['Pat Rsn']) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added. RSNs: Pat Rsn.');
-    ok('rolewatch: promotion line without RSNs ends at added.',
-      rw.TEXT.promotion('Pat', []) === 'Role sync: Pat was given a member role in Discord. Record updated to member, checklist entry added.');
-    ok('rolewatch: repair line wording',
-      rw.TEXT.repair('Pat', ['Pat Rsn']) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added. RSNs: Pat Rsn.');
-    ok('rolewatch: repair line without RSNs ends at added.',
-      rw.TEXT.repair('Pat', []) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added.');
-    ok('rolewatch: demotion line wording',
-      rw.TEXT.demotion('Pat') === 'Role sync: Pat is a member on record but holds no member role in Discord. Nothing changed - staff call.');
-    ok('rolewatch: demote line wording',
-      rw.TEXT.demote('Pat', ['Pat Rsn'], true) === 'Role sync: Pat was moved to Guest in Discord. Record updated to guest. Rank role removed. RSNs: Pat Rsn.');
-    ok('rolewatch: demote line without a rank removal or RSNs',
-      rw.TEXT.demote('Pat', [], false) === 'Role sync: Pat was moved to Guest in Discord. Record updated to guest.');
-    ok('rolewatch: no-record line wording',
-      rw.TEXT.norecord('Pat') === 'Role sync: Pat holds a member role in Discord but has no membership record. Nothing changed - staff call.');
+    // Panel strings, word for word (approved Nov 26, 2026).
+    const PT = require(path.join(__dirname, '..', 'src', 'role-sync-panel.js')).TEXT;
+    ok('rolesync: panel strings word for word',
+      PT.title === '⛧ Role Sync ⛧'
+      && PT.flagsHeading === 'Needs a staff call'
+      && PT.flag.demotion(1, '42', 100) === '**1.** <@42>: member on record, no member role. <t:100:R>'
+      && PT.flag.norecord(2, '42', 100) === '**2.** <@42>: member role, no record. <t:100:R>'
+      && PT.flagsEmpty === 'Nothing needs a staff call.'
+      && PT.recentHeading === 'Done by the bot'
+      && PT.recent.promote('42', 100) === '<@42> set to member. Checklist entry added. <t:100:R>'
+      && PT.recent.repair('42', 100) === '<@42> record fixed to member. Checklist entry added. <t:100:R>'
+      && PT.recent.demote('42', 100, true) === '<@42> set to guest. Rank role removed. <t:100:R>'
+      && PT.recent.demote('42', 100, false) === '<@42> set to guest. <t:100:R>'
+      && PT.recentEmpty === 'Nothing in the last 7 days.'
+      && PT.allClear === 'All caught up. Roles and records match.'
+      && PT.footer === 'Fix opens their record. A row clears once roles and record agree.'
+      && PT.fixButton(3) === 'Fix 3'
+      && PT.fixGone === 'That one is already sorted.'
+      && PT.staffOnly === 'That button is for staff only.');
+    ok('rolewatch: the old staff-line strings and posters are gone',
+      rw.TEXT === undefined && rw.postToChecklist === undefined);
 
     // The classifier, case by case.
     const cls = (standing, roleIds, isBot = false) => rw.classify({ standing, roleIds, isBot });
@@ -2760,7 +2764,7 @@ async function t(name, fn, needFile = true) {
       promo: '990000000000000301', demoted: '990000000000000302', stray: '990000000000000303',
       friend: '990000000000000304', quiet: '990000000000000305', repair: '990000000000000306', guestSwap: '990000000000000312',
       sweepDemoted: '990000000000000307', stray2: '990000000000000308', turtle: '990000000000000309',
-      snapStray: '990000000000000310', bot: '990000000000000311',
+      snapStray: '990000000000000310', bot: '990000000000000311', clearMe: '990000000000000313',
     };
     writeFixtureR('membership.json', {
       [GIDR]: {
@@ -2785,10 +2789,52 @@ async function t(name, fn, needFile = true) {
     writeFixtureR('cc-checklist.json', { entries: [], messageId: null, page: 0 });
     try { fs.unlinkSync(path.join(DATA, 'role-watch.json')); } catch {}
 
+    const panelM = require(path.join(__dirname, '..', 'src', 'role-sync-panel.js'));
+    const settledPathR = path.join(DATA, 'sync-settled.json');
+    const savedSettledR = fs.existsSync(settledPathR) ? fs.readFileSync(settledPathR) : null;
+    const stateFileR = path.join(DATA, 'role-watch.json');
+    const resetStateR = () => { try { fs.unlinkSync(stateFileR); } catch {} };
+    resetStateR();
+
+    // The panel thread: a fake thread that stores messages, counts
+    // sends and edits, and throws Unknown Message for a missing id.
+    // The test points config.roleSync.threadId at a thread id of its
+    // own (restored afterwards), so CC checklist posts and panel
+    // posts stay apart.
+    const panelThreadId = '990000000000009001';
+    const roleSyncBefore = cfgR.roleSync;
+    ok('rolesync: config.roleSync.threadId ships unset',
+      roleSyncBefore && roleSyncBefore.threadId === null);
+    cfgR.roleSync = { threadId: panelThreadId };
+    const panelMsgs = new Map();
     const sentR = [];
+    let panelSeq = 0;
+    let panelEdits = 0;
+    const fakePanelThread = {
+      id: panelThreadId,
+      archived: false,
+      isThread: () => true,
+      setArchived: async () => { fakePanelThread.archived = false; },
+      messages: {
+        fetch: async (id) => {
+          const m = panelMsgs.get(id);
+          if (!m) { const e = new Error('Unknown Message'); e.code = 10008; throw e; }
+          return m;
+        },
+      },
+      send: async (opts) => {
+        const m = {
+          id: `panel-${++panelSeq}`, payload: opts,
+          edit: async (o) => { m.payload = o; panelEdits++; return m; },
+        };
+        panelMsgs.set(m.id, m);
+        sentR.push(opts);
+        return m;
+      },
+    };
     const generalSentR = [];
-    const fakeChecklistR = { send: async (opts) => { sentR.push(opts); return { id: 'rolewatch-fake' }; } };
     const fakeGeneralR = { send: async (opts) => { generalSentR.push(opts); return { id: 'rolewatch-general' }; } };
+    const channelsR = () => new Map([[cfgR.recruit.generalChannelId, fakeGeneralR], [panelThreadId, fakePanelThread]]);
     const fakeMemberR = (id, name, roleIds, isBot = false) => {
       const cache = new Map(roleIds.map((r) => [r, { id: r }]));
       return {
@@ -2803,25 +2849,255 @@ async function t(name, fn, needFile = true) {
     const liveGuildR = (members) => ({
       id: GIDR,
       members: { cache: new Map(members.map((m) => [m.id, m])) },
-      channels: { cache: new Map([[cfgR.recruit.generalChannelId, fakeGeneralR]]) },
+      channels: { cache: channelsR() },
     });
     const liveClientR = (guild) => ({
-      channels: { fetch: async () => fakeChecklistR },
+      channels: { fetch: async () => fakePanelThread },
       guilds: { cache: new Map([[GIDR, guild]]) },
     });
+    const panelDesc = () => {
+      const st = panelM.loadState();
+      const m = st.messageId && panelMsgs.get(st.messageId);
+      return m ? m.payload.embeds[0].data.description || '' : null;
+    };
+    const openKeys = () => Object.keys(panelM.loadState().open).sort();
+    const err10007 = () => { const e = new Error('Unknown Member'); e.code = 10007; return e; };
 
     let rosterRefreshes = 0;
     const realScheduleRefresh = compRosterM.scheduleRefresh;
     compRosterM.scheduleRefresh = () => { rosterRefreshes++; };
     guildCacheR.invalidateCache();
     try {
+      // ---- State migration ------------------------------------------
+      const V1 = 1764160000000;
+      fs.writeFileSync(stateFileR, JSON.stringify({ sent: {
+        'demotion:111': V1, 'norecord:222': V1 + 5000, 'demote:333': V1,
+      } }));
+      const mig = panelM.loadState();
+      ok('rolesync: a v1 file migrates to open flags with the old timestamps',
+        mig.version === 2 && mig.messageId === null
+        && Object.keys(mig.open).sort().join() === 'demotion:111,norecord:222'
+        && mig.open['demotion:111'].since === Math.floor(V1 / 1000)
+        && mig.open['demotion:111'].action === 'demotion' && mig.open['demotion:111'].userId === '111'
+        && mig.open['norecord:222'].since === Math.floor((V1 + 5000) / 1000)
+        && !('demote:333' in mig.open) && mig.recent.length === 0,
+        JSON.stringify(mig));
+      fs.writeFileSync(stateFileR, '{ not json');
+      const corrupt = panelM.loadState();
+      ok('rolesync: a corrupt state file reads as empty',
+        corrupt.version === 2 && Object.keys(corrupt.open).length === 0 && corrupt.recent.length === 0);
+      resetStateR();
+
+      // ---- Embed build ----------------------------------------------
+      const nowSec = Math.floor(Date.now() / 1000);
+      const stBoth = {
+        messageId: null, page: 0,
+        open: {
+          'demotion:101': { action: 'demotion', userId: '101', since: nowSec - 300 },
+          'norecord:102': { action: 'norecord', userId: '102', since: nowSec - 100 },
+        },
+        recent: [
+          { action: 'promote', userId: '201', at: nowSec - 60, rankRemoved: false },
+          { action: 'demote', userId: '202', at: nowSec - 90, rankRemoved: true },
+        ],
+      };
+      const descBoth = panelM.buildEmbed(stBoth).data.description;
+      ok('rolesync: both sections render from state',
+        descBoth.includes('**Needs a staff call**') && descBoth.includes('**Done by the bot**')
+        && descBoth.includes(`**1.** <@101>: member on record, no member role. <t:${nowSec - 300}:R>`)
+        && descBoth.includes(`**2.** <@102>: member role, no record. <t:${nowSec - 100}:R>`)
+        && descBoth.includes(`<@201> set to member. Checklist entry added. <t:${nowSec - 60}:R>`)
+        && descBoth.includes(`<@202> set to guest. Rank role removed. <t:${nowSec - 90}:R>`)
+        && !descBoth.includes('All caught up'),
+        descBoth);
+      const stFlagsOnly = { ...stBoth, recent: [] };
+      const descFlagsOnly = panelM.buildEmbed(stFlagsOnly).data.description;
+      const descRecentOnly = panelM.buildEmbed({ ...stBoth, open: {} }).data.description;
+      ok('rolesync: an empty section shows its own empty line',
+        descFlagsOnly.includes('Nothing in the last 7 days.')
+        && descRecentOnly.includes('Nothing needs a staff call.'));
+      const embedClear = panelM.buildEmbed({ messageId: null, page: 0, open: {}, recent: [] });
+      ok('rolesync: the all-clear text shows when both sections are empty',
+        embedClear.data.description === 'All caught up. Roles and records match.'
+        && panelM.buildButtons({ open: {}, recent: [], page: 0 }).length === 0);
+      const manyOpen = {};
+      for (let i = 1; i <= 7; i++) manyOpen[`demotion:30${i}`] = { action: 'demotion', userId: `30${i}`, since: nowSec - 1000 + i };
+      const pg0 = { messageId: null, page: 0, open: manyOpen, recent: [] };
+      const pg1 = { ...pg0, page: 1 };
+      const d0 = panelM.buildEmbed(pg0).data.description;
+      const d1 = panelM.buildEmbed(pg1).data.description;
+      const b0 = panelM.buildButtons(pg0);
+      const b1 = panelM.buildButtons(pg1);
+      ok('rolesync: flags are numbered and paged at 5',
+        d0.includes('**5.** <@305>') && !d0.includes('**6.**')
+        && d1.includes('**6.** <@306>') && d1.includes('**7.** <@307>') && !d1.includes('**5.**')
+        && b0.length === 2 && b0[0].components.length === 5
+        && b0[0].components[0].data.custom_id === 'rsync:fix:301'
+        && b0[0].components[0].data.label === 'Fix 1'
+        && b0[1].components.map((c) => c.data.custom_id).join() === 'rsync:prev,rsync:next'
+        && b1[0].components.length === 2 && b1[0].components[0].data.label === 'Fix 6',
+        JSON.stringify({ d0, d1 }));
+      ok('rolesync: one page of flags has no paging row',
+        panelM.buildButtons(stFlagsOnly).length === 1);
+
+      // ---- recordAction ---------------------------------------------
+      resetStateR();
+      for (let i = 1; i <= 12; i++) panelM.recordAction('promote', `40${i}`, { at: nowSec - 1000 + i });
+      const rec12 = panelM.loadState().recent;
+      ok('rolesync: recordAction keeps newest first and trims to 10',
+        rec12.length === 10 && rec12[0].userId === '4012' && rec12[9].userId === '403',
+        JSON.stringify(rec12.map((r) => r.userId)));
+      panelM.recordAction('repair', '499', { at: nowSec - 8 * 86400 });
+      panelM.recordAction('demote', '498', { rankRemoved: true });
+      const recAged = panelM.loadState().recent;
+      ok('rolesync: recordAction drops entries older than 7 days on write',
+        !recAged.some((r) => r.userId === '499')
+        && recAged[0].userId === '498' && recAged[0].rankRemoved === true && recAged.length === 10,
+        JSON.stringify(recAged.map((r) => r.userId)));
+      resetStateR();
+
+      // ---- Refresh ----------------------------------------------------
+      const homeGuild = { channels: { cache: new Map([['111', 'ccthread'], ['222', 'ownthread']]) } };
+      ok('rolesync: the panel home is its own thread, else the CC checklist thread',
+        panelM.panelHome(homeGuild, { roleSync: { threadId: '222' }, ccChecklist: { threadId: '111' } }) === 'ownthread'
+        && panelM.panelHome(homeGuild, { roleSync: { threadId: null }, ccChecklist: { threadId: '111' } }) === 'ccthread'
+        && panelM.panelHome(homeGuild, { ccChecklist: { threadId: '111' } }) === 'ccthread'
+        && panelM.panelHome(homeGuild, { roleSync: { threadId: null } }) === null);
+      const GROUP = {
+        resolved: '990000000000000401', settledU: '990000000000000402', left: '990000000000000403',
+        errU: '990000000000000404', valid: '990000000000000405',
+      };
+      writeFixtureR('membership.json', {
+        [GIDR]: {
+          [GROUP.resolved]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [GROUP.settledU]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [GROUP.valid]: { standing: 'member', at: Date.now(), via: 'approval' },
+        },
+      });
+      fs.writeFileSync(settledPathR, JSON.stringify({ userIds: [GROUP.settledU], rsns: [] }));
+      const refGuild = {
+        id: GIDR,
+        channels: { cache: channelsR() },
+        members: {
+          cache: new Map([
+            [GROUP.resolved, fakeMemberR(GROUP.resolved, 'Resolved', [IRON])],
+            [GROUP.settledU, fakeMemberR(GROUP.settledU, 'SettledU', [PING])],
+            [GROUP.valid, fakeMemberR(GROUP.valid, 'Valid', [PING])],
+          ]),
+          fetch: async (id) => {
+            if (id === GROUP.left) throw err10007();
+            throw new Error('network down');
+          },
+        },
+      };
+      // Posts when messageId is null.
+      resetStateR();
+      const sendsBefore = sentR.length;
+      await panelM.refresh(refGuild);
+      const afterPost = panelM.loadState();
+      ok('rolesync: refresh posts a new panel when messageId is null',
+        sentR.length === sendsBefore + 1 && !!afterPost.messageId && afterPost.channelId === panelThreadId
+        && panelDesc() === 'All caught up. Roles and records match.'
+        && JSON.stringify(sentR[sentR.length - 1].allowedMentions) === JSON.stringify({ parse: [] }));
+      // Edits in place when it exists.
+      const editsBefore = panelEdits;
+      const idBefore = afterPost.messageId;
+      await panelM.refresh(refGuild);
+      ok('rolesync: refresh edits in place when the message exists',
+        panelEdits === editsBefore + 1 && sentR.length === sendsBefore + 1
+        && panelM.loadState().messageId === idBefore
+        && JSON.stringify(panelMsgs.get(idBefore).payload.allowedMentions) === JSON.stringify({ parse: [] }));
+      // Reposts when the message is gone.
+      panelMsgs.clear();
+      await panelM.refresh(refGuild);
+      ok('rolesync: refresh posts again when the message is gone',
+        sentR.length === sendsBefore + 2 && panelM.loadState().messageId !== idBefore
+        && panelMsgs.has(panelM.loadState().messageId));
+      // Two refreshes at once post once (chained ordering).
+      panelMsgs.clear();
+      const sendsRace = sentR.length;
+      await Promise.all([panelM.refresh(refGuild), panelM.refresh(refGuild)]);
+      ok('rolesync: concurrent refreshes post only once',
+        sentR.length === sendsRace + 1);
+      // A thread that slept is woken first.
+      fakePanelThread.archived = true;
+      await panelM.refresh(refGuild);
+      ok('rolesync: refresh un-archives the thread', fakePanelThread.archived === false);
+
+      // Flag re-check.
+      const base = panelM.loadState();
+      base.open = {
+        [`demotion:${GROUP.resolved}`]: { action: 'demotion', userId: GROUP.resolved, since: nowSec - 500 },
+        [`norecord:${GROUP.settledU}`]: { action: 'norecord', userId: GROUP.settledU, since: nowSec - 500 },
+        [`norecord:${GROUP.left}`]: { action: 'norecord', userId: GROUP.left, since: nowSec - 500 },
+        [`norecord:${GROUP.errU}`]: { action: 'norecord', userId: GROUP.errU, since: nowSec - 500 },
+        [`demotion:${GROUP.valid}`]: { action: 'demotion', userId: GROUP.valid, since: nowSec - 500 },
+      };
+      panelM.saveState(base);
+      await panelM.refresh(refGuild);
+      const keysAfter = openKeys();
+      ok('rolesync: refresh drops resolved, settled and departed flags and keeps the rest',
+        keysAfter.join() === [`demotion:${GROUP.valid}`, `norecord:${GROUP.errU}`].sort().join(),
+        JSON.stringify(keysAfter));
+      ok('rolesync: a flag dropped on refresh is also gone from the panel text',
+        !panelDesc().includes(`<@${GROUP.resolved}>`) && panelDesc().includes(`<@${GROUP.valid}>`)
+        && panelDesc().includes(`<@${GROUP.errU}>`));
+      const errKept = keysAfter.includes(`norecord:${GROUP.errU}`);
+      ok('rolesync: a fetch error keeps the flag', errKept);
+
+      // ---- Fix button -------------------------------------------------
+      const replies = [];
+      const mkInteraction = (customId, staff) => ({
+        customId, guildId: GIDR,
+        member: { roles: { cache: { some: () => staff } }, permissions: { has: () => false } },
+        reply: async (o) => { replies.push(o); },
+      });
+      replies.length = 0;
+      await panelM.handleRoleSyncButton(mkInteraction(`rsync:fix:${GROUP.valid}`, false));
+      ok('rolesync: the Fix button is staff only',
+        replies.length === 1 && replies[0].content === 'That button is for staff only.' && replies[0].ephemeral === true);
+      replies.length = 0;
+      await panelM.handleRoleSyncButton(mkInteraction(`rsync:fix:${GROUP.valid}`, true));
+      const wcM = require(path.join(__dirname, '..', 'src', 'website-controls.js'));
+      const expectPayload = wcM.standingPayload(GIDR, GROUP.valid);
+      ok('rolesync: Fix on a live flag replies with the standing payload',
+        replies.length === 1 && replies[0].ephemeral === true
+        && replies[0].content === expectPayload.content
+        && replies[0].content === `<@${GROUP.valid}> is recorded as a member.`
+        && replies[0].components.length === expectPayload.components.length
+        && replies[0].components[0].components[0].data.custom_id === `webctl:set:member:${GROUP.valid}`);
+      replies.length = 0;
+      await panelM.handleRoleSyncButton(mkInteraction(`rsync:fix:${GROUP.resolved}`, true));
+      ok('rolesync: Fix on a cleared flag replies with the already-sorted line',
+        replies.length === 1 && replies[0].content === 'That one is already sorted.' && replies[0].ephemeral === true);
+
+      // ---- Role-watch integration -------------------------------------
+      resetStateR();
+      panelMsgs.clear();
+      if (savedSettledR === null) { try { fs.unlinkSync(settledPathR); } catch {} }
+      else fs.writeFileSync(settledPathR, savedSettledR);
+      writeFixtureR('membership.json', {
+        [GIDR]: {
+          [UR.promo]: { standing: 'guest', at: Date.now(), via: 'approval' },
+          [UR.demoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [UR.friend]: { standing: 'guest', at: Date.now(), via: 'approval' },
+          [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [UR.repair]: { standing: 'guest', at: Date.now(), via: 'approval' },
+          [UR.sweepDemoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [UR.guestSwap]: { standing: 'member', at: Date.now(), via: 'approval' },
+          [UR.clearMe]: { standing: 'member', at: Date.now(), via: 'approval' },
+        },
+      });
+      const sendsStart = sentR.length;
+
       // Live promotion: a guest gains Iron Sworn by hand.
       const promoNew = fakeMemberR(UR.promo, 'Promo', [GUEST, IRON, PING]);
       const promoOld = fakeMemberR(UR.promo, 'Promo', [GUEST, PING]);
       const promoGuild = liveGuildR([promoNew]);
       promoNew.guild = promoGuild; promoOld.guild = promoGuild;
       const promoted = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
-      ok('rolewatch: a hand promotion lines everything up',
+      const stPromo = panelM.loadState();
+      ok('rolewatch: a hand promotion lines everything up and records a recent action',
         promoted === true
         && readMembershipR()[UR.promo].standing === 'member'
         && readMembershipR()[UR.promo].via === 'role-watch'
@@ -2829,47 +3105,55 @@ async function t(name, fn, needFile = true) {
         && readCcR().entries.some((e) => e.userId === UR.promo && e.oldRank === 'None' && e.newRank === 'Initiate')
         && rosterRefreshes >= 1
         && generalSentR.length === 1 && generalSentR[0].content.includes(`<@${UR.promo}> has joined Oath Forsaken.`)
-        && sentR.length === 1 && sentR[0].content === rw.TEXT.promotion('Promo', ['Promo Rsn'])
-        && JSON.stringify(sentR[0].allowedMentions) === JSON.stringify({ parse: [] }),
-        JSON.stringify({ sent: sentR.map((s) => s.content), general: generalSentR.length }));
+        && stPromo.recent.length === 1 && stPromo.recent[0].action === 'promote' && stPromo.recent[0].userId === UR.promo
+        && panelDesc().includes(`<@${UR.promo}> set to member. Checklist entry added.`),
+        JSON.stringify(stPromo));
+      ok('rolewatch: a live promotion posts no thread line, only the panel',
+        sentR.length === sendsStart + 1
+        && sentR.every((p) => p.content === undefined && Array.isArray(p.embeds)),
+        JSON.stringify({ n: sentR.length, start: sendsStart }));
       const promotedAgain = await rw.onMemberUpdate(liveClientR(promoGuild), promoOld, promoNew, { settleMs: 0 });
       ok('rolewatch: a repeat promotion event does nothing twice',
-        promotedAgain === false && sentR.length === 1 && generalSentR.length === 1);
+        promotedAgain === false && panelM.loadState().recent.length === 1 && generalSentR.length === 1);
 
-      // A cosmetic change (Initiate lands on a settled member) is ignored.
+      // A cosmetic change is ignored; a bot role change is ignored.
       const cosOld = fakeMemberR(UR.quiet, 'Quiet', [IRON]);
       const cosNew = fakeMemberR(UR.quiet, 'Quiet', [IRON, INITIATE]);
       cosOld.guild = promoGuild; cosNew.guild = promoGuild;
       const cosmetic = await rw.onMemberUpdate(liveClientR(promoGuild), cosOld, cosNew, { settleMs: 0 });
-      ok('rolewatch: a cosmetic role change is ignored', cosmetic === false && sentR.length === 1);
-
-      // A bot gaining a member role is ignored.
+      ok('rolewatch: a cosmetic role change is ignored', cosmetic === false && panelM.loadState().recent.length === 1);
       const botOld = fakeMemberR(UR.bot, 'Botty', [], true);
       const botNew = fakeMemberR(UR.bot, 'Botty', [IRON], true);
       botOld.guild = promoGuild; botNew.guild = promoGuild;
       const botSeen = await rw.onMemberUpdate(liveClientR(promoGuild), botOld, botNew, { settleMs: 0 });
-      ok('rolewatch: a bot role change is ignored', botSeen === false && sentR.length === 1);
+      ok('rolewatch: a bot role change is ignored', botSeen === false && openKeys().length === 0);
 
-      // Demotion drift: one staff line, no record change, no repeat.
+      // Demotion drift: a panel row, no record change, no repeat.
       const demOld = fakeMemberR(UR.demoted, 'Demoted', [IRON]);
       const demNew = fakeMemberR(UR.demoted, 'Demoted', [PING]);
       const demGuild = liveGuildR([demNew]);
       demOld.guild = demGuild; demNew.guild = demGuild;
+      const editsPre = panelEdits;
       const demotedOnce = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
-      ok('rolewatch: losing the last member role posts one staff line and changes nothing',
-        demotedOnce === true && sentR.length === 2 && sentR[1].content === rw.TEXT.demotion('Demoted')
-        && readMembershipR()[UR.demoted].standing === 'member');
+      ok('rolewatch: losing the last member role opens a panel row and changes nothing',
+        demotedOnce === true && openKeys().join() === `demotion:${UR.demoted}`
+        && panelEdits === editsPre + 1 && sentR.length === sendsStart + 1
+        && panelDesc().includes(`<@${UR.demoted}>: member on record, no member role.`)
+        && readMembershipR()[UR.demoted].standing === 'member',
+        JSON.stringify({ k: openKeys(), e: panelEdits - editsPre, n: sentR.length - sendsStart, d: panelDesc() }));
       const demotedTwice = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
-      ok('rolewatch: the same demotion drift never posts twice', demotedTwice === false && sentR.length === 2);
+      ok('rolewatch: the same demotion drift never opens twice',
+        demotedTwice === false && openKeys().length === 1);
 
-      // No record: one staff line, and no standing is created.
+      // No record: a panel row, and no standing is created.
       const strayOld = fakeMemberR(UR.stray, 'Stray', [PING]);
       const strayNew = fakeMemberR(UR.stray, 'Stray', [PING, UNBOUND]);
       const strayGuild = liveGuildR([strayNew]);
       strayOld.guild = strayGuild; strayNew.guild = strayGuild;
       const straySeen = await rw.onMemberUpdate(liveClientR(strayGuild), strayOld, strayNew, { settleMs: 0 });
-      ok('rolewatch: a member role with no record posts one staff line and creates nothing',
-        straySeen === true && sentR.length === 3 && sentR[2].content === rw.TEXT.norecord('Stray')
+      ok('rolewatch: a member role with no record opens a panel row and creates nothing',
+        straySeen === true && openKeys().includes(`norecord:${UR.stray}`)
+        && panelDesc().includes(`<@${UR.stray}>: member role, no record.`)
         && !readMembershipR()[UR.stray]);
 
       // Friend holder gaining a member role: exempt, untouched.
@@ -2879,38 +3163,56 @@ async function t(name, fn, needFile = true) {
       frOld.guild = frGuild; frNew.guild = frGuild;
       const friendSeen = await rw.onMemberUpdate(liveClientR(frGuild), frOld, frNew, { settleMs: 0 });
       ok('rolewatch: a Friend holder is exempt from the live watch',
-        friendSeen === false && sentR.length === 3 && readMembershipR()[UR.friend].standing === 'guest');
+        friendSeen === false && readMembershipR()[UR.friend].standing === 'guest'
+        && !openKeys().some((k) => k.endsWith(UR.friend)));
 
-      // Member to guest: a hand swap to Guest flips the record,
-      // takes the rank role off, refreshes the roster, and posts
-      // one staff line. A repeat event does nothing.
+      // Member to guest: record flips, rank role comes off, a recent row.
       const swapOld = fakeMemberR(UR.guestSwap, 'GuestSwap', [IRON, INITIATE]);
       const swapNew = fakeMemberR(UR.guestSwap, 'GuestSwap', [GUEST, INITIATE]);
       const swapGuild = liveGuildR([swapNew]);
       swapOld.guild = swapGuild; swapNew.guild = swapGuild;
       const swapsBefore = rosterRefreshes;
       const swapped = await rw.onMemberUpdate(liveClientR(swapGuild), swapOld, swapNew, { settleMs: 0 });
-      ok('rolewatch: a hand swap to Guest lines the record up behind it',
+      const swapRecent = panelM.loadState().recent[0];
+      ok('rolewatch: a hand swap to Guest lines the record up and records a recent action',
         swapped === true
         && readMembershipR()[UR.guestSwap].standing === 'guest'
         && readMembershipR()[UR.guestSwap].via === 'role-watch'
-        && !swapNew.roles.cache.has(INITIATE)
-        && swapNew.roles.cache.has(GUEST)
+        && !swapNew.roles.cache.has(INITIATE) && swapNew.roles.cache.has(GUEST)
         && rosterRefreshes > swapsBefore
-        && sentR.length === 4 && sentR[3].content === rw.TEXT.demote('GuestSwap', ['Swap Rsn'], true),
-        JSON.stringify({ sent: sentR.map((s) => s.content) }));
+        && swapRecent.action === 'demote' && swapRecent.userId === UR.guestSwap && swapRecent.rankRemoved === true
+        && panelDesc().includes(`<@${UR.guestSwap}> set to guest. Rank role removed.`));
       const swappedAgain = await rw.onMemberUpdate(liveClientR(swapGuild), swapOld, swapNew, { settleMs: 0 });
       ok('rolewatch: a repeat guest-swap event does nothing twice',
-        swappedAgain === false && sentR.length === 4);
+        swappedAgain === false && panelM.loadState().recent.filter((r) => r.userId === UR.guestSwap).length === 1);
 
-      // The sweep: one repair, two flags, one combined message, no
-      // welcome. The stray and demoted members from the live tests
-      // are absent here, so their live dedup keys prune away.
+      // A live fix clears an open flag: the flag opens, the record
+      // is set to guest by hand, the person gains Guest, and the
+      // access change lets classify() return null.
+      const clrOld = fakeMemberR(UR.clearMe, 'ClearMe', [IRON]);
+      const clrNew = fakeMemberR(UR.clearMe, 'ClearMe', [PING]);
+      const clrGuild = liveGuildR([clrNew]);
+      clrOld.guild = clrGuild; clrNew.guild = clrGuild;
+      await rw.onMemberUpdate(liveClientR(clrGuild), clrOld, clrNew, { settleMs: 0 });
+      const flagOpened = openKeys().includes(`demotion:${UR.clearMe}`);
+      require(path.join(__dirname, '..', 'src', 'store.js')).setMembershipStanding(GIDR, UR.clearMe, 'guest', 'panel');
+      const clrNew2 = fakeMemberR(UR.clearMe, 'ClearMe', [PING, GUEST]);
+      const clrGuild2 = liveGuildR([clrNew2]);
+      clrNew2.guild = clrGuild2;
+      const cleared = await rw.onMemberUpdate(liveClientR(clrGuild2), clrNew, clrNew2, { settleMs: 0 });
+      ok('rolewatch: an access change that resolves a flag clears the row at once',
+        flagOpened && cleared === true && !openKeys().includes(`demotion:${UR.clearMe}`)
+        && !panelDesc().includes(`<@${UR.clearMe}>`));
+
+      // ---- The sweep --------------------------------------------------
+      // Before the sweep the panel holds the live demotion and
+      // no-record rows. Neither person is in the sweep roster, so
+      // both rows are pruned.
       const sweepMembersR = new Map();
       const sweepGuildR = {
         id: GIDR,
         members: { fetch: async () => sweepMembersR, cache: sweepMembersR },
-        channels: { cache: new Map() },
+        channels: { cache: channelsR() },
       };
       const addSweepMember = (m) => { m.guild = sweepGuildR; sweepMembersR.set(m.id, m); return m; };
       const repairMember = fakeMemberR(UR.repair, 'Repair', [GUEST, IRON]);
@@ -2923,49 +3225,48 @@ async function t(name, fn, needFile = true) {
       addSweepMember(fakeMemberR(UR.bot, 'Botty', [IRON], true));
       const sweepClientR = liveClientR(sweepGuildR);
       guildCacheR.invalidateCache();
+      const preKeys = openKeys();
+      const editsPreSweep = panelEdits;
       const sweptOnce = await rw.runSweep(sweepClientR);
-      ok('rolewatch: the sweep repairs and flags in one message, with no welcome',
-        sweptOnce === true && sentR.length === 5
-        && sentR[4].content === [
-          rw.TEXT.repair('Repair', ['Repair Rsn']),
-          rw.TEXT.demote('SweepDemoted', [], false),
-          rw.TEXT.norecord('StrayTwo'),
-        ].join('\n')
+      const stSweep = panelM.loadState();
+      ok('rolewatch: the sweep repairs, records, flags and prunes a resolved flag from the panel',
+        sweptOnce === true
+        && preKeys.includes(`demotion:${UR.demoted}`) && preKeys.includes(`norecord:${UR.stray}`)
+        && Object.keys(stSweep.open).sort().join() === `norecord:${UR.stray2}`
+        && stSweep.recent.some((r) => r.action === 'repair' && r.userId === UR.repair)
+        && stSweep.recent.some((r) => r.action === 'demote' && r.userId === UR.sweepDemoted && r.rankRemoved === false)
         && readMembershipR()[UR.sweepDemoted].standing === 'guest'
-        && generalSentR.length === 1
         && readMembershipR()[UR.repair].standing === 'member'
         && repairMember.roles.cache.has(INITIATE)
-        && readCcR().entries.some((e) => e.userId === UR.repair && e.newRank === 'Initiate'),
-        JSON.stringify(sentR.map((s) => s.content)));
+        && readCcR().entries.some((e) => e.userId === UR.repair && e.newRank === 'Initiate')
+        && generalSentR.length === 1
+        && panelEdits > editsPreSweep
+        && panelDesc().includes(`<@${UR.stray2}>: member role, no record.`)
+        && panelDesc().includes(`<@${UR.repair}> record fixed to member.`),
+        JSON.stringify(stSweep));
+      const recentLen = stSweep.recent.length;
+      const editsPre2 = panelEdits;
       const sweptTwice = await rw.runSweep(sweepClientR);
-      ok('rolewatch: a repeat sweep with the same drift stays silent',
-        sweptTwice === false && sentR.length === 5);
+      ok('rolewatch: a repeat sweep adds nothing new but still refreshes the panel',
+        sweptTwice === true && panelM.loadState().recent.length === recentLen
+        && panelEdits === editsPre2 + 1
+        && Object.keys(panelM.loadState().open).join() === `norecord:${UR.stray2}`);
+      // A deleted panel comes back on the next sweep.
+      panelMsgs.clear();
+      const sendsBeforeSweep3 = sentR.length;
+      await rw.runSweep(sweepClientR);
+      ok('rolewatch: the sweep re-posts a deleted panel', sentR.length === sendsBeforeSweep3 + 1);
 
-      // The flipped member is a consistent guest now: a third
-      // sweep posts nothing, the demote key has cleared, and the
-      // still-open no-record key stays.
-      const sweptThrice = await rw.runSweep(sweepClientR);
-      const stateAfterR = readStateR();
-      ok('rolewatch: resolved issues clear their dedup keys',
-        sweptThrice === false && sentR.length === 5
-        && !stateAfterR.sent[`demote:${UR.sweepDemoted}`]
-        && !!stateAfterR.sent[`norecord:${UR.stray2}`],
-        JSON.stringify(stateAfterR));
-
-      // Settled cases: a settled member's demotion drift and a
-      // settled no-record member post nothing, live or in the
-      // sweep. The settled file is fixture data here, saved and
-      // restored like the rest.
-      const settledPathR = path.join(DATA, 'sync-settled.json');
-      const savedSettledR = fs.existsSync(settledPathR) ? fs.readFileSync(settledPathR) : null;
+      // Settled cases: a settled member's drift is not flagged
+      // live, and the sweep drops an existing row for them.
       fs.writeFileSync(settledPathR, JSON.stringify({ userIds: [UR.stray2, UR.demoted], rsns: [] }));
       const demSettled = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
       ok('rolewatch: a settled member is not flagged by the live watch',
-        demSettled === false && sentR.length === 5
+        demSettled === false && !openKeys().includes(`demotion:${UR.demoted}`)
         && readMembershipR()[UR.demoted].standing === 'member');
-      const settledSwept = await rw.runSweep(sweepClientR);
-      ok('rolewatch: a settled no-record member is not flagged by the sweep',
-        settledSwept === false && sentR.length === 5);
+      await rw.runSweep(sweepClientR);
+      ok('rolewatch: a settled no-record member is dropped from the panel by the sweep',
+        openKeys().length === 0, JSON.stringify(openKeys()));
       if (savedSettledR === null) { try { fs.unlinkSync(settledPathR); } catch {} }
       else fs.writeFileSync(settledPathR, savedSettledR);
 
@@ -2982,23 +3283,28 @@ async function t(name, fn, needFile = true) {
       const snapGuildR = {
         id: GIDR,
         members: { fetch: async () => { throw new Error('fetch down'); }, cache: new Map() },
-        channels: { cache: new Map() },
+        channels: { cache: channelsR() },
       };
       const snapSwept = await rw.runSweep(liveClientR(snapGuildR));
       ok('rolewatch: the sweep falls back to the roles snapshot',
-        snapSwept === true && sentR.length === 6
-        && sentR[5].content === rw.TEXT.norecord(`user ${UR.snapStray}`),
-        JSON.stringify(sentR.map((s) => s.content)));
+        snapSwept === true && openKeys().join() === `norecord:${UR.snapStray}`
+        && panelDesc().includes(`<@${UR.snapStray}>: member role, no record.`),
+        JSON.stringify(openKeys()));
 
-      // Neither source answers: silence, no crash.
+      // Neither source answers: silence, no crash, no panel change.
       try { fs.unlinkSync(snapPathR); } catch {}
       guildCacheR.invalidateCache();
+      const stBeforeNone = JSON.stringify(panelM.loadState());
+      const editsNone = panelEdits;
       const noSource = await rw.runSweep(liveClientR(snapGuildR));
       ok('rolewatch: with no member source the sweep stays silent',
-        noSource === false && sentR.length === 6);
+        noSource === false && JSON.stringify(panelM.loadState()) === stBeforeNone && panelEdits === editsNone);
     } finally {
+      cfgR.roleSync = roleSyncBefore;
       compRosterM.scheduleRefresh = realScheduleRefresh;
       guildCacheR.invalidateCache();
+      if (savedSettledR === null) { try { fs.unlinkSync(settledPathR); } catch {} }
+      else fs.writeFileSync(settledPathR, savedSettledR);
       restoreR();
     }
   }

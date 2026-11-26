@@ -42,6 +42,7 @@ const { mergeSiteLinkRequests } = require('./link-requests');
 const { handleStaffLinkSelect, handleStaffLinkModal, refreshStaffLinkPanel } = require('./staff-link');
 const { handleWebsiteControlsSelect, refreshWebsiteControlsPanel } = require('./website-controls');
 const { refreshChecklist } = require('./cc-checklist');
+const { refresh: refreshRoleSyncPanel } = require('./role-sync-panel');
 const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
@@ -246,6 +247,7 @@ client.once(Events.ClientReady, async (c) => {
         await refreshChecklist(guild);
         await refreshStaffLinkPanel(guild);
         await refreshWebsiteControlsPanel(guild);
+        await refreshRoleSyncPanel(guild);
       }
 
       // About the Forsaken thread: un-archive it if it slept, so the

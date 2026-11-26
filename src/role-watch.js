@@ -40,21 +40,21 @@
 // is re-read, so approvals pass through untouched and only hand
 // moves (which never write a record) are acted on.
 //
-// Staff lines go to the CC checklist thread with mentions parsing
-// disabled - no pings, ever. Sent lines are remembered in
-// data/role-watch.json so an unresolved issue is never posted
-// twice; a key clears when a sweep sees the issue is gone.
+// Reporting goes to the role sync panel (src/role-sync-panel.js),
+// one standing embed edited in place: open flags for the two
+// staff-call cases, and the bot's recent actions. The watcher
+// posts no lines of its own. Panel state lives in
+// data/role-watch.json; a flag clears when the issue is gone.
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const store = require('./store');
-const { atomicWrite } = require('./store');
 const { safeFetch, buildInitiateWelcome } = require('./utils');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getRsnEntry } = require('./teams');
 const { loadSettled, isUserSettled } = require('./sync-settled');
+const panel = require('./role-sync-panel');
 
-const STATE_FILE = path.join(__dirname, '..', 'data', 'role-watch.json');
 const SNAPSHOT_FILE = path.join(__dirname, '..', 'data', 'plugin-sync', 'roles-snapshot.json');
 const SETTLE_MS = 5000;
 
@@ -69,21 +69,6 @@ const GUEST_ID = config.recruit && config.recruit.types && config.recruit.types.
 const FRIEND_ID = (config.seniority || {}).friendOfClanRoleId;
 const MEMBER_ROLE_IDS = [IRON_SWORN_ID, UNBOUND_ID].filter(Boolean);
 const ACCESS_ROLE_IDS = [...MEMBER_ROLE_IDS, GUEST_ID].filter(Boolean);
-
-// =====================================================================
-// STAFF LINE TEXT - DRAFT, NOT YET APPROVED.
-// These strings were drafted for this feature and have NOT been
-// ruled on yet. They live here, in this one block, so the approved
-// wording can be swapped in with a single edit. Plain text, no
-// pings: posts go out with allowedMentions parsing disabled.
-// =====================================================================
-const TEXT = {
-  promotion: (name, rsns) => `Role sync: ${name} was given a member role in Discord. Record updated to member, checklist entry added.${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
-  repair: (name, rsns) => `Role sync: ${name} holds a member role but their record said guest. Record fixed to member, checklist entry added.${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
-  demotion: (name) => `Role sync: ${name} is a member on record but holds no member role in Discord. Nothing changed - staff call.`,
-  demote: (name, rsns, rankRemoved) => `Role sync: ${name} was moved to Guest in Discord. Record updated to guest.${rankRemoved ? ' Rank role removed.' : ''}${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
-  norecord: (name) => `Role sync: ${name} holds a member role in Discord but has no membership record. Nothing changed - staff call.`,
-};
 
 // ---- Role sets --------------------------------------------------------
 // A member's role ids as a Set, from a discord.js member (roles
@@ -151,52 +136,6 @@ function linkedRsns(userId) {
     out.push(rsn.trim());
   }
   return out;
-}
-
-// ---- Alert state ------------------------------------------------------
-// Only this feature's own file is ever written. A corrupt or
-// missing file reads as "nothing sent yet" rather than throwing.
-function loadState() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
-    if (raw && typeof raw === 'object' && raw.sent && typeof raw.sent === 'object') {
-      return { sent: { ...raw.sent } };
-    }
-  } catch { /* first run or unreadable: start empty */ }
-  return { sent: {} };
-}
-
-function saveState(state) {
-  fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-  atomicWrite(STATE_FILE, { sent: state.sent });
-}
-
-// Drop keys whose issue is no longer in the current set. Returns
-// true when anything changed.
-function pruneState(state, currentKeys) {
-  let changed = false;
-  for (const key of Object.keys(state.sent)) {
-    if (!currentKeys.has(key)) {
-      delete state.sent[key];
-      changed = true;
-    }
-  }
-  return changed;
-}
-
-// ---- Posting ------------------------------------------------------------
-async function postToChecklist(client, text) {
-  const threadId = config.ccChecklist && config.ccChecklist.threadId;
-  if (!threadId || !client) return false;
-  const channel = await safeFetch(client.channels.fetch(threadId), 'role-watch checklist post');
-  if (!channel || typeof channel.send !== 'function') return false;
-  try {
-    await channel.send({ content: text, allowedMentions: { parse: [] } });
-    return true;
-  } catch (err) {
-    console.error('[role-watch] checklist post failed:', err.message);
-    return false;
-  }
 }
 
 // The Initiate welcome, posted in General on a live promotion -
@@ -279,19 +218,6 @@ async function applyDemotion(client, guild, userId, member) {
   return rankRemoved;
 }
 
-// A deduped staff line for the two flag-only issues, shared by the
-// live handler and the sweep so an issue posts once from either.
-async function postFlag(client, state, action, userId, name) {
-  const key = `${action}:${userId}`;
-  if (state.sent[key]) return false;
-  const text = action === 'demotion' ? TEXT.demotion(name) : TEXT.norecord(name);
-  const posted = await postToChecklist(client, text);
-  if (!posted) return false;
-  state.sent[key] = Date.now();
-  saveState(state);
-  return true;
-}
-
 // ---- Live handler ---------------------------------------------------------
 // Called from the guildMemberUpdate handler in index.js whenever
 // roles changed. Only access-role changes are acted on. Never
@@ -321,19 +247,33 @@ async function onMemberUpdate(client, oldMember, newMember, opts = {}) {
       const rec = store.getMembership(guild.id)[newMember.id];
       const standing = rec ? rec.standing : null;
       const action = classify({ standing, roleIds: roleIdsOf(fresh), isBot: false });
-      if (!action) return false;
+      if (!action) {
+        // Nothing to do for this person now. If an access change
+        // just resolved an open flag, clear it so the panel row
+        // goes straight away instead of at the next sweep.
+        if (panel.clearFlagsFor(newMember.id)) {
+          await panel.refresh(guild);
+          return true;
+        }
+        return false;
+      }
       if (action !== 'promote' && isUserSettled(loadSettled(), newMember.id)) return false;
-      const name = displayNameOf(fresh);
 
       if (action === 'promote') {
         await applyPromotion(client, guild, newMember.id, fresh, { welcome: true });
-        return postToChecklist(client, TEXT.promotion(name, linkedRsns(newMember.id)));
+        panel.recordAction('promote', newMember.id);
+        await panel.refresh(guild);
+        return true;
       }
       if (action === 'demote') {
         const rankRemoved = await applyDemotion(client, guild, newMember.id, fresh);
-        return postToChecklist(client, TEXT.demote(name, linkedRsns(newMember.id), rankRemoved));
+        panel.recordAction('demote', newMember.id, { rankRemoved });
+        await panel.refresh(guild);
+        return true;
       }
-      return postFlag(client, loadState(), action, newMember.id, name);
+      if (!panel.openFlag(action, newMember.id)) return false;
+      await panel.refresh(guild);
+      return true;
     } finally {
       pending.delete(newMember.id);
     }
@@ -398,10 +338,9 @@ async function runSweep(client) {
     // starting picture.
     const membership = store.getMembership(config.guildId);
     const settled = loadSettled();
-    const state = loadState();
     const currentKeys = new Set();
-    const lines = [];
-    const freshKeys = [];
+    let repaired = 0;
+    let demoted = 0;
 
     for (const person of roster) {
       const rec = membership[person.id];
@@ -411,40 +350,29 @@ async function runSweep(client) {
       if (action !== 'promote' && isUserSettled(settled, person.id)) continue;
       if (action === 'promote') {
         await applyPromotion(client, guild, person.id, person.member, { welcome: false });
-        lines.push(TEXT.repair(person.name, linkedRsns(person.id)));
+        panel.recordAction('repair', person.id);
+        repaired++;
         continue;
       }
       if (action === 'demote') {
         const rankRemoved = await applyDemotion(client, guild, person.id, person.member);
-        const key = `demote:${person.id}`;
-        currentKeys.add(key);
-        if (!state.sent[key]) {
-          freshKeys.push(key);
-          lines.push(TEXT.demote(person.name, linkedRsns(person.id), rankRemoved));
-        }
+        panel.recordAction('demote', person.id, { rankRemoved });
+        demoted++;
         continue;
       }
-      const key = `${action}:${person.id}`;
-      currentKeys.add(key);
-      if (!state.sent[key]) {
-        freshKeys.push(key);
-        lines.push(action === 'demotion' ? TEXT.demotion(person.name) : TEXT.norecord(person.name));
-      }
+      currentKeys.add(`${action}:${person.id}`);
+      panel.openFlag(action, person.id);
     }
 
-    const pruned = pruneState(state, currentKeys);
-    let posted = false;
-    if (lines.length) {
-      posted = await postToChecklist(client, lines.join('\n'));
-      if (posted) {
-        for (const key of freshKeys) state.sent[key] = Date.now();
-      }
+    // Flags the sweep no longer sees are resolved. Then refresh
+    // always, even when nothing changed: the daily pass wakes the
+    // thread and re-posts a deleted panel.
+    panel.pruneOpen(currentKeys);
+    await panel.refresh(guild);
+    if (repaired || demoted || currentKeys.size) {
+      console.log(`Role watch sweep: ${repaired} repaired, ${demoted} moved to guest, ${currentKeys.size} open flag(s).`);
     }
-    if (pruned || (posted && freshKeys.length)) saveState(state);
-    if (lines.length && posted) {
-      console.log(`Role watch sweep: posted ${lines.length} line(s) to the CC checklist thread.`);
-    }
-    return posted;
+    return true;
   } catch (err) {
     console.error('[role-watch] sweep failed:', err.message);
     return false;
@@ -452,7 +380,6 @@ async function runSweep(client) {
 }
 
 module.exports = {
-  TEXT,
   MEMBER_ROLE_IDS,
   ACCESS_ROLE_IDS,
   SETTLE_MS,
@@ -461,10 +388,6 @@ module.exports = {
   accessChanged,
   classify,
   linkedRsns,
-  loadState,
-  saveState,
-  pruneState,
-  postToChecklist,
   onMemberUpdate,
   runSweep,
 };
