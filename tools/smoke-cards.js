@@ -2803,8 +2803,8 @@ async function t(name, fn, needFile = true) {
     // posts stay apart.
     const panelThreadId = '990000000000009001';
     const roleSyncBefore = cfgR.roleSync;
-    ok('rolesync: config.roleSync.threadId ships unset',
-      roleSyncBefore && roleSyncBefore.threadId === null);
+    ok('rolesync: config.roleSync.threadId ships as the Role sync thread',
+      roleSyncBefore && roleSyncBefore.threadId === '1575620420252467240');
     cfgR.roleSync = { threadId: panelThreadId };
     const panelMsgs = new Map();
     const sentR = [];
