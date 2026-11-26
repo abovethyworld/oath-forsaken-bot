@@ -3309,6 +3309,45 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // Skills card on approval (2026-11-26): gate-free helper plus the
+  // approve-path hook, checked by source shape.
+  {
+    ok('skills approval: skillsCardAttachment is exported', typeof S.skillsCardAttachment === 'function');
+    const realFetch = global.fetch;
+    let cardCalls = 0;
+    global.fetch = async (url, opts) => {
+      if (String(url).includes('/skills')) {
+        cardCalls++;
+        return { ok: true, status: 200, headers: { get: () => null }, arrayBuffer: async () => new Uint8Array([137, 80, 78, 71]).buffer };
+      }
+      return realFetch(url, opts);
+    };
+    try {
+      const att = await S.skillsCardAttachment(PRIMARY);
+      ok('skills approval: known RSN returns an attachment named skills.png',
+        !!att && att.name === 'skills.png' && cardCalls === 1, `calls=${cardCalls}`);
+      ok('skills approval: empty RSN returns null', (await S.skillsCardAttachment('')) === null);
+      const none = await S.skillsCardAttachment('zzq no such rsn 9981');
+      ok('skills approval: unknown RSN returns null', none === null);
+    } finally {
+      global.fetch = realFetch;
+    }
+    const recruitSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'recruit.js'), 'utf8');
+    const hookAt = recruitSrc.indexOf('skillsCardAttachment');
+    ok('skills approval: recruit.js references the helper exactly once',
+      hookAt >= 0 && recruitSrc.indexOf('skillsCardAttachment', hookAt + 1) === -1);
+    const approveAt = recruitSrc.indexOf("decision === 'approve'");
+    const prelinkAt = recruitSrc.indexOf('await runApprovalPrelink(');
+    const renameAt = recruitSrc.indexOf('thread.setName(`${base} - ${verdict}`');
+    ok('skills approval: hook sits after prelink and before the rename/lock block',
+      approveAt >= 0 && prelinkAt > approveAt && hookAt > prelinkAt && renameAt > hookAt);
+    const showSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'showoff.js'), 'utf8');
+    const fnAt = showSrc.indexOf('async function skillsCardAttachment');
+    const fnBody = showSrc.slice(fnAt, showSrc.indexOf('\n}\n', fnAt));
+    ok('skills approval: helper has no gate and no cooldown call',
+      fnAt > 0 && !/ownAccountGate|noteUse/.test(fnBody));
+  }
+
   // Timing guard (Nov 2, 2026): a payload builder that burns
   // seconds of CPU starves Discord's 3-second interaction
   // acknowledgement and the command dies with "Unknown
