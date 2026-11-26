@@ -151,6 +151,16 @@ function standingPayload(guildId, targetId) {
   return { content: line, components: [row, row2] };
 }
 
+// A standing change can resolve a role sync panel row; refresh it
+// so the row clears now. Never throws.
+async function refreshRoleSyncRow(guild) {
+  try {
+    await require('./role-sync-panel').refresh(guild);
+  } catch (e) {
+    console.error(`${TAG} role sync panel refresh failed:`, e.message);
+  }
+}
+
 async function postModLog(interaction, line) {
   const log = interaction.guild?.channels.cache.get(config.channels.modLog);
   if (log) {
@@ -212,6 +222,7 @@ async function handleWebsiteControlsButton(interaction) {
   }
   console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) set standing for ${targetId} to ${choice}`);
   await postModLog(interaction, `Website controls: <@${interaction.user.id}> set the standing for <@${targetId}> to ${choice}.`);
+  await refreshRoleSyncRow(interaction.guild);
   await interaction.reply({ content: `Standing for <@${targetId}> is now ${choice}.`, ephemeral: true });
 }
 
@@ -247,6 +258,7 @@ async function handleFriendMove(interaction, targetId) {
   }
   console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) moved ${targetId} to Friend of the Clan (record cleared)`);
   await postModLog(interaction, `Website controls: <@${interaction.user.id}> moved <@${targetId}> to Friend of the Clan (record cleared).`);
+  await refreshRoleSyncRow(interaction.guild);
   await interaction.reply({
     content: `The record for <@${targetId}> was cleared. They show as a Friend of the Clan while they hold the Friend role.`,
     ephemeral: true,
@@ -272,6 +284,7 @@ async function handleRemove(interaction, targetId) {
   }
   console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) removed ${targetId} from the clan (cleanup case)`);
   await postModLog(interaction, `Website controls: <@${interaction.user.id}> removed <@${targetId}> from the clan (cleanup case opened).`);
+  await refreshRoleSyncRow(interaction.guild);
   await interaction.reply({
     content: `Cleanup case opened for <@${targetId}>. Record marked left, link parked, and a Remove CC rank entry is on the checklist.`,
     ephemeral: true,
