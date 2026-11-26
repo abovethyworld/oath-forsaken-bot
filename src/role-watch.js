@@ -22,6 +22,9 @@
 //    removes a role.
 //  - Friend of the Clan holders are a separate track and are
 //    always exempt, as are bots.
+//  - People on the settled list (src/sync-settled.js) are exempt
+//    from the two staff-call flags: staff have already ruled on
+//    their case. Settling never blocks a promotion repair.
 //
 // Live changes settle for a few seconds before anything is read:
 // the application approval flow adds the role first and writes
@@ -42,6 +45,7 @@ const { atomicWrite } = require('./store');
 const { safeFetch, buildInitiateWelcome } = require('./utils');
 const { addEntry: addCcEntry } = require('./cc-checklist');
 const { getRsnEntry } = require('./teams');
+const { loadSettled, isUserSettled } = require('./sync-settled');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'role-watch.json');
 const SNAPSHOT_FILE = path.join(__dirname, '..', 'data', 'plugin-sync', 'roles-snapshot.json');
@@ -279,6 +283,7 @@ async function onMemberUpdate(client, oldMember, newMember, opts = {}) {
       const standing = rec ? rec.standing : null;
       const action = classify({ standing, roleIds: roleIdsOf(fresh), isBot: false });
       if (!action) return false;
+      if (action !== 'promote' && isUserSettled(loadSettled(), newMember.id)) return false;
       const name = displayNameOf(fresh);
 
       if (action === 'promote') {
@@ -349,6 +354,7 @@ async function runSweep(client) {
     // the store, and the sweep judges everyone against the same
     // starting picture.
     const membership = store.getMembership(config.guildId);
+    const settled = loadSettled();
     const state = loadState();
     const currentKeys = new Set();
     const lines = [];
@@ -359,6 +365,7 @@ async function runSweep(client) {
       const standing = rec ? rec.standing : null;
       const action = classify({ standing, roleIds: person.roleIds, isBot: person.isBot });
       if (!action) continue;
+      if (action !== 'promote' && isUserSettled(settled, person.id)) continue;
       if (action === 'promote') {
         await applyPromotion(client, guild, person.id, person.member, { welcome: false });
         lines.push(TEXT.repair(person.name, linkedRsns(person.id)));

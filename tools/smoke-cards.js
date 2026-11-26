@@ -2202,6 +2202,70 @@ async function t(name, fn, needFile = true) {
         inGuild: new Set(['u-old', 'u-new', 'u-guest', 'u-gone']),
       }).length === 0);
 
+    // Settled cases: a settled RSN missing from the group is not
+    // drift, a settled user is not flagged, and a settled group
+    // name is not a mystery. Removals are never settled away.
+    const ss = require(path.join(__dirname, '..', 'src', 'sync-settled.js'));
+    ok('settled: a missing settled file reads as nothing settled',
+      ss.loadSettled().userIds.size === 0 && ss.loadSettled().rsns.size === 0);
+    ok('settled: matching folds case and underscores',
+      ss.isRsnSettled({ userIds: new Set(), rsns: new Set(['pt is free']) }, 'Pt_Is_Free') === true
+      && ss.isRsnSettled({ userIds: new Set(), rsns: new Set(['pt is free']) }, 'Other Name') === false
+      && ss.isUserSettled({ userIds: new Set(['42']), rsns: new Set() }, '42') === true
+      && ss.isUserSettled({ userIds: new Set(['42']), rsns: new Set() }, '43') === false);
+    const settledRsnSweep = ws.computeSweep({
+      ...sweepArgs,
+      settled: { userIds: new Set(), rsns: new Set(['missing rsn']) },
+    });
+    ok('womsync: a settled RSN is not flagged missing',
+      !settledRsnSweep.some((i) => i.key.startsWith('missing:'))
+      && settledRsnSweep.some((i) => i.key.startsWith('remove:')),
+      JSON.stringify(settledRsnSweep));
+    const settledUserSweep = ws.computeSweep({
+      ...sweepArgs,
+      settled: { userIds: new Set(['u-old']), rsns: new Set() },
+    });
+    ok('womsync: a settled user is not flagged missing',
+      !settledUserSweep.some((i) => i.key.includes('u-old')));
+    const settledNameSweep = ws.computeSweep({
+      ...sweepArgs,
+      settled: { userIds: new Set(), rsns: new Set(['mystery name']) },
+    });
+    ok('womsync: a settled group name is not flagged unknown',
+      !settledNameSweep.some((i) => i.key.startsWith('unknown:')));
+
+    // Rename pairing: one missing member whose display name
+    // carries the one unknown group name is a single rename line,
+    // not a missing line plus an unknown line.
+    const renameSweep = ws.computeSweep({
+      membership: { 'u-ren': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' } },
+      links: { 'u-ren': { rsns: ['Old Name'] } },
+      groupNames: ['New Name'],
+      inGuild: new Set(['u-ren']),
+      nameOf: () => 'Renamed [New Name]',
+      now: NOWW,
+    });
+    ok('womsync: a rename pairs into one line',
+      renameSweep.length === 1 && renameSweep[0].key.startsWith('rename:u-ren')
+      && renameSweep[0].text === ws.TEXT.rename('Renamed [New Name]', 'Old Name', 'New Name'),
+      JSON.stringify(renameSweep));
+    const ambSweep = ws.computeSweep({
+      membership: {
+        'u-a': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        'u-b': { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+      },
+      links: { 'u-a': { rsns: ['A Old'] }, 'u-b': { rsns: ['B Old'] } },
+      groupNames: ['New Name'],
+      inGuild: new Set(['u-a', 'u-b']),
+      nameOf: (id) => (id === 'u-a' ? 'New Name A' : 'New Name B'),
+      now: NOWW,
+    });
+    ok('womsync: an ambiguous rename does not pair',
+      ambSweep.filter((i) => i.key.startsWith('missing:')).length === 2
+      && ambSweep.filter((i) => i.key.startsWith('unknown:')).length === 1
+      && !ambSweep.some((i) => i.key.startsWith('rename:')),
+      JSON.stringify(ambSweep));
+
     // Sweep timing: next run is the coming 14:00 UTC.
     ok('womsync: sweep timer targets 14:00 UTC',
       ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 13, 0, 0))) === HOURW
@@ -2574,6 +2638,23 @@ async function t(name, fn, needFile = true) {
         && !stateAfterR.sent[`demotion:${UR.sweepDemoted}`]
         && !!stateAfterR.sent[`norecord:${UR.stray2}`],
         JSON.stringify(stateAfterR));
+
+      // Settled cases: a settled member's demotion drift and a
+      // settled no-record member post nothing, live or in the
+      // sweep. The settled file is fixture data here, saved and
+      // restored like the rest.
+      const settledPathR = path.join(DATA, 'sync-settled.json');
+      const savedSettledR = fs.existsSync(settledPathR) ? fs.readFileSync(settledPathR) : null;
+      fs.writeFileSync(settledPathR, JSON.stringify({ userIds: [UR.stray2, UR.demoted], rsns: [] }));
+      const demSettled = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
+      ok('rolewatch: a settled member is not flagged by the live watch',
+        demSettled === false && sentR.length === 4
+        && readMembershipR()[UR.demoted].standing === 'member');
+      const settledSwept = await rw.runSweep(sweepClientR);
+      ok('rolewatch: a settled no-record member is not flagged by the sweep',
+        settledSwept === false && sentR.length === 4);
+      if (savedSettledR === null) { try { fs.unlinkSync(settledPathR); } catch {} }
+      else fs.writeFileSync(settledPathR, savedSettledR);
 
       // Snapshot fallback: the member fetch fails, the roles
       // snapshot still answers, and the sweep flags from it.

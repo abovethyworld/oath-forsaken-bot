@@ -15,6 +15,10 @@
 //    not in the group yet, group names that match no member's links
 //    (possible renames), and a backstop removal pass for members no
 //    longer in the guild whose RSNs are still in the group.
+//    A missing member whose display name carries an unknown group
+//    name is reported once as a likely rename, not as two separate
+//    problems. Cases staff have settled (src/sync-settled.js) are
+//    not flagged at all; removals are never settled away.
 // The same 14:00 UTC pass also runs the role watch sweep
 // (src/role-watch.js): one daily membership-sync pass, two checks,
 // each module keeping its own alert state.
@@ -28,6 +32,7 @@ const store = require('./store');
 const { atomicWrite } = require('./store');
 const { safeFetch } = require('./utils');
 const { normName, entryRsns, loadLinks } = require('./membership');
+const { loadSettled } = require('./sync-settled');
 const wom = require('./wom');
 const roleWatch = require('./role-watch');
 
@@ -46,6 +51,7 @@ const SWEEP_HOUR_UTC = 14;
 const TEXT = {
   leave: (name, rsns) => `WOM sync: ${name} left the server. Still in the Wise Old Man group: ${rsns}. Needs removing by hand.`,
   missing: (name, rsns) => `WOM sync: ${name} is a member but not in the Wise Old Man group yet: ${rsns}.`,
+  rename: (name, rsns, newName) => `WOM sync: ${name} looks renamed - link says ${rsns}, the group says ${newName}. Update the link to settle it.`,
   unknown: (names) => `WOM sync: names in the Wise Old Man group that match no member: ${names}. Could be renames.`,
 };
 
@@ -125,13 +131,17 @@ function removeIssue(userId, inGroupRsns) {
 }
 
 // Pure sweep: given the recorded standings, the link store, the live
-// group list, who is still in the guild, and a name resolver, work
-// out every open issue. Returns the issues (with dedup keys and the
-// exact lines to post) in a stable order: removals, missing, unknown.
-function computeSweep({ membership, links, groupNames, inGuild, nameOf, now }) {
+// group list, who is still in the guild, a name resolver, and the
+// settled cases, work out every open issue. Returns the issues
+// (with dedup keys and the exact lines to post) in a stable order:
+// removals, renames, missing, unknown.
+function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, settled }) {
   const gIndex = groupIndex(groupNames);
   const resolve = typeof nameOf === 'function' ? nameOf : (id) => `user ${id}`;
-  const issues = [];
+  const settledUsers = settled && settled.userIds ? settled.userIds : new Set();
+  const settledRsns = settled && settled.rsns ? settled.rsns : new Set();
+  const removals = [];
+  const missingList = [];
   const records = membership && typeof membership === 'object' ? membership : {};
   const linkMap = links && typeof links === 'object' ? links : {};
 
@@ -142,25 +152,32 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now }) {
     if (!inGuild.has(userId)) {
       const issue = removeIssue(userId, rsnsInGroup(entry, gIndex));
       if (issue) {
-        issues.push({ ...issue, text: TEXT.leave(resolve(userId), issue.rsns.join(', ')) });
+        removals.push({ ...issue, text: TEXT.leave(resolve(userId), issue.rsns.join(', ')) });
       }
       continue;
     }
     if (rec.standing !== 'member') continue;
+    if (settledUsers.has(userId)) continue;
     const at = typeof rec.at === 'number' ? rec.at : 0;
     if (now - at < APPROVAL_AGE_MS) continue;
-    const missing = rsnsMissing(entry, gIndex);
+    const missing = rsnsMissing(entry, gIndex)
+      .filter((rsn) => !settledRsns.has(normName(rsn)));
     if (missing.length) {
-      issues.push({
-        key: `missing:${userId}:${keyPart(missing)}`,
-        text: TEXT.missing(resolve(userId), missing.join(', ')),
+      missingList.push({
+        userId,
+        rsns: missing,
+        issue: {
+          key: `missing:${userId}:${keyPart(missing)}`,
+          text: TEXT.missing(resolve(userId), missing.join(', ')),
+        },
       });
     }
   }
 
   // Group names no link record explains. Any entry in the link store
   // counts, member or guest: a name somebody holds is not a rename
-  // mystery even when its owner is not a recorded member.
+  // mystery even when its owner is not a recorded member. A settled
+  // name is explained by the ruling, so it is not listed either.
   const known = new Set();
   for (const entry of Object.values(linkMap)) {
     for (const rsn of memberRsns(entry)) {
@@ -169,13 +186,42 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now }) {
   }
   const unknown = [];
   for (const [key, display] of gIndex) {
-    if (!known.has(key)) unknown.push(display);
+    if (!known.has(key) && !settledRsns.has(key)) unknown.push(display);
   }
-  if (unknown.length) {
-    unknown.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+  // Rename pairing: an unknown group name that appears in exactly
+  // one missing member's display name is that member's new name.
+  // One rename line replaces the member's missing line and the
+  // name's place in the unknown list. When the name could belong
+  // to more than one missing member, nothing pairs and the plain
+  // lines stand - the sweep never guesses between people.
+  const renames = [];
+  const pairedUsers = new Set();
+  const pairedNames = new Set();
+  for (const display of unknown) {
+    const key = normName(display);
+    const candidates = missingList.filter(
+      (m) => !pairedUsers.has(m.userId) && normName(resolve(m.userId)).includes(key),
+    );
+    if (candidates.length !== 1) continue;
+    pairedUsers.add(candidates[0].userId);
+    pairedNames.add(display);
+    renames.push({
+      key: `rename:${candidates[0].userId}:${key}`,
+      text: TEXT.rename(resolve(candidates[0].userId), candidates[0].rsns.join(', '), display),
+    });
+  }
+
+  const issues = [...removals, ...renames];
+  for (const m of missingList) {
+    if (!pairedUsers.has(m.userId)) issues.push(m.issue);
+  }
+  const remainingUnknown = unknown.filter((d) => !pairedNames.has(d));
+  if (remainingUnknown.length) {
+    remainingUnknown.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     issues.push({
-      key: `unknown:${keyPart(unknown)}`,
-      text: TEXT.unknown(unknown.join(', ')),
+      key: `unknown:${keyPart(remainingUnknown)}`,
+      text: TEXT.unknown(remainingUnknown.join(', ')),
     });
   }
   return issues;
@@ -313,6 +359,7 @@ async function collectIssues(client) {
     inGuild: presence.ids,
     nameOf: presence.nameOf,
     now: Date.now(),
+    settled: loadSettled(),
   });
 }
 
