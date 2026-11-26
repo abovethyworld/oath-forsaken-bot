@@ -28,7 +28,7 @@ const { syncDrift } = require('./permissions');
 const { getPingRole } = require('./utils');
 const { scheduleEphemeralDelete, scheduleMessageDelete, isPlainEphemeralNote, delayForNote } = require('./auto-delete');
 const store = require('./store');
-const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
+const { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleTotalCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleAutocomplete, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapModal, handleLeaderboardSelect, handleDryPickSelect, handleHubSelect, handleHubModal, handleLbProfileSelect, kcEntry, refreshProfileLuck, syncWomGains } = require('./showoff');
 const { snapshotToday } = require('./gains');
 const { handleModalSubmit, youngAccountFlag } = require('./recruit');
 const { handleSuggestModal } = require('./suggestions');
@@ -455,6 +455,7 @@ client.on(Events.MessageCreate, async (message) => {
     else if (cmd === 'leaderboard') await handleLeaderboardCommand(message, parts.slice(1));
     else if (cmd === 'pb') await handlePbCommand(message, parts.slice(1));
     else if (cmd === 'skills') await handleSkillsCommand(message, parts.slice(1));
+    else if (cmd === 'total') await handleTotalCommand(message, parts.slice(1));
     else if (cmd === 'compare') await handleCompareCommand(message, parts.slice(1));
     else if (cmd === 'dry') await handleDryCommand(message, parts.slice(1));
     else if (cmd === 'gains') await handleGainsCommand(message, parts.slice(1));
