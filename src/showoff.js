@@ -2976,21 +2976,19 @@ const SKILL_ORDER = [
   'construction', 'sailing',
 ];
 
-// !skills: the full skill grid from Wise Old Man, same numbers the
-// website profile pages show.
-async function skillsPayload(rsn, userId) {
-  const gate = ownAccountGate(userId, rsn);
-  if (gate) return gate;
-  if (userId) noteUse(userId, 'skills'); // a real lookup fires: start the cooldown
+// Card-building core shared by skillsPayload and skillsCardAttachment.
+// No gate, no cooldown. Returns { fail } (a text payload) or { card, rank };
+// card is null when the card service is down.
+async function buildSkillsCard(rsn) {
   await ensureSynced(rsn);
   let st;
   try {
     st = await getStats(rsn);
   } catch (err) {
-    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+    return { fail: { content: 'Could not reach the stats service right now. Try again in a bit.' } };
   }
-  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
-  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  if (!st) return { fail: { content: 'Could not reach the stats service right now. Try again in a bit.' } };
+  if (st.notFound) return { fail: { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` } };
   const skillsMap = st.skills || {};
   // WOM names the skill runecrafting; the display order (and the
   // website) call it runecraft.
@@ -3025,6 +3023,30 @@ async function skillsPayload(rsn, userId) {
   const card = await fetchCard('/skills', {
     rsn, badge: cardBadgeFor(rsn, st ? st.accountType : null), combat: st.combat, totalLevel, totalXp, skills, skillingBosses, rank,
   });
+  return { card, rank };
+}
+
+// Gate-free skills card for the approval path: an AttachmentBuilder for
+// the card PNG, or null on any failure. Never throws, never notes a use.
+async function skillsCardAttachment(rsn) {
+  try {
+    if (!rsn) return null;
+    const r = await buildSkillsCard(rsn);
+    if (r.fail || !r.card) return null;
+    return new AttachmentBuilder(r.card, { name: 'skills.png' });
+  } catch {
+    return null;
+  }
+}
+
+// !skills: the full skill grid from Wise Old Man, same numbers the
+// website profile pages show.
+async function skillsPayload(rsn, userId) {
+  const gate = ownAccountGate(userId, rsn);
+  if (gate) return gate;
+  if (userId) noteUse(userId, 'skills'); // a real lookup fires: start the cooldown
+  const { fail, card, rank } = await buildSkillsCard(rsn);
+  if (fail) return fail;
   if (card) {
     return withProfileButton({
       files: [new AttachmentBuilder(card, { name: 'skills.png' })],
@@ -5911,4 +5933,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleTotalCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleRefreshButton, updatedAgoText, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, totalPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleTotalCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleRefreshButton, updatedAgoText, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, skillsCardAttachment, totalPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
