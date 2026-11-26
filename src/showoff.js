@@ -3175,6 +3175,52 @@ async function handleSkillsCommand(message, args) {
   await replyPayload(message, rsn, skillsPayload(rsn, message.author.id));
 }
 
+// !total / /total (Nov 26, 2026): the game's own skills tab, drawn by
+// the card service's baked panel renderer. Levels go in skills-tab
+// row-major order (three columns, eight rows) using WOM skill keys.
+// No account-type gate: the panel carries no badge.
+const TOTAL_TAB_ORDER = [
+  'attack', 'hitpoints', 'mining', 'strength', 'agility', 'smithing',
+  'defence', 'herblore', 'fishing', 'ranged', 'thieving', 'cooking',
+  'prayer', 'crafting', 'firemaking', 'magic', 'fletching', 'woodcutting',
+  'runecrafting', 'slayer', 'farming', 'construction', 'hunter', 'sailing',
+];
+
+async function totalPayload(rsn, userId) {
+  if (userId) noteUse(userId, 'total'); // a real lookup fires: start the cooldown
+  await ensureSynced(rsn);
+  let st;
+  try {
+    st = await getStats(rsn);
+  } catch (err) {
+    return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  }
+  if (!st) return { content: 'Could not reach the stats service right now. Try again in a bit.' };
+  if (st.notFound) return { content: `Could not find the RuneScape name **${rsn}**. Check the spelling and try again.` };
+  const skillsMap = st.skills || {};
+  const levels = TOTAL_TAB_ORDER.map((key) => {
+    const entry = skillsMap[key];
+    const lv = entry && typeof entry.level === 'number' ? Math.round(entry.level) : 1;
+    return Math.min(99, Math.max(1, lv));
+  });
+  const overall = skillsMap.overall;
+  const total = overall && typeof overall.level === 'number' && overall.level > 0
+    ? overall.level
+    : levels.reduce((s, lv) => s + lv, 0);
+  const card = await fetchCard('/total', { levels, total });
+  if (card) return { files: [new AttachmentBuilder(card, { name: 'total.png' })] };
+  return CARD_DOWN;
+}
+
+async function handleTotalCommand(message, args) {
+  const cd = checkCooldown(message.author.id, 'total');
+  if (cd.wait) { if (cd.notify) await message.reply(cooldownText(cd.wait)).catch(() => {}); return; }
+  const { rsn, error, payload } = resolveName(args, message.author.id);
+  if (error) { await message.reply(error).catch(() => {}); return; }
+  if (payload) { await message.reply(payload).catch(() => {}); return; }
+  await replyPayload(message, rsn, totalPayload(rsn, message.author.id));
+}
+
 // ---- Compare (added Oct 31, 2026) -----------------------------------
 // !compare in three shapes: overall versus, skills diff, and boss
 // head-to-head. Everything reads the same cached WOM + RuneProfile
@@ -4864,6 +4910,19 @@ const commands = [
   },
   {
     data: new SlashCommandBuilder()
+      .setName('total')
+      .setDescription("Show a player's in-game skills tab")
+      .addStringOption((o) => o.setName('player').setDescription('RuneScape name (blank = you)')),
+    run: async (interaction) => {
+      const { rsn, error, payload } = resolveNameFor(interaction.user.id, interaction.options.getString('player'));
+      if (error) { await interaction.reply({ content: error, ephemeral: true }).catch(() => {}); return; }
+      if (payload) { await interaction.reply({ ...payload, ephemeral: true }).catch(() => {}); return; }
+      if (await slashCooldown(interaction, 'total')) return;
+      await slashReply(interaction, () => totalPayload(rsn, interaction.user.id));
+    },
+  },
+  {
+    data: new SlashCommandBuilder()
       .setName('pb')
       .setDescription("Show a player's personal best times from the clan plugin")
       .addStringOption((o) => o.setName('activity').setDescription('One boss (leave empty for all of them)').setAutocomplete(true))
@@ -5874,4 +5933,4 @@ async function syncWomGains() {
   console.log(`WOM gains sync: ${updated}/${names.length} players updated, ${warmed} period totals warmed${failed ? `, ${failed} updates failed` : ''}.`);
 }
 
-module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleRefreshButton, updatedAgoText, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, skillsCardAttachment, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };
+module.exports = { handleKcCommand, handleClogCommand, handleProfileCommand, handleLeaderboardCommand, handlePbCommand, handleSkillsCommand, handleTotalCommand, handleCompareCommand, handleDryCommand, handleGainsCommand, handleGainsButton, handleBridgeButton, handleRefreshButton, updatedAgoText, handleDryCatButton, handleDryViewButton, handleDryPickSelect, dryListPayload, syncWomGains, commands, kcPayload, clogPayload, profilePayload, leaderboardPayload, pbPayload, skillsPayload, skillsCardAttachment, totalPayload, dryPayload, gainsPayload, compareOverallPayload, compareSkillsPayload, compareBossPayload, compareBossBasePayload, compareClogsPayload, handleCompareButton, handleCompareBossSelect, handleCompareSkillSelect, handleCompareClogSelect, handleCompareSwapButton, handleCompareSwapModal, handleCompareAltButton, handleCompareMineButton, handleLeaderboardButton, handleLeaderboardSelect, handleLbSwapButton, handleLbBackButton, handleHubButton, handleHubSelect, handleHubModal, handleHubBackButton, handleHubMineButton, handleProfileButton, handleLbProfileButton, handleLbProfileSelect, hubPayload, checkCooldown, noteUse, COOLDOWN_MS, takeActivity, progressBar, prettyMetric, clogPageForCommand, unlinkedPayload, refreshProfileLuck, ensureSynced, isCold, handleAutocomplete, kcAutocompleteChoices, clogAutocompleteChoices, dryAutocompleteChoices, dryScoredKeys, KC_KEYS, CLOG_PAGES, kcEntry };

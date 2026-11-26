@@ -56,11 +56,29 @@ function pngFor(body) {
   ]);
 }
 
+// /total answers one fixed PNG and keeps the last request body, so
+// the suite can read back exactly what the bot posted:
+//   GET /__captured/total  ->  the last /total body as JSON (404 if none)
+const TOTAL_PNG = pngFor(Buffer.from('total'));
+let lastTotalBody = null;
+
 const port = Number(process.env.CARD_STUB_PORT || 8799);
 http.createServer((req, res) => {
+  if (req.method === 'GET' && req.url === '/__captured/total') {
+    if (lastTotalBody === null) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(lastTotalBody);
+    return;
+  }
   const chunks = [];
   req.on('data', (c) => chunks.push(c));
   req.on('end', () => {
+    if (req.url === '/total') {
+      lastTotalBody = Buffer.concat(chunks).toString('utf8');
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': TOTAL_PNG.length });
+      res.end(TOTAL_PNG);
+      return;
+    }
     const png = pngFor(Buffer.concat(chunks));
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length });
     res.end(png);

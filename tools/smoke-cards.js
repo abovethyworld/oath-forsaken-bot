@@ -3309,6 +3309,90 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // /total (Nov 26, 2026): the in-game skills tab card. A fixture
+  // account with a known WOM-shaped skill set goes in the stats
+  // cache; the stub captures the /total body so the levels order,
+  // clamping, the missing-skill default and the total are checked
+  // exactly. A cached not-found name checks the miss text against
+  // /skills. Both names carry a seed marker so no lookup leaves
+  // the machine.
+  {
+    const totalSrcIdx = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const totalSrcCmds = fs.readFileSync(path.join(__dirname, '..', 'src', 'commands.js'), 'utf8');
+    const slashNames = S.commands.map((c) => c.data.name);
+    ok('total: /total is in the slash command list',
+      slashNames.includes('total') && totalSrcCmds.includes('...showoff.commands'));
+    const totalSlash = S.commands.find((c) => c.data.name === 'total');
+    const totalOpts = totalSlash ? (totalSlash.data.toJSON().options || []) : [];
+    ok('total: /total takes one optional player option, like /skills',
+      totalOpts.length === 1 && totalOpts[0].name === 'player' && !totalOpts[0].required);
+    ok('total: !total is in the text command map',
+      typeof S.handleTotalCommand === 'function'
+      && /const \{[^}]*\bhandleTotalCommand\b[^}]*\} = require\('\.\/showoff'\)/.test(totalSrcIdx)
+      && totalSrcIdx.includes("else if (cmd === 'total') await handleTotalCommand(message, parts.slice(1));"));
+
+    const wcPath = path.join(DATA, 'wom-cache-v3.json');
+    const seedPath = path.join(DATA, 'cold-seeds.json');
+    const vaultPath = path.join(DATA, 'player-vault.json');
+    const savedT = {};
+    for (const p of [wcPath, seedPath, vaultPath]) savedT[p] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    const TAB = ['attack', 'hitpoints', 'mining', 'strength', 'agility', 'smithing',
+      'defence', 'herblore', 'fishing', 'ranged', 'thieving', 'cooking',
+      'prayer', 'crafting', 'firemaking', 'magic', 'fletching', 'woodcutting',
+      'runecrafting', 'slayer', 'farming', 'construction', 'hunter', 'sailing'];
+    // Distinct level per skill so any order slip shows; sailing is
+    // missing (defaults to 1), hunter is 0 (clamps up to 1).
+    const fxLevels = [70, 80, 61, 75, 55, 63, 72, 50, 66, 90, 58, 71,
+      52, 64, 73, 94, 85, 67, 44, 88, 62, 56, 0, null];
+    const fxSkills = { overall: { level: 1567, xp: 12345678 } };
+    TAB.forEach((k, i) => { if (fxLevels[i] !== null) fxSkills[k] = { level: fxLevels[i], xp: 1000 + i }; });
+    const fxName = 'Total Fixture';
+    const ghost = 'Total Ghost';
+    try {
+      const wc = savedT[wcPath] ? JSON.parse(savedT[wcPath]) : {};
+      wc[fxName.toLowerCase()] = { fetchedAt: Date.now(), stats: { combat: 90, skills: fxSkills, kc: {} } };
+      wc[ghost.toLowerCase()] = { fetchedAt: Date.now(), stats: { notFound: true } };
+      fs.writeFileSync(wcPath, JSON.stringify(wc));
+      const seeds = savedT[seedPath] ? JSON.parse(savedT[seedPath]) : {};
+      seeds[fxName.toLowerCase()] = Date.now();
+      seeds[ghost.toLowerCase()] = Date.now();
+      fs.writeFileSync(seedPath, JSON.stringify(seeds));
+
+      const tp = await S.totalPayload(fxName, null);
+      const files = (tp && tp.files) || [];
+      ok('total: reply is one total.png and nothing else',
+        files.length === 1 && files[0].name === 'total.png' && !tp.content && !(tp.components || []).length,
+        JSON.stringify(Object.keys(tp || {})));
+      let captured = null;
+      if (process.env.CARD_API_URL) {
+        const r = await fetch(process.env.CARD_API_URL.replace(/\/$/, '') + '/__captured/total').catch(() => null);
+        if (r && r.ok) captured = await r.json().catch(() => null);
+      }
+      if (captured) {
+        const want = [70, 80, 61, 75, 55, 63, 72, 50, 66, 90, 58, 71,
+          52, 64, 73, 94, 85, 67, 44, 88, 62, 56, 1, 1];
+        ok('total: posts the 24 levels in skills-tab order (missing -> 1, clamped 1..99)',
+          JSON.stringify(captured.levels) === JSON.stringify(want), JSON.stringify(captured.levels));
+        ok('total: posts the stats total level', captured.total === 1567, String(captured.total));
+      } else {
+        console.log('SKIP total: body capture needs tools/card-stub.js at CARD_API_URL');
+      }
+
+      const skMiss = await S.skillsPayload(ghost, null);
+      const tMiss = await S.totalPayload(ghost, null);
+      ok('total: unknown name gets the /skills not-found text, word for word',
+        !!skMiss && !!tMiss && typeof tMiss.content === 'string'
+        && tMiss.content === skMiss.content
+        && tMiss.content === `Could not find the RuneScape name **${ghost}**. Check the spelling and try again.`,
+        tMiss && tMiss.content);
+    } finally {
+      for (const p of [wcPath, seedPath, vaultPath]) {
+        if (savedT[p] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedT[p]);
+      }
+    }
+  }
+
   // Skills card on approval (2026-11-26): gate-free helper plus the
   // approve-path hook, checked by source shape.
   {
