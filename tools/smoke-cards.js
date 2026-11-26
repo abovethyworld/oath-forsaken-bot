@@ -2271,6 +2271,28 @@ async function t(name, fn, needFile = true) {
       ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 13, 0, 0))) === HOURW
       && ws.msUntilNextSweep(new Date(Date.UTC(2026, 10, 25, 15, 0, 0))) === 23 * HOURW);
 
+    // The post itself: one embed, owner-role ping only, issues
+    // grouped under their headings in display order.
+    const payloadW = ws.buildPayload([
+      { kind: 'unknown', line: ws.LINES.unknown('Mystery Name') },
+      { kind: 'rename', line: ws.LINES.rename('Ren', 'Old Name', 'New Name') },
+      { kind: 'missing', line: ws.LINES.missing('Stayer', 'Stayer Rsn') },
+      { kind: 'remove', line: ws.LINES.leave('Leaver', 'Leaver Rsn') },
+      { kind: 'missing' },
+    ]);
+    const descW = payloadW.embeds[0].description;
+    ok('womsync: payload pings only the owner role and groups the embed',
+      ws.PING_ROLE_ID === '1558578603359207555'
+      && payloadW.content === `<@&${ws.PING_ROLE_ID}>`
+      && JSON.stringify(payloadW.allowedMentions) === JSON.stringify({ roles: [ws.PING_ROLE_ID] })
+      && payloadW.embeds[0].color === 0xA31621
+      && payloadW.embeds[0].footer.text.includes('Settled cases stay quiet')
+      && descW.indexOf('**Left, still in the group**') < descW.indexOf('**Missing from the group**')
+      && descW.indexOf('**Missing from the group**') < descW.indexOf('**Looks renamed**')
+      && descW.indexOf('**Looks renamed**') < descW.indexOf('**In the group, not a member**')
+      && descW.includes('Ren — link says Old Name, the group says New Name.'),
+      JSON.stringify(payloadW));
+
     // Wrappers against fixture files, a stubbed fetch, a fake thread.
     const touchedW = ['membership.json', 'rsn-links.json', 'wom-sync-alerts.json'];
     const savedW = {};
@@ -2318,10 +2340,12 @@ async function t(name, fn, needFile = true) {
     try {
       const leaverMember = { id: UW.leaver, displayName: 'Leaver', user: { username: 'leaver' }, guild: { id: GIDW } };
       const postedLeave = await ws.onMemberLeave(fakeClientW, leaverMember);
-      ok('womsync: leave with RSNs in the group posts one ping-free line',
+      ok('womsync: leave with RSNs in the group posts one embed pinging only the owner role',
         postedLeave === true && sentW.length === 1
-        && sentW[0].content === ws.TEXT.leave('Leaver', 'Leaver Rsn')
-        && JSON.stringify(sentW[0].allowedMentions) === JSON.stringify({ parse: [] }),
+        && sentW[0].content === `<@&${ws.PING_ROLE_ID}>`
+        && JSON.stringify(sentW[0].allowedMentions) === JSON.stringify({ roles: [ws.PING_ROLE_ID] })
+        && sentW[0].embeds[0].title === '⛧ WOM Sync Check ⛧'
+        && sentW[0].embeds[0].description.includes('Leaver — left the server. Still in the group: Leaver Rsn.'),
         JSON.stringify(sentW));
       const postedLeaveAgain = await ws.onMemberLeave(fakeClientW, leaverMember);
       ok('womsync: the same leave never alerts twice', postedLeaveAgain === false && sentW.length === 1);
@@ -2333,14 +2357,18 @@ async function t(name, fn, needFile = true) {
       // alert, so only the unknown name is fresh.
       const sweptOnce = await ws.runSweep(fakeClientW);
       ok('womsync: sweep posts fresh drift as one message and does not repeat the leave alert',
-        sweptOnce === true && sentW.length === 2 && sentW[1].content === ws.TEXT.unknown('Mystery Name'),
+        sweptOnce === true && sentW.length === 2
+        && sentW[1].embeds[0].description.includes("Mystery Name — in the group but isn't a member here.")
+        && sentW[1].embeds[0].description.includes('**In the group, not a member**'),
         JSON.stringify(sentW.map((s) => s.content)));
 
       // Stayer drops out of the group: one missing line, nothing else.
       groupStub = ['Leaver Rsn', 'Mystery Name'];
       const sweptTwice = await ws.runSweep(fakeClientW);
       ok('womsync: sweep flags a member who fell out of the group',
-        sweptTwice === true && sentW.length === 3 && sentW[2].content === ws.TEXT.missing('Stayer', 'Stayer Rsn'),
+        sweptTwice === true && sentW.length === 3
+        && sentW[2].embeds[0].description.includes('Stayer — a member, but not in the group yet: Stayer Rsn.')
+        && sentW[2].embeds[0].description.includes('**Missing from the group**'),
         JSON.stringify(sentW.map((s) => s.content)));
       const sweptThrice = await ws.runSweep(fakeClientW);
       ok('womsync: a repeat sweep with the same drift stays silent', sweptThrice === false && sentW.length === 3);

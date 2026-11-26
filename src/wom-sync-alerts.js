@@ -3,10 +3,11 @@
 // The Wise Old Man group (26687) is the list the comps and the website
 // read, but nothing keeps it in step with Discord on its own: people
 // leave, people get approved and are never added, accounts get
-// renamed. This module watches for the drift and posts one plain line
-// per issue to the checklist thread so staff can fix the group by
-// hand (the bot has no WOM write access). It never edits the group,
-// never pings, and stays silent when the two lists agree.
+// renamed. This module watches for the drift and posts the issues
+// to the checklist thread as one embed so staff can fix the group
+// by hand (the bot has no WOM write access). It never edits the
+// group, pings only the clan owner role (Lord of Chaos), and stays
+// silent when the two lists agree.
 //
 // Two triggers:
 //  - A member leaving (guildMemberRemove, wired in index.js): if any
@@ -45,8 +46,10 @@ const SWEEP_HOUR_UTC = 14;
 // ALERT TEXT - DRAFT, NOT YET APPROVED.
 // These strings were drafted for this feature and have NOT been ruled
 // on yet. They live here, in this one block, so the approved wording
-// can be swapped in with a single edit. Plain text, no pings: posts
-// go out with allowedMentions parsing disabled.
+// can be swapped in with a single edit. TEXT is the canonical line
+// for each issue; LINES is the same content in the shorter form the
+// embed shows (the embed title carries the "WOM sync" lead). Posts
+// go out as one embed that pings only the owner role below.
 // =====================================================================
 const TEXT = {
   leave: (name, rsns) => `WOM sync: ${name} left the server. Still in the Wise Old Man group: ${rsns}. Needs removing by hand.`,
@@ -54,6 +57,69 @@ const TEXT = {
   rename: (name, rsns, newName) => `WOM sync: ${name} looks renamed - link says ${rsns}, the group says ${newName}. Update the link to settle it.`,
   unknown: (names) => `WOM sync: names in the Wise Old Man group that match no member: ${names}. Could be renames.`,
 };
+
+// The only role a WOM sync post may ping: Lord of Chaos, the clan
+// owner. Sourced from config so a role re-make is a config edit.
+const PING_ROLE_ID = (config.roles && config.roles.lordOfChaosId) || null;
+
+const LINES = {
+  leave: (name, rsns) => `${name} — left the server. Still in the group: ${rsns}. Needs removing by hand.`,
+  missing: (name, rsns) => `${name} — a member, but not in the group yet: ${rsns}.`,
+  rename: (name, rsns, newName) => `${name} — link says ${rsns}, the group says ${newName}. Update the link to settle it.`,
+  unknown: (names) => `${names} — in the group but isn't a member here.`,
+};
+
+// Embed sections, in display order: [issue kind, heading].
+const HEADINGS = [
+  ['remove', 'Left, still in the group'],
+  ['missing', 'Missing from the group'],
+  ['rename', 'Looks renamed'],
+  ['unknown', 'In the group, not a member'],
+];
+
+const EMBED_COLOR = 0xA31621;
+const EMBED_FOOTER = 'Settled cases stay quiet. Nothing here changes on its own - adding people to the group is still by hand.';
+
+// One message payload for a set of issues: an owner-role ping plus
+// a single embed with the issues grouped under their headings. The
+// description stays under Discord's cap by dropping trailing lines
+// and saying how many were left out, never by failing the post.
+function buildPayload(issues) {
+  const byKind = new Map();
+  for (const issue of issues || []) {
+    if (!issue || !issue.line) continue;
+    if (!byKind.has(issue.kind)) byKind.set(issue.kind, []);
+    byKind.get(issue.kind).push(issue.line);
+  }
+  const parts = [];
+  for (const [kind, heading] of HEADINGS) {
+    const lines = byKind.get(kind);
+    if (lines && lines.length) parts.push({ heading, lines: [...lines] });
+  }
+  let dropped = 0;
+  const render = () => parts
+    .filter((p) => p.lines.length)
+    .map((p) => `**${p.heading}**\n${p.lines.join('\n')}`)
+    .join('\n\n') + (dropped ? `\n\n+ ${dropped} more not shown.` : '');
+  let description = render();
+  while (description.length > 3900) {
+    const last = [...parts].reverse().find((p) => p.lines.length);
+    if (!last) break;
+    last.lines.pop();
+    dropped += 1;
+    description = render();
+  }
+  const payload = {
+    embeds: [{ title: '⛧ WOM Sync Check ⛧', color: EMBED_COLOR, description, footer: { text: EMBED_FOOTER } }],
+  };
+  if (PING_ROLE_ID) {
+    payload.content = `<@&${PING_ROLE_ID}>`;
+    payload.allowedMentions = { roles: [PING_ROLE_ID] };
+  } else {
+    payload.allowedMentions = { parse: [] };
+  }
+  return payload;
+}
 
 // ---- Name matching --------------------------------------------------
 // Same loose comparison as src/membership.js (case, underscores and
@@ -152,7 +218,13 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
     if (!inGuild.has(userId)) {
       const issue = removeIssue(userId, rsnsInGroup(entry, gIndex));
       if (issue) {
-        removals.push({ ...issue, text: TEXT.leave(resolve(userId), issue.rsns.join(', ')) });
+        const rsns = issue.rsns.join(', ');
+        removals.push({
+          ...issue,
+          kind: 'remove',
+          line: LINES.leave(resolve(userId), rsns),
+          text: TEXT.leave(resolve(userId), rsns),
+        });
       }
       continue;
     }
@@ -168,6 +240,8 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
         rsns: missing,
         issue: {
           key: `missing:${userId}:${keyPart(missing)}`,
+          kind: 'missing',
+          line: LINES.missing(resolve(userId), missing.join(', ')),
           text: TEXT.missing(resolve(userId), missing.join(', ')),
         },
       });
@@ -208,6 +282,8 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
     pairedNames.add(display);
     renames.push({
       key: `rename:${candidates[0].userId}:${key}`,
+      kind: 'rename',
+      line: LINES.rename(resolve(candidates[0].userId), candidates[0].rsns.join(', '), display),
       text: TEXT.rename(resolve(candidates[0].userId), candidates[0].rsns.join(', '), display),
     });
   }
@@ -221,6 +297,8 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
     remainingUnknown.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     issues.push({
       key: `unknown:${keyPart(remainingUnknown)}`,
+      kind: 'unknown',
+      line: LINES.unknown(remainingUnknown.join(', ')),
       text: TEXT.unknown(remainingUnknown.join(', ')),
     });
   }
@@ -260,13 +338,13 @@ function pruneState(state, currentKeys) {
 }
 
 // ---- Posting ----------------------------------------------------------
-async function postToChecklist(client, text) {
+async function postEmbedToChecklist(client, issues) {
   const threadId = config.ccChecklist && config.ccChecklist.threadId;
-  if (!threadId || !client) return false;
+  if (!threadId || !client || !issues || !issues.length) return false;
   const channel = await safeFetch(client.channels.fetch(threadId), 'wom-sync checklist post');
   if (!channel || typeof channel.send !== 'function') return false;
   try {
-    await channel.send({ content: text, allowedMentions: { parse: [] } });
+    await channel.send(buildPayload(issues));
     return true;
   } catch (err) {
     console.error('[wom-sync] checklist post failed:', err.message);
@@ -298,7 +376,9 @@ async function onMemberLeave(client, member) {
     const state = loadState();
     if (state.sent[issue.key]) return false;
     const name = member.displayName || (member.user && member.user.username) || `user ${member.id}`;
-    const posted = await postToChecklist(client, TEXT.leave(name, issue.rsns.join(', ')));
+    const posted = await postEmbedToChecklist(client, [
+      { kind: 'remove', line: LINES.leave(name, issue.rsns.join(', ')) },
+    ]);
     if (!posted) return false;
     state.sent[issue.key] = Date.now();
     saveState(state);
@@ -374,7 +454,7 @@ async function runSweep(client) {
     const fresh = issues.filter((i) => !state.sent[i.key]);
     let posted = false;
     if (fresh.length) {
-      posted = await postToChecklist(client, fresh.map((i) => i.text).join('\n'));
+      posted = await postEmbedToChecklist(client, fresh);
       if (posted) {
         for (const issue of fresh) state.sent[issue.key] = Date.now();
       }
@@ -417,6 +497,9 @@ function startWomSyncAlerts(client) {
 
 module.exports = {
   TEXT,
+  LINES,
+  PING_ROLE_ID,
+  buildPayload,
   nameKeys,
   memberRsns,
   groupIndex,
@@ -427,7 +510,7 @@ module.exports = {
   loadState,
   saveState,
   pruneState,
-  postToChecklist,
+  postEmbedToChecklist,
   onMemberLeave,
   runSweep,
   msUntilNextSweep,
