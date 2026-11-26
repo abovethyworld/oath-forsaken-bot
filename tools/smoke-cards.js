@@ -1979,8 +1979,10 @@ async function t(name, fn, needFile = true) {
       ok('webctl: standing lines are truthful for a record and for no record',
         spMember.content === `<@${WU1}> is recorded as a member.` && spNone.content === `<@${WU3}> has no standing record.`,
         `${spMember.content} / ${spNone.content}`);
-      ok('webctl: picker step carries the three standing buttons',
-        spJson.includes(`webctl:set:member:${WU1}`) && spJson.includes(`webctl:set:guest:${WU1}`) && spJson.includes(`webctl:set:clear:${WU1}`), spJson);
+      ok('webctl: picker step carries the standing buttons and the two clan actions',
+        spJson.includes(`webctl:set:member:${WU1}`) && spJson.includes(`webctl:set:guest:${WU1}`)
+        && spJson.includes(`webctl:remove:${WU1}`) && spJson.includes(`webctl:friend:${WU1}`)
+        && !spJson.includes('webctl:set:clear'), spJson);
 
       // Set guest overwrites a member record, via the panel.
       const setGuest = fakeIx({ staff: true, customId: `webctl:set:guest:${WU1}` });
@@ -1997,25 +1999,165 @@ async function t(name, fn, needFile = true) {
         storeW.getMembership(WG)[WU2].standing === 'member'
         && setMember.replies[0].content === `Standing for <@${WU2}> is now member.`);
 
-      // Clear deletes only that entry: the other member in the
-      // guild and the other guild's record both survive.
-      const clear = fakeIx({ staff: true, customId: `webctl:set:clear:${WU1}` });
-      await WC.handleWebsiteControlsButton(clear);
-      const afterClear = JSON.parse(fs.readFileSync(memPath, 'utf8'));
-      ok('webctl: clear deletes only that entry',
-        !(WU1 in (afterClear[WG] || {})) && afterClear[WG][WU2].standing === 'member'
-        && afterClear[WG2][WU3].standing === 'member'
-        && clear.replies[0].content === `The record for <@${WU1}> was cleared.`, JSON.stringify(afterClear));
+      // Move to Friend deletes only that entry: the other member
+      // in the guild and the other guild's record both survive.
+      const friend = fakeIx({ staff: true, customId: `webctl:friend:${WU1}` });
+      await WC.handleWebsiteControlsButton(friend);
+      const afterFriend = JSON.parse(fs.readFileSync(memPath, 'utf8'));
+      ok('webctl: Move to Friend deletes only that entry',
+        !(WU1 in (afterFriend[WG] || {})) && afterFriend[WG][WU2].standing === 'member'
+        && afterFriend[WG2][WU3].standing === 'member'
+        && friend.replies[0].content === `The record for <@${WU1}> was cleared. They show as a Friend of the Clan while they hold the Friend role.`,
+        JSON.stringify(afterFriend));
 
-      // Clearing a member with no record changes nothing and
+      // Moving a member with no record changes nothing and
       // says so.
-      const clearNone = fakeIx({ staff: true, customId: `webctl:set:clear:${WU1}` });
-      await WC.handleWebsiteControlsButton(clearNone);
-      ok('webctl: clear with no record is a truthful no-op',
-        clearNone.replies[0].content === `There is no record for <@${WU1}>. Nothing changed.`, JSON.stringify(clearNone.replies));
+      const friendNone = fakeIx({ staff: true, customId: `webctl:friend:${WU1}` });
+      await WC.handleWebsiteControlsButton(friendNone);
+      ok('webctl: Move to Friend with no record is a truthful no-op',
+        friendNone.replies[0].content === `There is no record for <@${WU1}>. Nothing changed.`, JSON.stringify(friendNone.replies));
     } finally {
       if (memSaved === null) { try { fs.unlinkSync(memPath); } catch {} }
       else fs.writeFileSync(memPath, memSaved);
+    }
+  }
+
+  // Leaver cleanup (Nov 26, 2026): a departure opens a case that
+  // runs the reversible removal steps (record marked left, link
+  // parked in the case, checklist closed plus a Remove CC rank
+  // entry, departed snapshot), and a staff Restore from the case
+  // puts it all back. The flows run against fixture data files
+  // with a fake guild and thread; every touched file is restored
+  // byte for byte afterwards.
+  {
+    const LC = require(path.join(__dirname, '..', 'src', 'leaver-cleanup.js'));
+    const storeC = require(path.join(__dirname, '..', 'src', 'store.js'));
+    const cfgCl = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const { Collection } = require('discord.js');
+    const indexSrcCl = fs.readFileSync(path.join(__dirname, '..', 'src', 'index.js'), 'utf8');
+    const buttonsSrcCl = fs.readFileSync(path.join(__dirname, '..', 'src', 'buttons.js'), 'utf8');
+    const GIDCL = cfgCl.guildId;
+    const THREADCL = cfgCl.ccChecklist.threadId;
+    const IRONCL = cfgCl.teams.ironSwornRoleId;
+    const INITIATECL = cfgCl.seniorityRanks.find((r) => r.minMonths === 0).roleId;
+    const UCL = { leaver: '990000000000000401', stayer: '990000000000000402' };
+
+    // Wiring: the case opens on leave after the WOM snapshot, the
+    // restore offer posts on rejoin, the button is routed.
+    ok('cleanup: index opens the case on leave, after the WOM snapshot',
+      indexSrcCl.indexOf('onCleanupLeave(client, member)') > indexSrcCl.indexOf('onWomSyncLeave(client, member)'));
+    ok('cleanup: index posts the restore offer on rejoin', indexSrcCl.includes('onCleanupRejoin(client, member)'));
+    ok('cleanup: the restore button is routed', buttonsSrcCl.includes("kind === 'cleanup'"));
+
+    const touchedCl = ['membership.json', 'rsn-links.json', 'cc-checklist.json', 'cleanup-cases.json', 'departed.json', 'seniority-assigned.json'];
+    const savedCl = {};
+    for (const name of touchedCl) {
+      const p = path.join(DATA, name);
+      savedCl[name] = fs.existsSync(p) ? fs.readFileSync(p) : null;
+    }
+    const writeFixtureCl = (name, obj) => fs.writeFileSync(path.join(DATA, name), JSON.stringify(obj));
+    const restoreCl = () => {
+      for (const name of touchedCl) {
+        const p = path.join(DATA, name);
+        if (savedCl[name] === null) { try { fs.unlinkSync(p); } catch {} }
+        else fs.writeFileSync(p, savedCl[name]);
+      }
+    };
+    writeFixtureCl('membership.json', {
+      [GIDCL]: {
+        [UCL.leaver]: { standing: 'member', at: Date.now() - 48 * 3600 * 1000, via: 'approval' },
+        [UCL.stayer]: { standing: 'member', at: Date.now() - 48 * 3600 * 1000, via: 'approval' },
+      },
+    });
+    writeFixtureCl('rsn-links.json', {
+      [UCL.leaver]: { rsns: ['Leaver Rsn'], verified: ['Leaver Rsn'], active: 'Leaver Rsn' },
+      [UCL.stayer]: { rsns: ['Stayer Rsn'], active: 'Stayer Rsn' },
+    });
+    writeFixtureCl('cc-checklist.json', { entries: [], messageId: null, page: 0 });
+    writeFixtureCl('seniority-assigned.json', { [GIDCL]: { [UCL.leaver]: { rank: 'Initiate', at: 1 } } });
+    try { fs.unlinkSync(path.join(DATA, 'cleanup-cases.json')); } catch {}
+    try { fs.unlinkSync(path.join(DATA, 'departed.json')); } catch {}
+
+    const sentCl = [];
+    const fakeThreadCl = {
+      send: async (opts) => { sentCl.push(opts); return { id: `cleanup-fake-${sentCl.length}` }; },
+      messages: { fetch: async () => null },
+    };
+    const leaverRolesCl = new Collection([[IRONCL, { id: IRONCL }], [INITIATECL, { id: INITIATECL }]]);
+    const fakeLeaverCl = {
+      id: UCL.leaver, displayName: 'Leaver', user: { username: 'leaver', bot: false },
+      roles: { cache: leaverRolesCl },
+    };
+    const fakeGuildCl = {
+      id: GIDCL,
+      channels: { cache: new Map([[THREADCL, fakeThreadCl]]) },
+      roles: { cache: new Map([[IRONCL, { id: IRONCL }], [INITIATECL, { id: INITIATECL }]]) },
+      members: { fetch: async (id) => (id === UCL.leaver ? fakeLeaverCl : null), cache: new Map() },
+    };
+    fakeLeaverCl.guild = fakeGuildCl;
+    const fakeClientCl = {
+      channels: { fetch: async () => fakeThreadCl },
+      guilds: { cache: new Map([[GIDCL, fakeGuildCl]]) },
+    };
+    const readJsonCl = (name) => JSON.parse(fs.readFileSync(path.join(DATA, name), 'utf8'));
+    try {
+      const openedCl = await LC.onMemberLeave(fakeClientCl, fakeLeaverCl);
+      const caseCl = LC.getCase(UCL.leaver);
+      ok('cleanup: a server leave opens a case with the full snapshot',
+        openedCl === true && !!caseCl && caseCl.priorStanding === 'member'
+        && caseCl.priorLink.rsns.includes('Leaver Rsn') && caseCl.priorRank === 'Initiate'
+        && caseCl.priorRoleIds.includes(IRONCL) && caseCl.priorRoleIds.includes(INITIATECL),
+        JSON.stringify(caseCl));
+      ok('cleanup: the case marks the record left and parks the link',
+        storeC.getMembership(GIDCL)[UCL.leaver].standing === 'left'
+        && !(UCL.leaver in readJsonCl('rsn-links.json')));
+      const entriesCl = readJsonCl('cc-checklist.json').entries;
+      ok('cleanup: the case adds one Remove CC rank entry',
+        entriesCl.length === 1 && entriesCl[0].userId === UCL.leaver
+        && entriesCl[0].newRank === 'Remove' && entriesCl[0].oldRank === 'Initiate',
+        JSON.stringify(entriesCl));
+      ok('cleanup: the case post carries the restore button',
+        sentCl.some((m) => typeof m.content === 'string' && m.content.includes('left the server')
+          && JSON.stringify(m.components || []).includes(`cleanup:restore:${UCL.leaver}`)),
+        JSON.stringify(sentCl.map((m) => m.content)));
+      ok('cleanup: the departure is snapshotted for the WOM alert',
+        !!readJsonCl('departed.json')[UCL.leaver]);
+      const openedAgainCl = await LC.onMemberLeave(fakeClientCl, fakeLeaverCl);
+      ok('cleanup: a second leave opens no second case', openedAgainCl === false && !!LC.getCase(UCL.leaver));
+
+      // Rejoin: the offer posts, and Restore puts everything back.
+      const rejoinRolesCl = new Collection();
+      const rejoinAddedCl = [];
+      const fakeRejoinCl = {
+        id: UCL.leaver, displayName: 'Leaver', user: { username: 'leaver', bot: false },
+        roles: { cache: rejoinRolesCl, add: async (id) => { rejoinAddedCl.push(id); rejoinRolesCl.set(id, { id }); } },
+        guild: fakeGuildCl,
+      };
+      const offeredCl = await LC.onMemberRejoin(fakeClientCl, fakeRejoinCl);
+      ok('cleanup: a rejoin with an open case posts the restore offer',
+        offeredCl === true && sentCl.some((m) => typeof m.content === 'string' && m.content.includes('back in the server')));
+      const restoredCl = await LC.restoreCase(fakeClientCl, fakeGuildCl, UCL.leaver, fakeRejoinCl);
+      ok('cleanup: restore puts back standing, link, roles, and rank eligibility',
+        restoredCl === true
+        && storeC.getMembership(GIDCL)[UCL.leaver].standing === 'member'
+        && readJsonCl('rsn-links.json')[UCL.leaver].rsns.includes('Leaver Rsn')
+        && rejoinAddedCl.includes(IRONCL) && rejoinAddedCl.includes(INITIATECL)
+        && !(UCL.leaver in (readJsonCl('seniority-assigned.json')[GIDCL] || {}))
+        && !LC.getCase(UCL.leaver),
+        JSON.stringify(rejoinAddedCl));
+      ok('cleanup: restore closes the removal entry',
+        !readJsonCl('cc-checklist.json').entries.some((e) => e.userId === UCL.leaver));
+      const restoredAgainCl = await LC.restoreCase(fakeClientCl, fakeGuildCl, UCL.leaver, fakeRejoinCl);
+      ok('cleanup: a second restore is a no-op', restoredAgainCl === false);
+
+      // Panel remove: a case opens with the panel as its source.
+      const panelCaseCl = await LC.onPanelRemove(fakeClientCl, fakeGuildCl, UCL.stayer, '990000000000000900');
+      ok('cleanup: a panel remove opens a panel case',
+        !!panelCaseCl && panelCaseCl.openedBy === 'panel'
+        && storeC.getMembership(GIDCL)[UCL.stayer].standing === 'left',
+        JSON.stringify(panelCaseCl));
+    } finally {
+      restoreCl();
     }
   }
 

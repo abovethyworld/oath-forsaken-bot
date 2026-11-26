@@ -15,6 +15,7 @@ const { handleHelpButton } = require('./guide');
 const { handleStaffLinkButton } = require('./staff-link');
 const { handleBumpButton } = require('./bump-tool');
 const { handleWebsiteControlsButton } = require('./website-controls');
+const { handleCleanupButton } = require('./leaver-cleanup');
 const config = require('./config');
 
 function panelRoleIds() {
@@ -35,6 +36,7 @@ async function routeButton(interaction) {
   if (kind === 'member') return handleMemberConfirm(interaction);
   if (kind === 'stafflink') return handleStaffLinkButton(interaction);
   if (kind === 'webctl') return handleWebsiteControlsButton(interaction);
+  if (kind === 'cleanup') return handleCleanupButton(interaction);
   if (kind === 'apply') return handleApplyButton(interaction);
   if (kind === 'poll') return handlePollButton(interaction);
   if (kind === 'cc') return handleCcButton(interaction);

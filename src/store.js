@@ -286,6 +286,17 @@ module.exports = {
     }
     if (changed) saveJson(ASSIGNED_FILE, data);
   },
+  // Drop one member's assigned record entirely. The leaver cleanup's
+  // restore uses it: a member whose rank vanished because they left
+  // the server is not a staff removal, so the marker that would make
+  // the sync skip them forever has to go before it can rank them
+  // again. Only ever run by that restore; nothing calls it
+  // automatically.
+  clearSeniorityAssigned(guildId, userId) {
+    const data = loadJson(ASSIGNED_FILE);
+    if (data[guildId]) delete data[guildId][userId];
+    saveJson(ASSIGNED_FILE, data);
+  },
 
   // ---- Membership standing: { guildId: { userId: { standing, at, via } } } ----
   // Recorded when staff decide an application (ruling Nov 6, 2026):

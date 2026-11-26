@@ -4020,6 +4020,7 @@ module.exports = {
   teamsChannelId,
   normalizeRsnEntry,
   getRsnEntry,
+  mutateRsnLinks,
   addRsn,
   linkRsnQuiet,
   verifiedOwnerOf,

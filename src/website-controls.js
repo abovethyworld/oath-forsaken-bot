@@ -9,9 +9,12 @@
 //   button, the member picker, and the standing buttons, so a
 //   forwarded component id gains a non-staff member nothing.
 // - Approval writes the record on its own (see src/recruit.js).
-//   This panel is the hand fix: set a member, set a guest, or
-//   clear the record. Nothing here touches roles; standing and
-//   roles are separate on purpose.
+//   This panel is the hand fix: set a member or a guest, move a
+//   member to Friend of the Clan (clears the record; the Friend
+//   role itself is still staff's to move), or remove them from
+//   the clan, which opens a cleanup case (src/leaver-cleanup.js).
+//   Standing buttons never touch roles; standing and roles are
+//   separate on purpose.
 // - Every change posts one line to the mod-log and logs to the
 //   journal. Failures log with the [website-controls] tag,
 //   never swallowed.
@@ -122,7 +125,9 @@ function standingPayload(guildId, targetId) {
     ? `<@${targetId}> is recorded as a member.`
     : standing === 'guest'
       ? `<@${targetId}> is recorded as a guest.`
-      : `<@${targetId}> has no standing record.`;
+      : standing === 'left'
+        ? `<@${targetId}> left the clan. A cleanup case holds their record.`
+        : `<@${targetId}> has no standing record.`;
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`webctl:set:member:${targetId}`)
@@ -132,12 +137,18 @@ function standingPayload(guildId, targetId) {
       .setCustomId(`webctl:set:guest:${targetId}`)
       .setLabel('Set as guest')
       .setStyle(ButtonStyle.Danger),
+  );
+  const row2 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`webctl:set:clear:${targetId}`)
-      .setLabel('Clear record')
+      .setCustomId(`webctl:remove:${targetId}`)
+      .setLabel('Remove from clan')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`webctl:friend:${targetId}`)
+      .setLabel('Move to Friend')
       .setStyle(ButtonStyle.Danger),
   );
-  return { content: line, components: [row] };
+  return { content: line, components: [row, row2] };
 }
 
 async function postModLog(interaction, line) {
@@ -168,22 +179,26 @@ async function handleWebsiteControlsButton(interaction) {
     await interaction.reply({ content: 'Whose record are you changing?', components: [row], ephemeral: true });
     return;
   }
-  if (action !== 'set' || !targetId || !['member', 'guest', 'clear'].includes(choice)) return;
+  // Remove from clan / Move to Friend carry the target in the
+  // third segment instead of a standing choice.
+  if (action === 'remove' || action === 'friend') {
+    const target = choice;
+    if (!target) return;
+    if (!isStaff(interaction)) {
+      await interaction.reply({ content: 'That button is for staff only.', ephemeral: true });
+      return;
+    }
+    if (action === 'friend') return handleFriendMove(interaction, target);
+    return handleRemove(interaction, target);
+  }
+  if (action !== 'set' || !targetId || !['member', 'guest'].includes(choice)) return;
   if (!isStaff(interaction)) {
     await interaction.reply({ content: 'That button is for staff only.', ephemeral: true });
     return;
   }
   const guildId = interaction.guildId;
-  if (choice === 'clear' && !currentStanding(guildId, targetId)) {
-    await interaction.reply({ content: `There is no record for <@${targetId}>. Nothing changed.`, ephemeral: true });
-    return;
-  }
   try {
-    if (choice === 'clear') {
-      store.clearMembershipStanding(guildId, targetId);
-    } else {
-      store.setMembershipStanding(guildId, targetId, choice, 'panel');
-    }
+    store.setMembershipStanding(guildId, targetId, choice, 'panel');
   } catch (err) {
     console.error(`${TAG} standing write failed:`, err.message);
     await interaction.reply({ content: 'The record could not be saved. Nothing changed.', ephemeral: true });
@@ -195,15 +210,72 @@ async function handleWebsiteControlsButton(interaction) {
   } catch (e) {
     console.error(`${TAG} comp roster refresh failed:`, e.message);
   }
-  if (choice === 'clear') {
-    console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) cleared the standing record for ${targetId}`);
-    await postModLog(interaction, `Website controls: <@${interaction.user.id}> cleared the standing record for <@${targetId}>.`);
-    await interaction.reply({ content: `The record for <@${targetId}> was cleared.`, ephemeral: true });
-    return;
-  }
   console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) set standing for ${targetId} to ${choice}`);
   await postModLog(interaction, `Website controls: <@${interaction.user.id}> set the standing for <@${targetId}> to ${choice}.`);
   await interaction.reply({ content: `Standing for <@${targetId}> is now ${choice}.`, ephemeral: true });
+}
+
+// Move to Friend: the record clears, exactly as the old Clear
+// record button did - the website then shows them as a Friend of
+// the Clan while they hold the Friend role (published from roles
+// by src/friends.js). Deliberately NOT the cleanup case: a Friend
+// keeps their link, their checklist state, and their plugin code.
+async function handleFriendMove(interaction, targetId) {
+  const guildId = interaction.guildId;
+  if (!currentStanding(guildId, targetId)) {
+    await interaction.reply({ content: `There is no record for <@${targetId}>. Nothing changed.`, ephemeral: true });
+    return;
+  }
+  if (require('./leaver-cleanup').getCase(targetId)) {
+    await interaction.reply({
+      content: `<@${targetId}> has an open cleanup case. Restore it from the case post first, then move them.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  try {
+    store.clearMembershipStanding(guildId, targetId);
+  } catch (err) {
+    console.error(`${TAG} standing write failed:`, err.message);
+    await interaction.reply({ content: 'The record could not be saved. Nothing changed.', ephemeral: true });
+    return;
+  }
+  try {
+    require('./comp-roster').scheduleRefresh(interaction.guild);
+  } catch (e) {
+    console.error(`${TAG} comp roster refresh failed:`, e.message);
+  }
+  console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) moved ${targetId} to Friend of the Clan (record cleared)`);
+  await postModLog(interaction, `Website controls: <@${interaction.user.id}> moved <@${targetId}> to Friend of the Clan (record cleared).`);
+  await interaction.reply({
+    content: `The record for <@${targetId}> was cleared. They show as a Friend of the Clan while they hold the Friend role.`,
+    ephemeral: true,
+  });
+}
+
+// Remove from clan: opens a cleanup case (src/leaver-cleanup.js),
+// which runs the reversible removal steps and holds the undo.
+async function handleRemove(interaction, targetId) {
+  const cleanup = require('./leaver-cleanup');
+  if (cleanup.getCase(targetId)) {
+    await interaction.reply({ content: `A cleanup case is already open for <@${targetId}>.`, ephemeral: true });
+    return;
+  }
+  if (!currentStanding(interaction.guildId, targetId)) {
+    await interaction.reply({ content: `There is no record for <@${targetId}>. Nothing to remove.`, ephemeral: true });
+    return;
+  }
+  const opened = await cleanup.onPanelRemove(interaction.client, interaction.guild, targetId, interaction.user.id);
+  if (!opened) {
+    await interaction.reply({ content: `The cleanup case for <@${targetId}> could not be opened. Nothing changed.`, ephemeral: true });
+    return;
+  }
+  console.log(`${TAG} ${interaction.user.tag} (${interaction.user.id}) removed ${targetId} from the clan (cleanup case)`);
+  await postModLog(interaction, `Website controls: <@${interaction.user.id}> removed <@${targetId}> from the clan (cleanup case opened).`);
+  await interaction.reply({
+    content: `Cleanup case opened for <@${targetId}>. Record marked left, link parked, and a Remove CC rank entry is on the checklist.`,
+    ephemeral: true,
+  });
 }
 
 async function handleWebsiteControlsSelect(interaction) {

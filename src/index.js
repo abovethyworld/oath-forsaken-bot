@@ -47,6 +47,7 @@ const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
 const { warmMemberStats } = require('./wom-warm');
 const { onMemberLeave: onWomSyncLeave, onMemberRejoin: onWomSyncRejoin, startWomSyncAlerts } = require('./wom-sync-alerts');
+const { onMemberLeave: onCleanupLeave, onMemberRejoin: onCleanupRejoin } = require('./leaver-cleanup');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 const { handleBoostMessage } = require('./boost-thanks');
 const { ensureBumpTool, checkBumpTool } = require('./bump-tool');
@@ -508,6 +509,9 @@ client.on(Events.GuildMemberAdd, async (member) => {
   // WOM sync: a rejoin ends any departed case held for the removal
   // alert (src/wom-sync-alerts.js). The hook guards itself.
   onWomSyncRejoin(member.id);
+  // Leaver cleanup: with a cleanup case still open for them, post
+  // the restore offer in the CC checklist thread.
+  onCleanupRejoin(client, member).catch((e) => console.error('[join] cleanup restore offer failed:', e.message));
   // Everyone-ping role: assign on join so announcements reach all members
   try {
     const pingRole = getPingRole(member.guild);
@@ -556,6 +560,11 @@ client.on(Events.GuildMemberRemove, (member) => {
   // Old Man group, alert the CC checklist thread so staff can remove
   // them by hand. Runs after (and never disturbs) the revoke above.
   onWomSyncLeave(client, member).catch((e) => console.error('[leave] WOM sync alert failed:', e.message));
+  // Leaver cleanup: open the cleanup case behind the departure
+  // (record marked left, link parked, checklist, comp roster).
+  // Runs after the WOM sync snapshot above, which reads the link
+  // before the case parks it.
+  onCleanupLeave(client, member).catch((e) => console.error('[leave] cleanup case failed:', e.message));
 });
 
 // Member leave logging handled by Sapphire (2026-10-11)

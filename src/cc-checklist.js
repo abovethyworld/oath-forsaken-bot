@@ -40,6 +40,14 @@ function oldRankDisplay(rankName) {
   if (!rankName || rankName === 'None') return 'New';
   return rankDisplay(rankName);
 }
+
+// A removal entry (the leaver cleanup's "take their CC rank away"
+// job) stores the marker 'Remove' as its new rank. It renders as
+// the words staff act on, not as a rank name.
+function newRankDisplay(newRank) {
+  if (newRank === 'Remove') return 'Remove CC rank';
+  return rankDisplay(newRank || '');
+}
 const DATA_FILE = path.join(__dirname, '..', 'data', 'cc-checklist.json');
 
 // Last cleared entries, kept in memory for the Undo button on the
@@ -88,7 +96,7 @@ function buildEmbed(entries, page) {
   const lines = pageEntries.map((e, i) => {
     const num = start + i + 1;
     const holdTag = e.held ? ' \u23f8\ufe0f **HELD**' : '';
-    return `**${num}.** <@${e.userId}> - ${oldRankDisplay(e.oldRank)} \u2192 **${rankDisplay(e.newRank)}**${holdTag}\n\u26e7 <t:${e.at}:R>`;
+    return `**${num}.** <@${e.userId}> - ${oldRankDisplay(e.oldRank)} \u2192 **${newRankDisplay(e.newRank)}**${holdTag}\n\u26e7 <t:${e.at}:R>`;
   });
 
   let desc = lines.join('\n\n');
@@ -212,7 +220,7 @@ async function addEntry(guild, userId, oldRank, newRank) {
     const channel = guild.channels.cache.get(CC_THREAD_ID);
     if (channel) {
       const pingMsg = await channel.send({
-        content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${userId}> - ${oldRankDisplay(oldRank)} → **${rankDisplay(newRank)}**`,
+        content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${userId}> - ${oldRankDisplay(oldRank)} → **${newRankDisplay(newRank)}**`,
         allowedMentions: { parse: ['roles'] },
       }).catch((e) => { console.error('[cc-checklist] Ping send failed:', e.message); return null; });
       if (pingMsg) {
@@ -226,6 +234,35 @@ async function addEntry(guild, userId, oldRank, newRank) {
       }
     }
   } catch {}
+}
+
+// Close every open entry for one member and delete their ping
+// messages, the same cleanup the Done button does per entry. The
+// leaver cleanup uses it twice: at case open (their pending rank
+// jobs are moot) and at restore (the removal job is moot). Returns
+// how many entries were closed.
+async function removeEntriesForUser(guild, userId) {
+  const data = load();
+  const removed = data.entries.filter((e) => e.userId === userId);
+  if (!removed.length) return 0;
+  data.entries = data.entries.filter((e) => e.userId !== userId);
+  const totalPages = Math.ceil(data.entries.length / PER_PAGE);
+  if (data.page >= totalPages && data.page > 0) data.page = Math.max(0, totalPages - 1);
+  save(data);
+  await refreshChecklist(guild);
+  const pingIds = removed.map((e) => e.pingMsgId).filter(Boolean);
+  if (pingIds.length) {
+    try {
+      const thread = guild.channels.cache.get(CC_THREAD_ID);
+      if (thread) {
+        for (const pid of pingIds) {
+          const pingMsg = await safeFetch(thread.messages.fetch(pid), 'cc-checklist ping cleanup');
+          if (pingMsg) await pingMsg.delete().catch((e) => console.error('[cc-checklist.js] Non-fatal error:', e.message));
+        }
+      }
+    } catch {}
+  }
+  return removed.length;
 }
 
 async function handleCcButton(interaction) {
@@ -323,7 +360,7 @@ async function handleCcButton(interaction) {
         const channel = interaction.guild.channels.cache.get(CC_THREAD_ID);
         if (channel) {
           const pingMsg = await channel.send({
-            content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${stash.entry.userId}> - ${oldRankDisplay(stash.entry.oldRank)} → **${rankDisplay(stash.entry.newRank)}**`,
+            content: `<@&${CC_UPDATER_ROLE_ID}> New CC update needed: <@${stash.entry.userId}> - ${oldRankDisplay(stash.entry.oldRank)} → **${newRankDisplay(stash.entry.newRank)}**`,
             allowedMentions: { parse: ['roles'] },
           }).catch(() => null);
           if (pingMsg) {
@@ -408,4 +445,4 @@ const commands = [
   },
 ];
 
-module.exports = { commands, handleCcButton, addEntry, refreshChecklist };
+module.exports = { commands, handleCcButton, addEntry, refreshChecklist, removeEntriesForUser, newRankDisplay };
