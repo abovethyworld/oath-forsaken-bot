@@ -46,7 +46,7 @@ const { warmProfiles } = require('./profile-warm');
 const { syncChampions } = require('./champions');
 const { syncCompetitions } = require('./competitions');
 const { warmMemberStats } = require('./wom-warm');
-const { onMemberLeave: onWomSyncLeave, startWomSyncAlerts } = require('./wom-sync-alerts');
+const { onMemberLeave: onWomSyncLeave, onMemberRejoin: onWomSyncRejoin, startWomSyncAlerts } = require('./wom-sync-alerts');
 const { ensureLaunchCountdown, refreshLaunchCountdown } = require('./launch-countdown');
 const { handleBoostMessage } = require('./boost-thanks');
 const { ensureBumpTool, checkBumpTool } = require('./bump-tool');
@@ -505,6 +505,9 @@ client.on(Events.GuildMemberAdd, async (member) => {
   invalidateCache();
   scheduleSnapshot();
   recordJoin(member.id, member.joinedAt);
+  // WOM sync: a rejoin ends any departed case held for the removal
+  // alert (src/wom-sync-alerts.js). The hook guards itself.
+  onWomSyncRejoin(member.id);
   // Everyone-ping role: assign on join so announcements reach all members
   try {
     const pingRole = getPingRole(member.guild);

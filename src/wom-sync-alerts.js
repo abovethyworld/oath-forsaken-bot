@@ -20,6 +20,11 @@
 //    name is reported once as a likely rename, not as two separate
 //    problems. Cases staff have settled (src/sync-settled.js) are
 //    not flagged at all; removals are never settled away.
+// Removal issues read the departed registry (src/departed.js) as
+// well as the live records: the registry snapshots a member's RSNs
+// when they leave, so a later cleanup that marks the record left or
+// parks the link cannot silence the removal alert or wipe its
+// dedup memory. The sweep prunes the registry as cases resolve.
 // The same 14:00 UTC pass also runs the role watch sweep
 // (src/role-watch.js): one daily membership-sync pass, two checks,
 // each module keeping its own alert state.
@@ -34,6 +39,7 @@ const { atomicWrite } = require('./store');
 const { safeFetch } = require('./utils');
 const { normName, entryRsns, loadLinks } = require('./membership');
 const { loadSettled } = require('./sync-settled');
+const { loadDeparted, saveDeparted, recordDeparture, clearDeparture } = require('./departed');
 const wom = require('./wom');
 const roleWatch = require('./role-watch');
 
@@ -201,7 +207,7 @@ function removeIssue(userId, inGroupRsns) {
 // settled cases, work out every open issue. Returns the issues
 // (with dedup keys and the exact lines to post) in a stable order:
 // removals, renames, missing, unknown.
-function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, settled }) {
+function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, settled, departed }) {
   const gIndex = groupIndex(groupNames);
   const resolve = typeof nameOf === 'function' ? nameOf : (id) => `user ${id}`;
   const settledUsers = settled && settled.userIds ? settled.userIds : new Set();
@@ -211,11 +217,34 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
   const records = membership && typeof membership === 'object' ? membership : {};
   const linkMap = links && typeof links === 'object' ? links : {};
 
+  // Departed registry first: a departure snapshot outranks the live
+  // record and link, which a cleanup may have marked left or parked.
+  // Same issue key as the record path below, so the two never post
+  // the same departure twice and the dedup memory carries over.
+  const departedMap = departed && typeof departed === 'object' ? departed : {};
+  const coveredDeparted = new Set();
+  for (const [userId, dep] of Object.entries(departedMap)) {
+    if (!dep || inGuild.has(userId)) continue;
+    const snapshot = { rsns: Array.isArray(dep.rsns) ? dep.rsns : [] };
+    const issue = removeIssue(userId, rsnsInGroup(snapshot, gIndex));
+    if (!issue) continue;
+    coveredDeparted.add(userId);
+    const rsns = issue.rsns.join(', ');
+    const who = dep.name || resolve(userId);
+    removals.push({
+      ...issue,
+      kind: 'remove',
+      line: LINES.leave(who, rsns),
+      text: TEXT.leave(who, rsns),
+    });
+  }
+
   for (const [userId, rec] of Object.entries(records)) {
     if (!rec || (rec.standing !== 'member' && rec.standing !== 'guest')) continue;
     const entry = linkMap[userId];
     if (!entry) continue;
     if (!inGuild.has(userId)) {
+      if (coveredDeparted.has(userId)) continue;
       const issue = removeIssue(userId, rsnsInGroup(entry, gIndex));
       if (issue) {
         const rsns = issue.rsns.join(', ');
@@ -255,6 +284,14 @@ function computeSweep({ membership, links, groupNames, inGuild, nameOf, now, set
   const known = new Set();
   for (const entry of Object.values(linkMap)) {
     for (const rsn of memberRsns(entry)) {
+      for (const key of nameKeys(rsn)) known.add(key);
+    }
+  }
+  // A departed snapshot explains its names too: they are a removal
+  // case above, not an unknown-name mystery.
+  for (const dep of Object.values(departedMap)) {
+    if (!dep || !Array.isArray(dep.rsns)) continue;
+    for (const rsn of dep.rsns) {
       for (const key of nameKeys(rsn)) known.add(key);
     }
   }
@@ -364,6 +401,14 @@ async function onMemberLeave(client, member) {
     const entry = loadLinks()[member.id];
     if (!entry || !memberRsns(entry).length) return false;
 
+    // Snapshot the departure now, before anything else can change:
+    // the sweep's removal check reads this registry, so a later
+    // cleanup of the record or the link cannot silence it. Recorded
+    // even when the WOM fetch below fails - a failed fetch is not
+    // drift, but the departure still happened.
+    const name = member.displayName || (member.user && member.user.username) || `user ${member.id}`;
+    recordDeparture(member.id, name, memberRsns(entry));
+
     const groupNames = await wom.getGroupMembers(config.womGroupId);
     if (!groupNames) {
       // WOM is unreachable: a failed fetch is not drift. Log and skip.
@@ -375,7 +420,6 @@ async function onMemberLeave(client, member) {
 
     const state = loadState();
     if (state.sent[issue.key]) return false;
-    const name = member.displayName || (member.user && member.user.username) || `user ${member.id}`;
     const posted = await postEmbedToChecklist(client, [
       { kind: 'remove', line: LINES.leave(name, issue.rsns.join(', ')) },
     ]);
@@ -386,6 +430,17 @@ async function onMemberLeave(client, member) {
   } catch (err) {
     console.error('[wom-sync] leave alert failed:', err.message);
     return false;
+  }
+}
+
+// ---- Rejoin -----------------------------------------------------------
+// Called from the guildMemberAdd handler in index.js: a rejoin ends
+// the departed case, so the removal alert stands down. Never throws.
+function onMemberRejoin(userId) {
+  try {
+    if (userId) clearDeparture(userId);
+  } catch (err) {
+    console.error('[wom-sync] rejoin clear failed:', err.message);
   }
 }
 
@@ -432,6 +487,20 @@ async function collectIssues(client) {
     console.warn('[wom-sync] sweep skipped: guild membership unavailable.');
     return null;
   }
+  // Prune the departed registry against this run's facts before
+  // computing: an entry ends when the person is back in the guild
+  // or none of their snapshot RSNs remain in the group.
+  const departed = loadDeparted();
+  const gIndex = groupIndex(groupNames);
+  let departedChanged = false;
+  for (const [userId, dep] of Object.entries(departed)) {
+    const snapshot = { rsns: dep && Array.isArray(dep.rsns) ? dep.rsns : [] };
+    if (presence.ids.has(userId) || !rsnsInGroup(snapshot, gIndex).length) {
+      delete departed[userId];
+      departedChanged = true;
+    }
+  }
+  if (departedChanged) saveDeparted(departed);
   return computeSweep({
     membership: store.getMembership(config.guildId),
     links: loadLinks(),
@@ -440,6 +509,7 @@ async function collectIssues(client) {
     nameOf: presence.nameOf,
     now: Date.now(),
     settled: loadSettled(),
+    departed,
   });
 }
 
@@ -512,6 +582,7 @@ module.exports = {
   pruneState,
   postEmbedToChecklist,
   onMemberLeave,
+  onMemberRejoin,
   runSweep,
   msUntilNextSweep,
   startWomSyncAlerts,

@@ -2158,6 +2158,7 @@ async function t(name, fn, needFile = true) {
     ok('womsync: index imports the module', indexSrcW.includes("require('./wom-sync-alerts')"));
     ok('womsync: leave hook runs after the connect-code revoke', revokeAtW >= 0 && leaveHookAtW > revokeAtW);
     ok('womsync: daily sweep timer starts on ready', indexSrcW.includes('startWomSyncAlerts(client)'));
+    ok('womsync: index clears the departed case on rejoin', indexSrcW.includes('onWomSyncRejoin(member.id)'));
 
     // Name matching: case and underscores fold; alt notations split.
     ok('womsync: name keys fold case and underscores', ws.nameKeys('Fake_Name').includes('fake name'));
@@ -2234,6 +2235,65 @@ async function t(name, fn, needFile = true) {
     ok('womsync: a settled group name is not flagged unknown',
       !settledNameSweep.some((i) => i.key.startsWith('unknown:')));
 
+    // Departed registry: the removal alert reads the departure
+    // snapshot, so it survives the record being marked left and the
+    // link being parked (the leaver cleanup's shape), and it never
+    // doubles the record path's own line.
+    const depOnly = ws.computeSweep({
+      membership: {},
+      links: {},
+      groupNames: ['Gone Rsn'],
+      inGuild: new Set(),
+      nameOf: (id) => `user ${id}`,
+      now: NOWW,
+      departed: { 'u-gone': { name: 'Gone Member', rsns: ['Gone Rsn'], at: NOWW - HOURW } },
+    });
+    ok('womsync: a departed snapshot flags removal with no record at all',
+      depOnly.length === 1 && depOnly[0].key.startsWith('remove:u-gone')
+      && depOnly[0].text === ws.TEXT.leave('Gone Member', 'Gone Rsn'),
+      JSON.stringify(depOnly));
+    const depCleaned = ws.computeSweep({
+      membership: { 'u-gone': { standing: 'left', at: NOWW - 48 * HOURW, via: 'cleanup' } },
+      links: { 'u-gone': { rsns: [] } },
+      groupNames: ['Gone Rsn'],
+      inGuild: new Set(),
+      nameOf: (id) => `user ${id}`,
+      now: NOWW,
+      departed: { 'u-gone': { name: 'Gone Member', rsns: ['Gone Rsn'], at: NOWW - HOURW } },
+    });
+    ok('womsync: the removal alert survives a cleaned record and a parked link',
+      depCleaned.filter((i) => i.key.startsWith('remove:')).length === 1,
+      JSON.stringify(depCleaned));
+    const depBoth = ws.computeSweep({
+      ...sweepArgs,
+      departed: { 'u-gone': { name: 'Gone Member', rsns: ['Gone Rsn'], at: NOWW - HOURW } },
+    });
+    ok('womsync: snapshot and record never double-report a departure',
+      depBoth.filter((i) => i.key.startsWith('remove:')).length === 1,
+      JSON.stringify(depBoth));
+    const depBack = ws.computeSweep({
+      membership: {},
+      links: {},
+      groupNames: ['Gone Rsn'],
+      inGuild: new Set(['u-gone']),
+      nameOf: (id) => `user ${id}`,
+      now: NOWW,
+      departed: { 'u-gone': { name: 'Gone Member', rsns: ['Gone Rsn'], at: NOWW - HOURW } },
+    });
+    ok('womsync: a departed entry for someone back in the guild stays silent',
+      !depBack.some((i) => i.key.startsWith('remove:')));
+    const depOut = ws.computeSweep({
+      membership: {},
+      links: {},
+      groupNames: ['Other Name'],
+      inGuild: new Set(),
+      nameOf: (id) => `user ${id}`,
+      now: NOWW,
+      departed: { 'u-gone': { name: 'Gone Member', rsns: ['Gone Rsn'], at: NOWW - HOURW } },
+    });
+    ok('womsync: a departed entry with no RSNs left in the group stays silent',
+      !depOut.some((i) => i.key.startsWith('remove:')));
+
     // Rename pairing: one missing member whose display name
     // carries the one unknown group name is a single rename line,
     // not a missing line plus an unknown line.
@@ -2294,7 +2354,7 @@ async function t(name, fn, needFile = true) {
       JSON.stringify(payloadW));
 
     // Wrappers against fixture files, a stubbed fetch, a fake thread.
-    const touchedW = ['membership.json', 'rsn-links.json', 'wom-sync-alerts.json'];
+    const touchedW = ['membership.json', 'rsn-links.json', 'wom-sync-alerts.json', 'departed.json'];
     const savedW = {};
     for (const name of touchedW) {
       const p = path.join(DATA, name);
@@ -2349,6 +2409,12 @@ async function t(name, fn, needFile = true) {
         JSON.stringify(sentW));
       const postedLeaveAgain = await ws.onMemberLeave(fakeClientW, leaverMember);
       ok('womsync: the same leave never alerts twice', postedLeaveAgain === false && sentW.length === 1);
+      const depM = require(path.join(__dirname, '..', 'src', 'departed.js'));
+      const depAfterLeave = depM.loadDeparted();
+      ok('womsync: the leave hook snapshots the departure',
+        !!depAfterLeave[UW.leaver] && depAfterLeave[UW.leaver].rsns.includes('Leaver Rsn')
+        && depAfterLeave[UW.leaver].name === 'Leaver',
+        JSON.stringify(depAfterLeave));
       const quietMember = { id: UW.quiet, displayName: 'Quiet', user: { username: 'quiet' }, guild: { id: GIDW } };
       const postedQuiet = await ws.onMemberLeave(fakeClientW, quietMember);
       ok('womsync: leave with no RSNs in the group stays silent', postedQuiet === false && sentW.length === 1);
@@ -2391,6 +2457,29 @@ async function t(name, fn, needFile = true) {
         && Object.keys(stateAfter.sent).length === 1
         && Object.keys(stateAfter.sent)[0].startsWith(`remove:${UW.leaver}:`),
         JSON.stringify(stateAfter));
+
+      // The leaver cleanup's shape: the record is marked left and
+      // the link is parked, but the name is still in the group. The
+      // removal issue must stay open (its dedup key survives the
+      // sweep's prune), or the alert has been silenced.
+      writeFixtureW('membership.json', {
+        [GIDW]: {
+          [UW.leaver]: { standing: 'left', at: NOWW - 48 * HOURW, via: 'cleanup' },
+          [UW.stayer]: { standing: 'member', at: NOWW - 48 * HOURW, via: 'approval' },
+        },
+      });
+      writeFixtureW('rsn-links.json', {
+        [UW.stayer]: { rsns: ['Stayer Rsn'] },
+      });
+      const sweptCleaned = await ws.runSweep(fakeClientW);
+      const stateCleaned = JSON.parse(fs.readFileSync(path.join(DATA, 'wom-sync-alerts.json'), 'utf8'));
+      ok('womsync: the removal case survives the cleanup shape',
+        sweptCleaned === false && sentW.length === 3
+        && Object.keys(stateCleaned.sent).some((k) => k.startsWith(`remove:${UW.leaver}:`)),
+        JSON.stringify(stateCleaned));
+      ws.onMemberRejoin(UW.leaver);
+      ok('womsync: a rejoin clears the departed entry',
+        !depM.loadDeparted()[UW.leaver]);
     } finally {
       womM.getGroupMembers = realGroupFetch;
       guildCacheM.invalidateCache();
