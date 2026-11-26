@@ -979,6 +979,23 @@ async function handleDecision(interaction) {
         await thread.send(`Link failed for <@${userId}>. Name given: ${f.rsn}. Reason: ${f.reason}. Approval still went through.`).catch((e) => console.error('[recruit-prelink] staff notice failed:', e.message));
       }
     }
+    // Skills card in the application thread (2026-11-26). Silent on any
+    // failure; must never block approval.
+    try {
+      const cardRsn = appAnswers && appAnswers.rsn ? String(appAnswers.rsn).split(/[,/]/)[0].trim() : '';
+      if (cardRsn && thread && thread.isThread()) {
+        const cardFile = await require('./showoff').skillsCardAttachment(cardRsn);
+        if (cardFile) {
+          await thread.send({ files: [cardFile], allowedMentions: { parse: [] } });
+        } else {
+          console.log(`[recruit.js] Skills card skipped for ${userId}: no card`);
+        }
+      } else {
+        console.log(`[recruit.js] Skills card skipped for ${userId}: no RSN or thread`);
+      }
+    } catch (e) {
+      console.log(`[recruit.js] Skills card skipped for ${userId}: ${e.message}`);
+    }
     // Comp roster follows membership (ruling Nov 20, 2026): a new
     // member's names belong on it as soon as they are approved.
     try {
