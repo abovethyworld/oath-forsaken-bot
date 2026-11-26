@@ -13,13 +13,20 @@
 //    standing flipped to member, Initiate added, CC checklist
 //    entry queued, comp roster refreshed, welcome posted, one
 //    staff line in the CC checklist thread.
+//  - The reverse move (added Nov 26, 2026): a recorded member
+//    who ends up holding the Guest role and no member role was
+//    swapped to guest by hand, so the record follows - standing
+//    flipped to guest, seniority rank role removed (the rank
+//    itself stays on file in seniority-assigned, so a later
+//    promotion restores it), comp roster refreshed, one staff
+//    line. Holding Guest is the signal of intent: a member who
+//    loses the member role without gaining Guest is NOT moved.
 //  - A daily sweep (the same 14:00 UTC pass as the WOM sync
 //    sweep) repairs anyone the live watch missed and flags the
 //    two cases a person has to decide: a recorded member holding
-//    no member role, and a member role held with no record at
-//    all. Those two are staff lines only - the watcher never
-//    demotes, never creates standing from roles alone, and never
-//    removes a role.
+//    no member role and no Guest role, and a member role held
+//    with no record at all. Those two are staff lines only -
+//    the watcher never creates standing from roles alone.
 //  - Friend of the Clan holders are a separate track and are
 //    always exempt, as are bots.
 //  - People on the settled list (src/sync-settled.js) are exempt
@@ -74,6 +81,7 @@ const TEXT = {
   promotion: (name, rsns) => `Role sync: ${name} was given a member role in Discord. Record updated to member, checklist entry added.${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
   repair: (name, rsns) => `Role sync: ${name} holds a member role but their record said guest. Record fixed to member, checklist entry added.${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
   demotion: (name) => `Role sync: ${name} is a member on record but holds no member role in Discord. Nothing changed - staff call.`,
+  demote: (name, rsns, rankRemoved) => `Role sync: ${name} was moved to Guest in Discord. Record updated to guest.${rankRemoved ? ' Rank role removed.' : ''}${rsns && rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
   norecord: (name) => `Role sync: ${name} holds a member role in Discord but has no membership record. Nothing changed - staff call.`,
 };
 
@@ -109,7 +117,8 @@ function accessChanged(oldIds, newIds) {
 // 'guest', or null for no record), the role ids they hold, and
 // whether they are a bot, what should happen?
 //   'promote'  - recorded guest holding a member access role
-//   'demotion' - recorded member holding no member access role
+//   'demote'   - recorded member holding Guest and no member role
+//   'demotion' - recorded member holding no member role, no Guest
 //   'norecord' - no record, holding a member access role
 //   null       - nothing to do (includes bots, Friend holders,
 //                records with an unrecognised standing, and every
@@ -121,6 +130,7 @@ function classify({ standing, roleIds, isBot }) {
   if (FRIEND_ID && roles.has(FRIEND_ID)) return null;
   const hasMemberRole = MEMBER_ROLE_IDS.some((id) => roles.has(id));
   if (standing === 'guest' && hasMemberRole) return 'promote';
+  if (standing === 'member' && !hasMemberRole && GUEST_ID && roles.has(GUEST_ID)) return 'demote';
   if (standing === 'member' && !hasMemberRole) return 'demotion';
   if (standing === null && hasMemberRole) return 'norecord';
   return null;
@@ -240,6 +250,35 @@ async function applyPromotion(client, guild, userId, member, { welcome }) {
   return true;
 }
 
+// The reverse of a promotion: a member swapped to Guest by hand.
+// The record follows (standing to guest), the seniority rank
+// role comes off (the rank stays on file in the assigned record,
+// so a later promotion restores it), and the comp roster
+// refreshes. The Guest role itself is never touched. Returns
+// true when a rank role was removed, so the staff line can say
+// so. Rank removal needs a live member object; the sweep's
+// snapshot path flips the record only.
+async function applyDemotion(client, guild, userId, member) {
+  store.setMembershipStanding(guild.id, userId, 'guest', 'role-watch');
+  let rankRemoved = false;
+  if (member && member.roles && typeof member.roles.remove === 'function') {
+    const held = roleIdsOf(member);
+    for (const entry of config.seniorityRanks || []) {
+      if (entry && entry.roleId && held.has(entry.roleId)) {
+        await member.roles.remove(entry.roleId, 'Role sync: member to guest')
+          .then(() => { rankRemoved = true; })
+          .catch((e) => console.error('[role-watch] rank remove failed:', e.message));
+      }
+    }
+  }
+  try {
+    require('./comp-roster').scheduleRefresh(guild);
+  } catch (e) {
+    console.error('[role-watch] Comp roster refresh failed:', e.message);
+  }
+  return rankRemoved;
+}
+
 // A deduped staff line for the two flag-only issues, shared by the
 // live handler and the sweep so an issue posts once from either.
 async function postFlag(client, state, action, userId, name) {
@@ -289,6 +328,10 @@ async function onMemberUpdate(client, oldMember, newMember, opts = {}) {
       if (action === 'promote') {
         await applyPromotion(client, guild, newMember.id, fresh, { welcome: true });
         return postToChecklist(client, TEXT.promotion(name, linkedRsns(newMember.id)));
+      }
+      if (action === 'demote') {
+        const rankRemoved = await applyDemotion(client, guild, newMember.id, fresh);
+        return postToChecklist(client, TEXT.demote(name, linkedRsns(newMember.id), rankRemoved));
       }
       return postFlag(client, loadState(), action, newMember.id, name);
     } finally {
@@ -369,6 +412,16 @@ async function runSweep(client) {
       if (action === 'promote') {
         await applyPromotion(client, guild, person.id, person.member, { welcome: false });
         lines.push(TEXT.repair(person.name, linkedRsns(person.id)));
+        continue;
+      }
+      if (action === 'demote') {
+        const rankRemoved = await applyDemotion(client, guild, person.id, person.member);
+        const key = `demote:${person.id}`;
+        currentKeys.add(key);
+        if (!state.sent[key]) {
+          freshKeys.push(key);
+          lines.push(TEXT.demote(person.name, linkedRsns(person.id), rankRemoved));
+        }
         continue;
       }
       const key = `${action}:${person.id}`;

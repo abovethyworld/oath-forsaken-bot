@@ -2700,6 +2700,10 @@ async function t(name, fn, needFile = true) {
       rw.TEXT.repair('Pat', []) === 'Role sync: Pat holds a member role but their record said guest. Record fixed to member, checklist entry added.');
     ok('rolewatch: demotion line wording',
       rw.TEXT.demotion('Pat') === 'Role sync: Pat is a member on record but holds no member role in Discord. Nothing changed - staff call.');
+    ok('rolewatch: demote line wording',
+      rw.TEXT.demote('Pat', ['Pat Rsn'], true) === 'Role sync: Pat was moved to Guest in Discord. Record updated to guest. Rank role removed. RSNs: Pat Rsn.');
+    ok('rolewatch: demote line without a rank removal or RSNs',
+      rw.TEXT.demote('Pat', [], false) === 'Role sync: Pat was moved to Guest in Discord. Record updated to guest.');
     ok('rolewatch: no-record line wording',
       rw.TEXT.norecord('Pat') === 'Role sync: Pat holds a member role in Discord but has no membership record. Nothing changed - staff call.');
 
@@ -2709,7 +2713,8 @@ async function t(name, fn, needFile = true) {
     ok('rolewatch: guest with Unbound promotes', cls('guest', asSet(UNBOUND)) === 'promote');
     ok('rolewatch: guest with no member role is left alone', cls('guest', asSet(GUEST)) === null);
     ok('rolewatch: member with a member role is consistent', cls('member', asSet(IRON)) === null);
-    ok('rolewatch: member holding only Guest flags demotion drift', cls('member', asSet(GUEST)) === 'demotion');
+    ok('rolewatch: member holding only Guest is a hand swap to guest', cls('member', asSet(GUEST)) === 'demote');
+    ok('rolewatch: member holding Guest and a member role is left alone', cls('member', asSet(GUEST, IRON)) === null);
     ok('rolewatch: member with no access role flags demotion drift', cls('member', asSet(PING)) === 'demotion');
     ok('rolewatch: no record with a member role flags for staff', cls(null, asSet(IRON)) === 'norecord');
     ok('rolewatch: no record with only a non-access role is untouched', cls(null, asSet(PING)) === null);
@@ -2753,7 +2758,7 @@ async function t(name, fn, needFile = true) {
 
     const UR = {
       promo: '990000000000000301', demoted: '990000000000000302', stray: '990000000000000303',
-      friend: '990000000000000304', quiet: '990000000000000305', repair: '990000000000000306',
+      friend: '990000000000000304', quiet: '990000000000000305', repair: '990000000000000306', guestSwap: '990000000000000312',
       sweepDemoted: '990000000000000307', stray2: '990000000000000308', turtle: '990000000000000309',
       snapStray: '990000000000000310', bot: '990000000000000311',
     };
@@ -2765,6 +2770,7 @@ async function t(name, fn, needFile = true) {
         [UR.quiet]: { standing: 'member', at: Date.now(), via: 'approval' },
         [UR.repair]: { standing: 'guest', at: Date.now(), via: 'approval' },
         [UR.sweepDemoted]: { standing: 'member', at: Date.now(), via: 'approval' },
+        [UR.guestSwap]: { standing: 'member', at: Date.now(), via: 'approval' },
       },
     });
     const linkR = (rsn) => ({ rsns: [rsn], active: rsn, verified: [] });
@@ -2774,6 +2780,7 @@ async function t(name, fn, needFile = true) {
       [UR.friend]: linkR('Friend Rsn'),
       [UR.quiet]: linkR('Quiet Rsn'),
       [UR.repair]: linkR('Repair Rsn'),
+      [UR.guestSwap]: linkR('Swap Rsn'),
     });
     writeFixtureR('cc-checklist.json', { entries: [], messageId: null, page: 0 });
     try { fs.unlinkSync(path.join(DATA, 'role-watch.json')); } catch {}
@@ -2786,7 +2793,11 @@ async function t(name, fn, needFile = true) {
       const cache = new Map(roleIds.map((r) => [r, { id: r }]));
       return {
         id, displayName: name, user: { username: name.toLowerCase(), bot: isBot },
-        roles: { cache, add: async (roleId) => { cache.set(roleId, { id: roleId }); return {}; } },
+        roles: {
+          cache,
+          add: async (roleId) => { cache.set(roleId, { id: roleId }); return {}; },
+          remove: async (roleId) => { cache.delete(roleId); return {}; },
+        },
       };
     };
     const liveGuildR = (members) => ({
@@ -2870,6 +2881,28 @@ async function t(name, fn, needFile = true) {
       ok('rolewatch: a Friend holder is exempt from the live watch',
         friendSeen === false && sentR.length === 3 && readMembershipR()[UR.friend].standing === 'guest');
 
+      // Member to guest: a hand swap to Guest flips the record,
+      // takes the rank role off, refreshes the roster, and posts
+      // one staff line. A repeat event does nothing.
+      const swapOld = fakeMemberR(UR.guestSwap, 'GuestSwap', [IRON, INITIATE]);
+      const swapNew = fakeMemberR(UR.guestSwap, 'GuestSwap', [GUEST, INITIATE]);
+      const swapGuild = liveGuildR([swapNew]);
+      swapOld.guild = swapGuild; swapNew.guild = swapGuild;
+      const swapsBefore = rosterRefreshes;
+      const swapped = await rw.onMemberUpdate(liveClientR(swapGuild), swapOld, swapNew, { settleMs: 0 });
+      ok('rolewatch: a hand swap to Guest lines the record up behind it',
+        swapped === true
+        && readMembershipR()[UR.guestSwap].standing === 'guest'
+        && readMembershipR()[UR.guestSwap].via === 'role-watch'
+        && !swapNew.roles.cache.has(INITIATE)
+        && swapNew.roles.cache.has(GUEST)
+        && rosterRefreshes > swapsBefore
+        && sentR.length === 4 && sentR[3].content === rw.TEXT.demote('GuestSwap', ['Swap Rsn'], true),
+        JSON.stringify({ sent: sentR.map((s) => s.content) }));
+      const swappedAgain = await rw.onMemberUpdate(liveClientR(swapGuild), swapOld, swapNew, { settleMs: 0 });
+      ok('rolewatch: a repeat guest-swap event does nothing twice',
+        swappedAgain === false && sentR.length === 4);
+
       // The sweep: one repair, two flags, one combined message, no
       // welcome. The stray and demoted members from the live tests
       // are absent here, so their live dedup keys prune away.
@@ -2892,12 +2925,13 @@ async function t(name, fn, needFile = true) {
       guildCacheR.invalidateCache();
       const sweptOnce = await rw.runSweep(sweepClientR);
       ok('rolewatch: the sweep repairs and flags in one message, with no welcome',
-        sweptOnce === true && sentR.length === 4
-        && sentR[3].content === [
+        sweptOnce === true && sentR.length === 5
+        && sentR[4].content === [
           rw.TEXT.repair('Repair', ['Repair Rsn']),
-          rw.TEXT.demotion('SweepDemoted'),
+          rw.TEXT.demote('SweepDemoted', [], false),
           rw.TEXT.norecord('StrayTwo'),
         ].join('\n')
+        && readMembershipR()[UR.sweepDemoted].standing === 'guest'
         && generalSentR.length === 1
         && readMembershipR()[UR.repair].standing === 'member'
         && repairMember.roles.cache.has(INITIATE)
@@ -2905,17 +2939,16 @@ async function t(name, fn, needFile = true) {
         JSON.stringify(sentR.map((s) => s.content)));
       const sweptTwice = await rw.runSweep(sweepClientR);
       ok('rolewatch: a repeat sweep with the same drift stays silent',
-        sweptTwice === false && sentR.length === 4);
+        sweptTwice === false && sentR.length === 5);
 
-      // The demotion resolves (the role comes back): the next
-      // sweep posts nothing and the resolved key clears, while the
+      // The flipped member is a consistent guest now: a third
+      // sweep posts nothing, the demote key has cleared, and the
       // still-open no-record key stays.
-      sweepMembersR.get(UR.sweepDemoted).roles.cache.set(IRON, { id: IRON });
       const sweptThrice = await rw.runSweep(sweepClientR);
       const stateAfterR = readStateR();
       ok('rolewatch: resolved issues clear their dedup keys',
-        sweptThrice === false && sentR.length === 4
-        && !stateAfterR.sent[`demotion:${UR.sweepDemoted}`]
+        sweptThrice === false && sentR.length === 5
+        && !stateAfterR.sent[`demote:${UR.sweepDemoted}`]
         && !!stateAfterR.sent[`norecord:${UR.stray2}`],
         JSON.stringify(stateAfterR));
 
@@ -2928,11 +2961,11 @@ async function t(name, fn, needFile = true) {
       fs.writeFileSync(settledPathR, JSON.stringify({ userIds: [UR.stray2, UR.demoted], rsns: [] }));
       const demSettled = await rw.onMemberUpdate(liveClientR(demGuild), demOld, demNew, { settleMs: 0 });
       ok('rolewatch: a settled member is not flagged by the live watch',
-        demSettled === false && sentR.length === 4
+        demSettled === false && sentR.length === 5
         && readMembershipR()[UR.demoted].standing === 'member');
       const settledSwept = await rw.runSweep(sweepClientR);
       ok('rolewatch: a settled no-record member is not flagged by the sweep',
-        settledSwept === false && sentR.length === 4);
+        settledSwept === false && sentR.length === 5);
       if (savedSettledR === null) { try { fs.unlinkSync(settledPathR); } catch {} }
       else fs.writeFileSync(settledPathR, savedSettledR);
 
@@ -2953,8 +2986,8 @@ async function t(name, fn, needFile = true) {
       };
       const snapSwept = await rw.runSweep(liveClientR(snapGuildR));
       ok('rolewatch: the sweep falls back to the roles snapshot',
-        snapSwept === true && sentR.length === 5
-        && sentR[4].content === rw.TEXT.norecord(`user ${UR.snapStray}`),
+        snapSwept === true && sentR.length === 6
+        && sentR[5].content === rw.TEXT.norecord(`user ${UR.snapStray}`),
         JSON.stringify(sentR.map((s) => s.content)));
 
       // Neither source answers: silence, no crash.
@@ -2962,7 +2995,7 @@ async function t(name, fn, needFile = true) {
       guildCacheR.invalidateCache();
       const noSource = await rw.runSweep(liveClientR(snapGuildR));
       ok('rolewatch: with no member source the sweep stays silent',
-        noSource === false && sentR.length === 5);
+        noSource === false && sentR.length === 6);
     } finally {
       compRosterM.scheduleRefresh = realScheduleRefresh;
       guildCacheR.invalidateCache();
