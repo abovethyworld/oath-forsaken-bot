@@ -361,10 +361,10 @@ const commands = [
   {
     data: new SlashCommandBuilder()
       .setName('seniority-hold')
-      .setDescription('Hold/unhold a member\'s seniority rank (Manage Roles only)')
+      .setDescription('Hold/unhold a member\'s seniority rank, or list holds (Manage Roles only)')
       .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
-      .addUserOption((o) => o.setName('user').setDescription('Who').setRequired(true))
-      .addBooleanOption((o) => o.setName('hold').setDescription('Hold their rank (true) or release (false)').setRequired(true)),
+      .addUserOption((o) => o.setName('user').setDescription('Who (leave empty to list current holds)'))
+      .addBooleanOption((o) => o.setName('hold').setDescription('Hold their rank (true) or release (false)')),
     run: async (interaction) => {
       if (!isStaff(interaction)) {
         await interaction.reply({ content: 'Staff only.', ephemeral: true }).catch(() => {});
@@ -372,6 +372,49 @@ const commands = [
       }
       const user = interaction.options.getUser('user');
       const hold = interaction.options.getBoolean('hold');
+      if (!user) {
+        // No member named: list who is on hold. Staff only, like
+        // the rest of the command, and ephemeral. Holds set
+        // before the stamp existed show no date.
+        const records = store.getSeniorityHoldRecords(interaction.guildId);
+        const ids = Object.keys(records);
+        if (!ids.length) {
+          await interaction.reply({ content: 'No seniority holds right now.', ephemeral: true }).catch(() => {});
+          return;
+        }
+        const lines = [];
+        for (const id of ids) {
+          let name = null;
+          try {
+            const m = await interaction.guild.members.fetch(id);
+            name = m.displayName;
+          } catch {
+            try {
+              const u = await interaction.client.users.fetch(id);
+              name = u.username;
+            } catch { /* no name available: the mention fallback below still identifies them */ }
+          }
+          const rec = records[id];
+          const at = rec && typeof rec === 'object' ? rec.at : null;
+          const since = typeof at === 'number'
+            ? `held since ${new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/New_York' })}`
+            : 'no date recorded';
+          lines.push(`- ${name || `<@${id}>`}: ${since}`);
+        }
+        await interaction.reply({
+          content: `Seniority holds (${ids.length}):\n${lines.join('\n')}`,
+          ephemeral: true,
+          allowedMentions: { parse: [] },
+        }).catch(() => {});
+        return;
+      }
+      if (hold === null) {
+        await interaction.reply({
+          content: 'Pick hold true or false for that member, or run the command with no member to see the current holds.',
+          ephemeral: true,
+        }).catch(() => {});
+        return;
+      }
       store.setSeniorityHold(interaction.guildId, user.id, hold);
       await interaction.reply({
         content: hold

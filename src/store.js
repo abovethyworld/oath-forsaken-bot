@@ -242,8 +242,10 @@ module.exports = {
     return (data[guildId] || []).filter((e) => e.decidedAt >= sinceMs);
   },
 
-  // ---- Seniority holds: { guildId: { userId: true } } ----
+  // ---- Seniority holds: { guildId: { userId: { at } } } ----
   // Staff can hold a member's seniority rank (honorary/exception). Sync skips them.
+  // Holds set before Nov 26, 2026 carry `true` instead of the stamp;
+  // both read as held, only the stamp says since when.
   isSeniorityHeld(guildId, userId) {
     const data = loadJson(HOLDS_FILE);
     return !!(data[guildId] && data[guildId][userId]);
@@ -252,11 +254,17 @@ module.exports = {
     const data = loadJson(HOLDS_FILE);
     return new Set(Object.keys(data[guildId] || {}));
   },
+  // The raw hold records ({ userId: { at } | true }), for lists
+  // that need the stamp getSeniorityHolds throws away.
+  getSeniorityHoldRecords(guildId) {
+    const data = loadJson(HOLDS_FILE);
+    return data[guildId] || {};
+  },
   setSeniorityHold(guildId, userId, held) {
     const data = loadJson(HOLDS_FILE);
     data[guildId] ??= {};
     if (held) {
-      data[guildId][userId] = true;
+      data[guildId][userId] = { at: Date.now() };
     } else {
       delete data[guildId][userId];
     }

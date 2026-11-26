@@ -1305,6 +1305,27 @@ async function t(name, fn, needFile = true) {
         !!roundTrip[U.plainGuest] && roundTrip[U.plainGuest].standing === 'guest'
         && roundTrip[U.plainGuest].via === 'approval');
 
+      // Hold round-trip: setting a hold stamps when it was set
+      // (Nov 26, 2026); a legacy `true` value still reads as held.
+      storeM.setSeniorityHold(TG, U.womMember, true);
+      const holdsRaw = JSON.parse(fs.readFileSync(path.join(DATA, 'seniority-holds.json'), 'utf8'));
+      ok('holds: setting a hold stamps the time',
+        !!holdsRaw[TG] && typeof (holdsRaw[TG][U.womMember] || {}).at === 'number',
+        JSON.stringify(holdsRaw[TG] || null));
+      ok('holds: a stamped hold reads as held',
+        storeM.isSeniorityHeld(TG, U.womMember) && storeM.getSeniorityHolds(TG).has(U.womMember));
+      ok('holds: the records getter returns the stamp',
+        typeof (storeM.getSeniorityHoldRecords(TG)[U.womMember] || {}).at === 'number');
+      writeFixture('seniority-holds.json', { [TG]: { [U.plainGuest]: true } });
+      ok('holds: a legacy unstamped hold still reads as held',
+        storeM.isSeniorityHeld(TG, U.plainGuest) && !storeM.isSeniorityHeld(TG, U.womMember));
+      ok('holds: the records getter keeps a legacy hold as true',
+        storeM.getSeniorityHoldRecords(TG)[U.plainGuest] === true);
+      storeM.setSeniorityHold(TG, U.plainGuest, false);
+      ok('holds: releasing a hold removes it',
+        !storeM.isSeniorityHeld(TG, U.plainGuest) && storeM.getSeniorityHolds(TG).size === 0);
+      writeFixture('seniority-holds.json', {});
+
       // (f) Backfill seed: WOM-derived members and current rank
       // holders become recorded members; a plain guest does not; an
       // existing record set is never overwritten.
