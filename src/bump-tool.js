@@ -137,10 +137,11 @@ function publicPanelContent(state) {
   }
   const top = topBumpers(state);
   if (top.length) {
+    const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
     lines.push('', '**Top bumpers**');
     top.forEach(([uid, n], i) => {
       const name = (state.names && state.names[uid]) || 'Someone';
-      lines.push(`${i + 1}. ${name}${i === 0 ? ' \u2605' : ''} - ${n}`);
+      lines.push(`${medals[i] || `${i + 1}.`} ${name}${i === 0 ? ' \u2605' : ''} - ${n}`);
     });
   }
   return lines.join('\n');

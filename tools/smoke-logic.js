@@ -2723,8 +2723,8 @@ function sec(name) {
     ok('bump panel: leaderboard sorts and cuts at 5', top.length === 5 && top[0][0] === 'u1' && top[4][0] === 'u5');
     const txt = BT.publicPanelContent(st);
     ok('bump panel: ready once the 2h window has passed', txt.includes('Status: **Ready to bump**'));
-    ok('bump panel: leader carries the star and the count', txt.includes('1. Ptstud \u2605 - 14'));
-    ok('bump panel: plain text, no medals, no instruction line', txt.startsWith('**Bump**') && !txt.includes('\u{1F947}') && !txt.includes('tap **I bumped**'));
+    ok('bump panel: leader carries the star and the count', txt.includes('\u{1F947} Ptstud \u2605 - 14'));
+    ok('bump panel: plain text, medals on the top 3, no instruction line', txt.startsWith('**Bump**') && txt.includes('\u{1F947} Ptstud') && txt.includes('\u{1F948} Kagaku') && txt.includes('\u{1F949} Ben Lad Iron') && !txt.includes('tap **I bumped**'));
     const txt2 = BT.publicPanelContent({});
     ok('bump panel: empty state is ready with no board', txt2.includes('Ready to bump') && !txt2.includes('Top bumpers'));
     const btSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
