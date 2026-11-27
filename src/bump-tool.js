@@ -120,7 +120,7 @@ function publicPanelEmbed(state) {
   const s = settings();
   const lines = [
     `Forum thread: ${s.forumThreadUrl}`,
-    'Grab the pinned post, drop it in the forum thread, then tap **I bumped**.',
+    'Drop the Discord link in the forum thread, then tap **I bumped**.',
   ];
   if (state.lastBumpedAt) {
     const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
@@ -147,8 +147,7 @@ function publicPanelEmbed(state) {
   return new EmbedBuilder()
     .setColor(0xA31621)
     .setTitle('\u26E7 Bump \u26E7')
-    .setDescription(lines.join('\n'))
-    .setFooter({ text: 'The bump text is pinned in this channel.' });
+    .setDescription(lines.join('\n'));
 }
 
 async function fetchPublicChannel(client) {
@@ -179,8 +178,7 @@ async function refreshPublicPanel(client, state) {
 async function ensurePublicPanel(client, state) {
   const channel = await fetchPublicChannel(client);
   if (!channel) return;
-  if (!state.publicPanelMessageId || !state.publicTextMessageId) {
-    const text = readText();
+  if (!state.publicPanelMessageId) {
     const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
     if (recent) {
       for (const msg of recent.values()) {
@@ -188,21 +186,8 @@ async function ensurePublicPanel(client, state) {
         if (!state.publicPanelMessageId && msg.embeds.some((e) => e.title && e.title.includes('Bump'))) {
           state.publicPanelMessageId = msg.id;
         }
-        if (!state.publicTextMessageId && text && msg.content === text) {
-          state.publicTextMessageId = msg.id;
-        }
       }
       saveState(state);
-    }
-  }
-  if (!state.publicTextMessageId) {
-    const text = readText();
-    if (text) {
-      const msg = await channel.send(text);
-      await msg.pin().catch(() => {});
-      state.publicTextMessageId = msg.id;
-      saveState(state);
-      console.log('Bump tool: public bump text posted and pinned.');
     }
   }
   if (!state.publicPanelMessageId) {

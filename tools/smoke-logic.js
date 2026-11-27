@@ -2724,7 +2724,7 @@ function sec(name) {
     const emb = BT.publicPanelEmbed(st).toJSON();
     ok('bump panel: ready once the 2h window has passed', emb.description.includes('Status: **Ready to bump**'));
     ok('bump panel: board lists the leader with the count', emb.description.includes('Ptstud - 14'));
-    ok('bump panel: crimson embed, pinned-text footer', emb.color === 0xA31621 && emb.footer.text.includes('pinned'));
+    ok('bump panel: crimson embed, no footer, link instruction', emb.color === 0xA31621 && !emb.footer && emb.description.includes('Drop the Discord link'));
     const emb2 = BT.publicPanelEmbed({}).toJSON();
     ok('bump panel: empty state is ready with no board', emb2.description.includes('Ready to bump') && !emb2.description.includes('Top bumpers'));
     const btSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
