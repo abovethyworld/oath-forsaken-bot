@@ -29,7 +29,7 @@
 // clan chat, which the repo guard keeps out of committed files.
 const fs = require('node:fs');
 const path = require('node:path');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
 const config = require('./config');
 const { atomicWrite } = require('./store');
@@ -116,17 +116,15 @@ function topBumpers(state) {
     .slice(0, 5);
 }
 
-function publicPanelContent(state) {
+function publicPanelEmbed(state) {
   const s = settings();
   const lines = [
-    '**Bump**',
     `Forum thread: ${s.forumThreadUrl}`,
   ];
   if (state.lastBumpedAt) {
     const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
     const due = last + BUMP_GAP_HOURS * 3600;
-    const byName = state.lastBumpedBy && state.names && state.names[state.lastBumpedBy];
-    lines.push(`Last bump: <t:${last}:f>${byName ? ` by ${byName}` : ''}`);
+    lines.push(`Last bump: <t:${last}:f>${state.lastBumpedBy ? ` by <@${state.lastBumpedBy}>` : ''}`);
     if (Math.floor(DateTime.now().toSeconds()) >= due) {
       lines.push('Status: **Ready to bump**');
     } else {
@@ -140,11 +138,13 @@ function publicPanelContent(state) {
     const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
     lines.push('', '**Top bumpers**');
     top.forEach(([uid, n], i) => {
-      const name = (state.names && state.names[uid]) || 'Someone';
-      lines.push(`${medals[i] || `${i + 1}.`} ${name}${i === 0 ? ' \u2605' : ''} - ${n}`);
+      lines.push(`${medals[i] || `${i + 1}.`} <@${uid}>${i === 0 ? ' \u2605' : ''} - ${n}`);
     });
   }
-  return lines.join('\n');
+  return new EmbedBuilder()
+    .setColor(0xA31621)
+    .setTitle('Bump')
+    .setDescription(lines.join('\n'));
 }
 
 async function fetchPublicChannel(client) {
@@ -159,13 +159,14 @@ async function refreshPublicPanel(client, state) {
   if (!state.publicPanelMessageId) return;
   const channel = await fetchPublicChannel(client);
   if (!channel) return;
-  const content = publicPanelContent(state);
-  if (state.lastPublicRender === content) return;
+  const embed = publicPanelEmbed(state);
+  const render = JSON.stringify(embed.toJSON());
+  if (state.lastPublicRender === render) return;
   const msg = await channel.messages.fetch(state.publicPanelMessageId).catch(() => null);
   if (!msg) return;
-  await msg.edit({ content, embeds: [], components: [bumpButton()] }).catch(() => {});
+  await msg.edit({ content: '', embeds: [embed], components: [bumpButton()] }).catch(() => {});
   const fresh = loadState();
-  fresh.lastPublicRender = content;
+  fresh.lastPublicRender = render;
   saveState(fresh);
 }
 
@@ -179,7 +180,7 @@ async function ensurePublicPanel(client, state) {
     if (recent) {
       for (const msg of recent.values()) {
         if (!msg.author.bot) continue;
-        if (!state.publicPanelMessageId && msg.content.startsWith('**Bump**')) {
+        if (!state.publicPanelMessageId && (msg.content.startsWith('**Bump**') || msg.embeds.some((e) => e.title === 'Bump'))) {
           state.publicPanelMessageId = msg.id;
         }
       }
@@ -187,10 +188,10 @@ async function ensurePublicPanel(client, state) {
     }
   }
   if (!state.publicPanelMessageId) {
-    const panel = await channel.send({ content: publicPanelContent(state), components: [bumpButton()] });
+    const panel = await channel.send({ embeds: [publicPanelEmbed(state)], components: [bumpButton()] });
     await panel.pin().catch(() => {});
     state.publicPanelMessageId = panel.id;
-    state.lastPublicRender = publicPanelContent(state);
+    state.lastPublicRender = JSON.stringify(publicPanelEmbed(state).toJSON());
     saveState(state);
     console.log('Bump tool: public panel posted and pinned.');
   }
@@ -391,4 +392,4 @@ async function handleBumpButton(interaction) {
   }
 }
 
-module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelContent, topBumpers };
+module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelEmbed, topBumpers };
