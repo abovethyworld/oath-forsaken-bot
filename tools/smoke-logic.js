@@ -2748,7 +2748,7 @@ function sec(name) {
     const SG = require(path.join(__dirname, '..', 'src', 'suggestions.js'));
     const p = SG.eventSuggestPanelPayload();
     const emb = p.embeds[0].toJSON();
-    ok('event suggest: panel carries the question', emb.color === 0x6b0e0e && emb.title === '⛧ Event Suggestions ⛧' && emb.description.includes('What events do you want to see us run?'));
+    ok('event suggest: panel carries the question', emb.color === 0x6b0e0e && emb.title === '⛧ Event Suggestions ⛧' && emb.description.includes('What events do you want to see us run?') && emb.description.includes('Skilling or PvM.'));
     const btn = p.components[0].components[0].toJSON();
     ok('event suggest: one button opens the events modal', btn.custom_id === 'suggest:open:events' && btn.label === 'Suggest an Event');
     ok('event suggest: config carries the events chat channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).channels.eventsChat));

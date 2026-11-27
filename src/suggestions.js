@@ -190,7 +190,7 @@ function eventSuggestPanelPayload() {
         .setColor(ZAMORAK_RED)
         .setTitle('⛧ Event Suggestions ⛧')
         .setDescription(
-          'What events do you want to see us run? Low level, high level, skilling, PvM, whatever - if you would show up to it, we want to hear it.\n\nClick the button, type your idea, and members vote on it with ✅ and ❌.'
+          'What events do you want to see us run?\nSkilling or PvM. If you\'d show up to it, we want it in here.\nHit the button, put your idea up, and vote on the ones you\'d come to.'
         ),
     ],
     components: [
