@@ -37,6 +37,7 @@ const { handleTeamModal, handleTeamSelect, handleTeamStepSelect, sweepExpiredTea
 const { reconcileVerifiedLinks, surfaceHeldPosts, publishRolesSnapshot, revokeCodeFor } = require('./plugin-connect');
 const { watchRenames } = require('./rename-watch');
 const { syncFriends, syncWomGroup } = require('./friends');
+const { syncTotalRoles } = require('./total-roles');
 const { refreshCompRoster } = require('./comp-roster');
 const { mergeSiteLinkRequests } = require('./link-requests');
 const { handleStaffLinkSelect, handleStaffLinkModal, refreshStaffLinkPanel } = require('./staff-link');
@@ -219,6 +220,9 @@ client.once(Events.ClientReady, async (c) => {
       // Publish Friend of the Clan role holders for the website roster.
       await syncFriends(client);
 
+      // Total level bracket roles, from the same linked-RSN inputs.
+      await syncTotalRoles(client);
+
       // Archive any finished WOM competitions for the hall of champions.
       const newChamps = await syncChampions(client);
       if (newChamps) console.log(`Champions: archived ${newChamps} finished competition(s).`);
@@ -269,6 +273,7 @@ client.once(Events.ClientReady, async (c) => {
   setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
   setInterval(() => run('leaver-close', () => require('./leaver-cleanup').closeExpiredCases(client, client.guilds.cache.get(config.guildId))), 24 * 3600 * 1000);
   setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
+  setInterval(() => run('total-roles', () => syncTotalRoles(client)), 24 * 3600 * 1000);
   setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);
   setInterval(() => run('comp-roster', () => refreshCompRoster(client.guilds.cache.get(config.guildId))), 24 * 3600 * 1000);
   setInterval(() => run('champions', () => syncChampions(client)), 24 * 3600 * 1000);

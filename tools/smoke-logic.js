@@ -2732,6 +2732,17 @@ function sec(name) {
     ok('bump panel: config carries the public channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).bumpTool.publicChannelId));
   }
 
+  sec('AF. total level bracket roles');
+  {
+    const TR = require(path.join(__dirname, '..', 'src', 'total-roles.js'));
+    ok('bracket: 897 sits under 1250', TR.bracketFor(897) === 'under');
+    ok('bracket: 1249 under, 1250 mid', TR.bracketFor(1249) === 'under' && TR.bracketFor(1250) === 'mid');
+    ok('bracket: 1849 mid, 1850 high', TR.bracketFor(1849) === 'mid' && TR.bracketFor(1850) === 'high');
+    ok('bracket: maxed is high', TR.bracketFor(2277) === 'high');
+    ok('bracket: unknown total gives no bracket', TR.bracketFor(null) === null && TR.bracketFor(undefined) === null && TR.bracketFor(NaN) === null);
+    ok('bracket: config carries the three role ids', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).totalRoles.under1250));
+  }
+
   sec(null);
   console.log(`SECTION-TIME total: ${secTimes.reduce((a, s) => a + s.ms, 0)}ms`);
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
