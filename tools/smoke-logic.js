@@ -2710,6 +2710,28 @@ function sec(name) {
   }
 
 
+  sec('AE. bump tool public panel');
+  {
+    const BT = require(path.join(__dirname, '..', 'src', 'bump-tool.js'));
+    const st = {
+      lastBumpedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+      lastBumpedBy: 'u1',
+      counts: { u1: 14, u2: 11, u3: 9, u4: 7, u5: 5, u6: 2 },
+      names: { u1: 'Ptstud', u2: 'Kagaku', u3: 'Ben Lad Iron', u4: 'IronClamChow', u5: 'Ferric Niko', u6: 'Extra' },
+    };
+    const top = BT.topBumpers(st);
+    ok('bump panel: leaderboard sorts and cuts at 5', top.length === 5 && top[0][0] === 'u1' && top[4][0] === 'u5');
+    const emb = BT.publicPanelEmbed(st).toJSON();
+    ok('bump panel: ready once the 2h window has passed', emb.description.includes('Status: **Ready to bump**'));
+    ok('bump panel: board lists the leader with the count', emb.description.includes('Ptstud - 14'));
+    ok('bump panel: crimson embed, pinned-text footer', emb.color === 0xA31621 && emb.footer.text.includes('pinned'));
+    const emb2 = BT.publicPanelEmbed({}).toJSON();
+    ok('bump panel: empty state is ready with no board', emb2.description.includes('Ready to bump') && !emb2.description.includes('Top bumpers'));
+    const btSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
+    ok('bump panel: public gate names members and Friends', btSrc.includes('Only members and Friends of the Clan can log a bump.'));
+    ok('bump panel: config carries the public channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).bumpTool.publicChannelId));
+  }
+
   sec(null);
   console.log(`SECTION-TIME total: ${secTimes.reduce((a, s) => a + s.ms, 0)}ms`);
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);

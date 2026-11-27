@@ -29,7 +29,7 @@
 // clan chat, which the repo guard keeps out of committed files.
 const fs = require('node:fs');
 const path = require('node:path');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { DateTime } = require('luxon');
 const config = require('./config');
 const { atomicWrite } = require('./store');
@@ -99,6 +99,121 @@ function panelContent(state) {
     lines.push('No bump logged yet. Status: **Bump available now**');
   }
   return lines.join('\n');
+}
+
+
+// ─── Public panel ─────────────────────────────────────────────────
+// A second home for the same bump state: a public channel where
+// members and Friends of the Clan can log bumps. No reminders and
+// no pings ever post here; the pinned embed just re-renders when a
+// bump is logged or when the ready window flips. Bump counts are
+// shared with the staff thread - one forum thread, one truth.
+function topBumpers(state) {
+  const counts = state.counts || {};
+  return Object.entries(counts)
+    .filter(([, n]) => Number.isFinite(n) && n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+}
+
+function publicPanelEmbed(state) {
+  const s = settings();
+  const lines = [
+    `Forum thread: ${s.forumThreadUrl}`,
+    'Grab the pinned post, drop it in the forum thread, then tap **I bumped**.',
+  ];
+  if (state.lastBumpedAt) {
+    const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
+    const due = last + BUMP_GAP_HOURS * 3600;
+    const byName = state.lastBumpedBy && state.names && state.names[state.lastBumpedBy];
+    lines.push(`Last bump: <t:${last}:f>${byName ? ` by ${byName}` : ''}`);
+    if (Math.floor(DateTime.now().toSeconds()) >= due) {
+      lines.push('Status: **Ready to bump**');
+    } else {
+      lines.push(`Status: Next bump ready <t:${due}:R>`);
+    }
+  } else {
+    lines.push('Status: **Ready to bump**');
+  }
+  const top = topBumpers(state);
+  if (top.length) {
+    const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
+    lines.push('', '**Top bumpers**');
+    top.forEach(([uid, n], i) => {
+      const name = (state.names && state.names[uid]) || 'Someone';
+      lines.push(`${medals[i] || `${i + 1}.`} ${name} - ${n}`);
+    });
+  }
+  return new EmbedBuilder()
+    .setColor(0xA31621)
+    .setTitle('\u26E7 Bump \u26E7')
+    .setDescription(lines.join('\n'))
+    .setFooter({ text: 'The bump text is pinned in this channel.' });
+}
+
+async function fetchPublicChannel(client) {
+  const s = settings();
+  if (!s.publicChannelId) return null;
+  return client.channels.fetch(s.publicChannelId).catch(() => null);
+}
+
+// Re-render the public panel only when what it shows has changed,
+// so the 10-minute tick stays silent unless the status flipped.
+async function refreshPublicPanel(client, state) {
+  if (!state.publicPanelMessageId) return;
+  const channel = await fetchPublicChannel(client);
+  if (!channel) return;
+  const embed = publicPanelEmbed(state);
+  const render = JSON.stringify(embed.toJSON());
+  if (state.lastPublicRender === render) return;
+  const msg = await channel.messages.fetch(state.publicPanelMessageId).catch(() => null);
+  if (!msg) return;
+  await msg.edit({ embeds: [embed], components: [bumpButton()] }).catch(() => {});
+  const fresh = loadState();
+  fresh.lastPublicRender = render;
+  saveState(fresh);
+}
+
+// First run in the public channel: pin the bump text and the panel.
+// Adopts messages already there if the state file was lost.
+async function ensurePublicPanel(client, state) {
+  const channel = await fetchPublicChannel(client);
+  if (!channel) return;
+  if (!state.publicPanelMessageId || !state.publicTextMessageId) {
+    const text = readText();
+    const recent = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+    if (recent) {
+      for (const msg of recent.values()) {
+        if (!msg.author.bot) continue;
+        if (!state.publicPanelMessageId && msg.embeds.some((e) => e.title && e.title.includes('Bump'))) {
+          state.publicPanelMessageId = msg.id;
+        }
+        if (!state.publicTextMessageId && text && msg.content === text) {
+          state.publicTextMessageId = msg.id;
+        }
+      }
+      saveState(state);
+    }
+  }
+  if (!state.publicTextMessageId) {
+    const text = readText();
+    if (text) {
+      const msg = await channel.send(text);
+      await msg.pin().catch(() => {});
+      state.publicTextMessageId = msg.id;
+      saveState(state);
+      console.log('Bump tool: public bump text posted and pinned.');
+    }
+  }
+  if (!state.publicPanelMessageId) {
+    const panel = await channel.send({ embeds: [publicPanelEmbed(state)], components: [bumpButton()] });
+    await panel.pin().catch(() => {});
+    state.publicPanelMessageId = panel.id;
+    state.lastPublicRender = JSON.stringify(publicPanelEmbed(state).toJSON());
+    saveState(state);
+    console.log('Bump tool: public panel posted and pinned.');
+  }
+  await refreshPublicPanel(client, loadState());
 }
 
 async function fetchThread(client) {
@@ -191,11 +306,13 @@ async function ensureBumpTool(client) {
   }
   // Keep the panel text current across restarts (status line, times).
   await refreshPanel(client, state);
+  await ensurePublicPanel(client, loadState());
 }
 
 // Called on an interval. Posts at most one reminder per call, and
 // never while one is already live.
 async function checkBumpTool(client) {
+  await refreshPublicPanel(client, loadState()).catch(() => {});
   const s = settings();
   if (!s.threadId || !Array.isArray(s.times)) return;
   const now = DateTime.now().setZone(ZONE);
@@ -243,13 +360,29 @@ async function checkBumpTool(client) {
 // one, or the live one when the tap came from the panel), refreshes
 // the panel, and tells the tapper when the next bump is due.
 async function handleBumpButton(interaction) {
+  const s = settings();
   const pingUserId = process.env.BUMP_TOOL_PING_USER_ID;
-  if (!isStaff(interaction) && !(pingUserId && interaction.user.id === pingUserId)) {
+  const inPublic = Boolean(s.publicChannelId) && interaction.channelId === s.publicChannelId;
+  if (inPublic) {
+    const roleIds = Array.isArray(s.publicRoleIds) ? s.publicRoleIds : [];
+    const hasRole = Boolean(interaction.member && interaction.member.roles
+      && interaction.member.roles.cache.some((r) => roleIds.includes(r.id)));
+    if (!isStaff(interaction) && !hasRole) {
+      await interaction.reply({ content: 'Only members and Friends of the Clan can log a bump.', ephemeral: true }).catch(() => {});
+      return;
+    }
+  } else if (!isStaff(interaction) && !(pingUserId && interaction.user.id === pingUserId)) {
     await interaction.reply({ content: 'Only staff can log a bump.', ephemeral: true }).catch(() => {});
     return;
   }
   const state = loadState();
   state.lastBumpedAt = DateTime.now().setZone(ZONE).toISO();
+  state.lastBumpedBy = interaction.user.id;
+  state.counts = state.counts || {};
+  state.counts[interaction.user.id] = (state.counts[interaction.user.id] || 0) + 1;
+  state.names = state.names || {};
+  const display = (interaction.member && interaction.member.displayName) || interaction.user.username;
+  if (display) state.names[interaction.user.id] = display;
   saveState(state);
   const due = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds()) + BUMP_GAP_HOURS * 3600;
   const tappedId = interaction.message?.id;
@@ -257,6 +390,9 @@ async function handleBumpButton(interaction) {
     state.reminderMessageId = null;
     saveState(state);
     await interaction.message.delete().catch(() => {});
+  } else if (tappedId && tappedId === state.publicPanelMessageId) {
+    // Public panel tap: clear the live staff reminder if one is sitting there.
+    await deleteReminder(interaction.client, loadState()).catch(() => {});
   } else if (tappedId && tappedId !== state.panelMessageId) {
     // A reminder left over from before this build: it carried the
     // button too, so a bump tap clears it the same way.
@@ -266,7 +402,12 @@ async function handleBumpButton(interaction) {
     await deleteReminder(interaction.client, loadState()).catch(() => {});
   }
   await refreshPanel(interaction.client, loadState()).catch(() => {});
-  await interaction.reply({ content: `Logged. Next bump due <t:${due}:R> - I will ping you here then.`, ephemeral: true });
+  await refreshPublicPanel(interaction.client, loadState()).catch(() => {});
+  if (inPublic) {
+    await interaction.reply({ content: `Logged. Next bump ready <t:${due}:R>.`, ephemeral: true });
+  } else {
+    await interaction.reply({ content: `Logged. Next bump due <t:${due}:R> - I will ping you here then.`, ephemeral: true });
+  }
 }
 
-module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton };
+module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelEmbed, topBumpers };
