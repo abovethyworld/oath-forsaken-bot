@@ -2182,6 +2182,97 @@ async function t(name, fn, needFile = true) {
     }
   }
 
+  // ---- leaver cleanup part 2 (day-7 close) ----
+  {
+    const LC2 = require(path.join(__dirname, '..', 'src', 'leaver-cleanup.js'));
+    const PC2 = require(path.join(__dirname, '..', 'src', 'plugin-connect.js'));
+    const cfg2 = require(path.join(__dirname, '..', 'src', 'config.js'));
+    const DAY2 = 24 * 3600 * 1000;
+    const NOW2 = Date.now();
+    const U2 = { young: '990000000000000501', old: '990000000000000502', fail: '990000000000000503' };
+    const rsnY = 'Part2 Young Rsn';
+    const rsnO = 'Part2 Old Rsn';
+    const rsnF = 'Part2 Fail Rsn';
+    const archiveDir2 = path.join(path.dirname(path.dirname(PC2.recordPath(rsnO))), 'archive');
+    const files2 = [LC2.CASES_FILE, LC2.CLOSED_FILE, PC2.recordPath(rsnY), PC2.recordPath(rsnO), PC2.recordPath(rsnF), path.join(archiveDir2, path.basename(PC2.recordPath(rsnO)))];
+    const saved2 = new Map(files2.map((f) => [f, fs.existsSync(f) ? fs.readFileSync(f) : null]));
+    const archiveDirExisted2 = fs.existsSync(archiveDir2);
+    const mkCase2 = (name, rsn, ageMs) => ({
+      openedAt: NOW2 - ageMs, openedBy: 'leave', by: null, name, rsns: [rsn],
+      priorStanding: 'member', priorLink: { rsns: [rsn], active: rsn }, priorRank: 'Initiate', priorRoleIds: ['r1'],
+    });
+    const sent2 = [];
+    const thread2 = { send: async (o) => { sent2.push(o); return { id: 'p2' }; } };
+    const client2 = { channels: { fetch: async () => thread2 }, guilds: { cache: new Map() } };
+    const cases2 = () => (fs.existsSync(LC2.CASES_FILE) ? JSON.parse(fs.readFileSync(LC2.CASES_FILE, 'utf8')) : {});
+    const closed2 = () => (fs.existsSync(LC2.CLOSED_FILE) ? JSON.parse(fs.readFileSync(LC2.CLOSED_FILE, 'utf8')) : {});
+    try {
+      try { fs.unlinkSync(LC2.CLOSED_FILE); } catch {}
+      fs.mkdirSync(path.dirname(PC2.recordPath(rsnY)), { recursive: true });
+      for (const r of [rsnY, rsnO, rsnF]) fs.writeFileSync(PC2.recordPath(r), JSON.stringify({ rsn: r }));
+      fs.writeFileSync(LC2.CASES_FILE, JSON.stringify({
+        [U2.young]: mkCase2('Young', rsnY, 7 * DAY2 - 3600 * 1000),
+        [U2.old]: mkCase2('Old', rsnO, 7 * DAY2),
+      }));
+
+      await LC2.closeExpiredCases(client2, null, NOW2);
+      ok('cleanup2: a 6d23h case is untouched',
+        !!cases2()[U2.young] && fs.existsSync(PC2.recordPath(rsnY)) && !closed2()[U2.young]);
+      const t2 = closed2()[U2.old];
+      ok('cleanup2: a 7d case leaves the live file',
+        !cases2()[U2.old] && LC2.getCase(U2.old) === null);
+      ok('cleanup2: tombstone has no priorLink or priorRoleIds',
+        !!t2 && t2.closedBy === 'day-7 sweep' && t2.closedAt === NOW2 && t2.name === 'Old'
+        && t2.priorStanding === 'member' && t2.priorRank === 'Initiate' && t2.openedBy === 'leave'
+        && !('priorLink' in t2) && !('priorRoleIds' in t2), JSON.stringify(t2));
+      ok('cleanup2: the plugin record moved to archive/',
+        !fs.existsSync(PC2.recordPath(rsnO))
+        && fs.existsSync(path.join(archiveDir2, path.basename(PC2.recordPath(rsnO)))));
+      ok('cleanup2: one staff line, no pings',
+        sent2.length === 1 && sent2[0].content === LC2.TEXT.closed('Old', [rsnO])
+        && JSON.stringify(sent2[0].allowedMentions) === JSON.stringify({ parse: [] }), JSON.stringify(sent2));
+      console.log(`    staff line captured: ${sent2[0] && sent2[0].content}`);
+
+      const casesBefore2 = fs.readFileSync(LC2.CASES_FILE, 'utf8');
+      const closedBefore2 = fs.readFileSync(LC2.CLOSED_FILE, 'utf8');
+      await LC2.closeExpiredCases(client2, null, NOW2 + 1000);
+      ok('cleanup2: a second sweep changes nothing',
+        fs.readFileSync(LC2.CASES_FILE, 'utf8') === casesBefore2
+        && fs.readFileSync(LC2.CLOSED_FILE, 'utf8') === closedBefore2 && sent2.length === 1);
+
+      // Forced archive failure: the case stays open.
+      const orig2 = PC2.archiveRecordsFor;
+      PC2.archiveRecordsFor = () => { throw new Error('forced'); };
+      const errOrig2 = console.error;
+      console.error = () => {};
+      try {
+        const c = cases2();
+        c[U2.fail] = mkCase2('Fail', rsnF, 8 * DAY2);
+        fs.writeFileSync(LC2.CASES_FILE, JSON.stringify(c));
+        await LC2.closeExpiredCases(client2, null, NOW2);
+      } finally {
+        PC2.archiveRecordsFor = orig2;
+        console.error = errOrig2;
+      }
+      ok('cleanup2: a failed archive keeps the case open',
+        !!cases2()[U2.fail] && !closed2()[U2.fail] && fs.existsSync(PC2.recordPath(rsnF)) && sent2.length === 1);
+
+      // Once closed, restore has nothing to act on and rejoin posts no offer.
+      ok('cleanup2: getCase on a closed case is null (Restore answers already-closed)', LC2.getCase(U2.old) === null);
+      const offersBefore2 = sent2.length;
+      await LC2.onMemberRejoin(client2, { id: U2.old, displayName: 'Old' });
+      ok('cleanup2: rejoin after close posts no offer', sent2.length === offersBefore2);
+      ok('cleanup2: no guild, no client: still never throws',
+        Array.isArray(await LC2.closeExpiredCases(null, null, NOW2)));
+    } finally {
+      for (const [f, buf] of saved2) {
+        if (buf === null) { try { fs.unlinkSync(f); } catch {} }
+        else fs.writeFileSync(f, buf);
+      }
+      if (!archiveDirExisted2) { try { fs.rmdirSync(archiveDir2); } catch {} }
+    }
+  }
+
   // ── Help menu + setup card + staff help ──
   // /help mimics the DropTracker menu: plain "Help Menu" title, logo
   // thumbnail, every member command as a slash mention pill plus one

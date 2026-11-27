@@ -267,6 +267,7 @@ client.once(Events.ClientReady, async (c) => {
   // Recurring loops (use cached data where possible)
   setInterval(() => runSync('site-link-merge', () => mergeSiteLinkRequests(), 'Link request merge failed'), 60 * 1000);
   setInterval(() => run('seniority', () => syncSeniority(client)), 24 * 3600 * 1000);
+  setInterval(() => run('leaver-close', () => require('./leaver-cleanup').closeExpiredCases(client, client.guilds.cache.get(config.guildId))), 24 * 3600 * 1000);
   setInterval(() => run('friends', () => syncFriends(client)), 24 * 3600 * 1000);
   setInterval(() => run('wom-group', () => syncWomGroup()), 24 * 3600 * 1000);
   setInterval(() => run('comp-roster', () => refreshCompRoster(client.guilds.cache.get(config.guildId))), 24 * 3600 * 1000);

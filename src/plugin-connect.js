@@ -309,4 +309,21 @@ const commands = [
   },
 ];
 
-module.exports = { commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, publishRolesSnapshot, buildRolesSnapshot, clearRecordOwner, slugOf, readRecord, recordPath, loadFlags };
+// Day-7 leaver close: move each RSN's record file out of the live members dir
+// into members/../archive (same filename). A missing file is fine. Returns the
+// number of files moved; throws on a real fs failure so the caller keeps the case open.
+function archiveRecordsFor(rsns) {
+  const archiveDir = path.join(path.dirname(MEMBERS_DIR), 'archive');
+  let moved = 0;
+  for (const rsn of rsns || []) {
+    if (typeof rsn !== 'string' || !rsn.trim()) continue;
+    const src = recordPath(rsn);
+    if (!fs.existsSync(src)) continue;
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.renameSync(src, path.join(archiveDir, path.basename(src)));
+    moved++;
+  }
+  return moved;
+}
+
+module.exports = { archiveRecordsFor, commands, issueCode, revokeCodeFor, reconcileVerifiedLinks, surfaceHeldPosts, publishRolesSnapshot, buildRolesSnapshot, clearRecordOwner, slugOf, readRecord, recordPath, loadFlags };
