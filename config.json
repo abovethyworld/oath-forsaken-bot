@@ -116,7 +116,7 @@
     {
       "title": "\u26e7 Clan Roles \u26e7",
       "color": 7015950,
-      "description": "Press each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.\n\ud83d\udcdc <@&1566342297082269787> - Get pinged when a new bounty is posted.",
+      "description": "Press each clan role you want.\n\nThese roles get pinged for events, giveaways, and clan news.\n\n<:zamoraksymbol:1559104599032594442> <@&1558399088687587401> - Get notifications for all clan events!\n<:bluepartyhat:1559102058555113583> <@&1558399093905293445> - Get pinged when we run giveaways.\n<:milestonecake:1559102129782657075> <@&1558468803661135952> - Get notified when we're throwing a party for someone's milestone.\n<:clanfriend:1558634136510537728> <@&1558468773806084168> - Get pinged for other games (RS3, WoW, etc).\n\ud83c\udfac <@&1558468788897452174> - Get pinged for movies and shows.\n\ud83d\udcdc <@&1566342297082269787> - Get pinged when a new bounty is posted.\n\ud83d\udce2 <@&1575970815638241321> - Get pinged when the clan's recruitment thread needs a bump.",
       "banner": "",
       "buttons": [
         {
@@ -162,6 +162,12 @@
           "label": "Bounty Hunter",
           "emoji": "\ud83d\udcdc",
           "roleId": "1566342297082269787",
+          "style": "Danger"
+        },
+        {
+          "label": "OSRS Discord Bumper",
+          "emoji": "\ud83d\udce2",
+          "roleId": "1575970815638241321",
           "style": "Danger"
         }
       ]
@@ -1044,6 +1050,7 @@
       "1558540434652008569",
       "1558621489283211316"
     ],
+    "pingRoleId": "1575970815638241321",
     "forumThreadUrl": "https://discord.com/channels/324132423636090880/1574272902289821736",
     "times": [
       "09:00",

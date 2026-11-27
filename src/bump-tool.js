@@ -216,8 +216,9 @@ async function refreshPanel(client, state) {
 async function postReminder(client, state) {
   const thread = await fetchThread(client);
   if (!thread) return false;
+  const pingRoleId = settings().pingRoleId;
   const pingId = process.env.BUMP_TOOL_PING_USER_ID;
-  const ping = pingId ? `<@${pingId}> ` : '';
+  const ping = pingRoleId ? `<@&${pingRoleId}> ` : pingId ? `<@${pingId}> ` : '';
   const msg = await thread.send({
     content: `${ping}**Bump time.**`,
     components: [bumpButton()],

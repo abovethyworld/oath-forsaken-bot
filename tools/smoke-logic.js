@@ -2730,6 +2730,12 @@ function sec(name) {
     const btSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
     ok('bump panel: public gate names members and Friends', btSrc.includes('Only members and Friends of the Clan can log a bump.'));
     ok('bump panel: config carries the public channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).bumpTool.publicChannelId));
+    const btCfg = require(path.join(__dirname, '..', 'src', 'config.js'));
+    ok('bump ping: config carries the bumper role', btCfg.bumpTool.pingRoleId === '1575970815638241321');
+    const clanPanel = btCfg.rolePanels.find((p) => p.title.includes('Clan Roles'));
+    ok('bump ping: clan roles panel carries the bumper button and line', Boolean(clanPanel) && clanPanel.buttons.some((b) => b.roleId === '1575970815638241321') && clanPanel.description.includes('recruitment thread needs a bump'));
+    const btSrc2 = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
+    ok('bump ping: reminder prefers the role ping', btSrc2.includes('pingRoleId ? `<@&${pingRoleId}> `'));
   }
 
   sec('AF. total level bracket roles');
