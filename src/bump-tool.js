@@ -29,7 +29,7 @@
 // clan chat, which the repo guard keeps out of committed files.
 const fs = require('node:fs');
 const path = require('node:path');
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { DateTime } = require('luxon');
 const config = require('./config');
 const { atomicWrite } = require('./store');
@@ -105,7 +105,7 @@ function panelContent(state) {
 // ─── Public panel ─────────────────────────────────────────────────
 // A second home for the same bump state: a public channel where
 // members and Friends of the Clan can log bumps. No reminders and
-// no pings ever post here; the pinned embed just re-renders when a
+// no pings ever post here; the pinned panel just re-renders when a
 // bump is logged or when the ready window flips. Bump counts are
 // shared with the staff thread - one forum thread, one truth.
 function topBumpers(state) {
@@ -116,9 +116,10 @@ function topBumpers(state) {
     .slice(0, 5);
 }
 
-function publicPanelEmbed(state) {
+function publicPanelContent(state) {
   const s = settings();
   const lines = [
+    '**Bump**',
     `Forum thread: ${s.forumThreadUrl}`,
   ];
   if (state.lastBumpedAt) {
@@ -129,24 +130,20 @@ function publicPanelEmbed(state) {
     if (Math.floor(DateTime.now().toSeconds()) >= due) {
       lines.push('Status: **Ready to bump**');
     } else {
-      lines.push(`Status: Next bump ready <t:${due}:R>`);
+      lines.push(`Status: Next bump ready at <t:${due}:t>`);
     }
   } else {
     lines.push('Status: **Ready to bump**');
   }
   const top = topBumpers(state);
   if (top.length) {
-    const medals = ['\u{1F947}', '\u{1F948}', '\u{1F949}'];
     lines.push('', '**Top bumpers**');
     top.forEach(([uid, n], i) => {
       const name = (state.names && state.names[uid]) || 'Someone';
-      lines.push(`${medals[i] || `${i + 1}.`} ${name} - ${n}`);
+      lines.push(`${i + 1}. ${name}${i === 0 ? ' \u2605' : ''} - ${n}`);
     });
   }
-  return new EmbedBuilder()
-    .setColor(0xA31621)
-    .setTitle('\u26E7 Bump \u26E7')
-    .setDescription(lines.join('\n'));
+  return lines.join('\n');
 }
 
 async function fetchPublicChannel(client) {
@@ -161,14 +158,13 @@ async function refreshPublicPanel(client, state) {
   if (!state.publicPanelMessageId) return;
   const channel = await fetchPublicChannel(client);
   if (!channel) return;
-  const embed = publicPanelEmbed(state);
-  const render = JSON.stringify(embed.toJSON());
-  if (state.lastPublicRender === render) return;
+  const content = publicPanelContent(state);
+  if (state.lastPublicRender === content) return;
   const msg = await channel.messages.fetch(state.publicPanelMessageId).catch(() => null);
   if (!msg) return;
-  await msg.edit({ embeds: [embed], components: [bumpButton()] }).catch(() => {});
+  await msg.edit({ content, embeds: [], components: [bumpButton()] }).catch(() => {});
   const fresh = loadState();
-  fresh.lastPublicRender = render;
+  fresh.lastPublicRender = content;
   saveState(fresh);
 }
 
@@ -182,7 +178,7 @@ async function ensurePublicPanel(client, state) {
     if (recent) {
       for (const msg of recent.values()) {
         if (!msg.author.bot) continue;
-        if (!state.publicPanelMessageId && msg.embeds.some((e) => e.title && e.title.includes('Bump'))) {
+        if (!state.publicPanelMessageId && msg.content.startsWith('**Bump**')) {
           state.publicPanelMessageId = msg.id;
         }
       }
@@ -190,10 +186,10 @@ async function ensurePublicPanel(client, state) {
     }
   }
   if (!state.publicPanelMessageId) {
-    const panel = await channel.send({ embeds: [publicPanelEmbed(state)], components: [bumpButton()] });
+    const panel = await channel.send({ content: publicPanelContent(state), components: [bumpButton()] });
     await panel.pin().catch(() => {});
     state.publicPanelMessageId = panel.id;
-    state.lastPublicRender = JSON.stringify(publicPanelEmbed(state).toJSON());
+    state.lastPublicRender = publicPanelContent(state);
     saveState(state);
     console.log('Bump tool: public panel posted and pinned.');
   }
@@ -394,4 +390,4 @@ async function handleBumpButton(interaction) {
   }
 }
 
-module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelEmbed, topBumpers };
+module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelContent, topBumpers };

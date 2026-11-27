@@ -2721,12 +2721,12 @@ function sec(name) {
     };
     const top = BT.topBumpers(st);
     ok('bump panel: leaderboard sorts and cuts at 5', top.length === 5 && top[0][0] === 'u1' && top[4][0] === 'u5');
-    const emb = BT.publicPanelEmbed(st).toJSON();
-    ok('bump panel: ready once the 2h window has passed', emb.description.includes('Status: **Ready to bump**'));
-    ok('bump panel: board lists the leader with the count', emb.description.includes('Ptstud - 14'));
-    ok('bump panel: crimson embed, no footer, no instruction line', emb.color === 0xA31621 && !emb.footer && emb.description.startsWith('Forum thread:'));
-    const emb2 = BT.publicPanelEmbed({}).toJSON();
-    ok('bump panel: empty state is ready with no board', emb2.description.includes('Ready to bump') && !emb2.description.includes('Top bumpers'));
+    const txt = BT.publicPanelContent(st);
+    ok('bump panel: ready once the 2h window has passed', txt.includes('Status: **Ready to bump**'));
+    ok('bump panel: leader carries the star and the count', txt.includes('1. Ptstud \u2605 - 14'));
+    ok('bump panel: plain text, no medals, no instruction line', txt.startsWith('**Bump**') && !txt.includes('\u{1F947}') && !txt.includes('tap **I bumped**'));
+    const txt2 = BT.publicPanelContent({});
+    ok('bump panel: empty state is ready with no board', txt2.includes('Ready to bump') && !txt2.includes('Top bumpers'));
     const btSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
     ok('bump panel: public gate names members and Friends', btSrc.includes('Only members and Friends of the Clan can log a bump.'));
     ok('bump panel: config carries the public channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).bumpTool.publicChannelId));
