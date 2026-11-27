@@ -120,7 +120,6 @@ function publicPanelEmbed(state) {
   const s = settings();
   const lines = [
     `Forum thread: ${s.forumThreadUrl}`,
-    'Drop the Discord link in the forum thread, then tap **I bumped**.',
   ];
   if (state.lastBumpedAt) {
     const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
