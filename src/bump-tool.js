@@ -112,8 +112,7 @@ function topBumpers(state) {
   const counts = state.counts || {};
   return Object.entries(counts)
     .filter(([, n]) => Number.isFinite(n) && n > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+    .sort((a, b) => b[1] - a[1]);
 }
 
 function publicPanelEmbed(state) {

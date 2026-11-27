@@ -2720,7 +2720,7 @@ function sec(name) {
       names: { u1: 'Ptstud', u2: 'Kagaku', u3: 'Ben Lad Iron', u4: 'IronClamChow', u5: 'Ferric Niko', u6: 'Extra' },
     };
     const top = BT.topBumpers(st);
-    ok('bump panel: leaderboard sorts and cuts at 5', top.length === 5 && top[0][0] === 'u1' && top[4][0] === 'u5');
+    ok('bump panel: leaderboard sorts, everyone listed', top.length === 6 && top[0][0] === 'u1' && top[5][0] === 'u6');
     const emb = BT.publicPanelEmbed(st).toJSON();
     ok('bump panel: ready once the 2h window has passed', emb.description.includes('Status: **Ready to bump**'));
     ok('bump panel: leader carries the star and the count', emb.description.includes('\u{1F947} <@u1> \u2605 - 14'));
