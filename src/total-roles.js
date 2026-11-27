@@ -90,6 +90,12 @@ async function syncTotalRoles(client) {
     let total = cached && Date.now() - cached.at < CACHE_TTL_MS ? cached.total : null;
     if (total === null) {
       total = await fetchTotalLevel(entry.active);
+      if (total === null) {
+        // The hiscores intermittently 5xx a name on a burst; one
+        // spaced retry before the name is left for the next run.
+        await new Promise((r) => setTimeout(r, 2000));
+        total = await fetchTotalLevel(entry.active);
+      }
       if (total !== null) {
         cache[key] = { total, at: Date.now() };
         cacheDirty = true;
