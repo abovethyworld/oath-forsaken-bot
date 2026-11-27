@@ -31,8 +31,9 @@ function isOnCooldown(userId) {
 }
 
 async function handleSuggestButton(interaction) {
-  // customId: 'suggest:open' or 'suggest:open:anon'
+  // customId: 'suggest:open', 'suggest:open:anon' or 'suggest:open:events'
   const anon = interaction.customId === 'suggest:open:anon';
+  const events = interaction.customId === 'suggest:open:events';
 
   // Check the cooldown here, before the modal opens. A reply to the button
   // press renders reliably on mobile; a reply to the modal submit often
@@ -45,8 +46,8 @@ async function handleSuggestButton(interaction) {
   }
 
   const modal = new ModalBuilder()
-    .setCustomId(anon ? 'suggest:modal:anon' : 'suggest:modal')
-    .setTitle(anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
+    .setCustomId(events ? 'suggest:modal:events' : anon ? 'suggest:modal:anon' : 'suggest:modal')
+    .setTitle(events ? 'Suggest an event' : anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
   modal.addComponents(
     new ActionRowBuilder().addComponents(
       new TextInputBuilder()
@@ -69,9 +70,10 @@ async function handleSuggestButton(interaction) {
 }
 
 async function handleSuggestModal(interaction) {
-  // customId: 'suggest:modal' or 'suggest:modal:anon'
+  // customId: 'suggest:modal', 'suggest:modal:anon' or 'suggest:modal:events'
   // (index.js only routes 'suggest' modals here).
   const anon = interaction.customId === 'suggest:modal:anon';
+  const events = interaction.customId === 'suggest:modal:events';
 
   const title = interaction.fields.getTextInputValue('suggest:title').trim();
   const details = interaction.fields.getTextInputValue('suggest:details').trim();
@@ -91,7 +93,7 @@ async function handleSuggestModal(interaction) {
     return;
   }
 
-  const channelId = suggestionsChannelId();
+  const channelId = events ? config.channels && config.channels.eventsChat : suggestionsChannelId();
   if (!channelId) {
     await interaction
       .reply({ content: 'Suggestions are not set up yet. Tell staff.', ephemeral: true })
@@ -181,4 +183,26 @@ function suggestPanelPayload() {
   };
 }
 
-module.exports = { handleSuggestButton, handleSuggestModal, suggestPanelPayload };
+function eventSuggestPanelPayload() {
+  return {
+    embeds: [
+      new EmbedBuilder()
+        .setColor(ZAMORAK_RED)
+        .setTitle('⛧ Event Suggestions ⛧')
+        .setDescription(
+          'What events do you want to see us run? Low level, high level, skilling, PvM, whatever - if you would show up to it, we want to hear it.\n\nClick the button, type your idea, and members vote on it with ✅ and ❌.'
+        ),
+    ],
+    components: [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('suggest:open:events')
+          .setLabel('Suggest an Event')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🎉')
+      ),
+    ],
+  };
+}
+
+module.exports = { handleSuggestButton, handleSuggestModal, suggestPanelPayload, eventSuggestPanelPayload };

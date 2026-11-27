@@ -2743,6 +2743,17 @@ function sec(name) {
     ok('bracket: config carries the three role ids', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).totalRoles.under1250));
   }
 
+  sec('AG. event suggestions panel');
+  {
+    const SG = require(path.join(__dirname, '..', 'src', 'suggestions.js'));
+    const p = SG.eventSuggestPanelPayload();
+    const emb = p.embeds[0].toJSON();
+    ok('event suggest: panel carries the question', emb.color === 0x6b0e0e && emb.title === '⛧ Event Suggestions ⛧' && emb.description.includes('What events do you want to see us run?'));
+    const btn = p.components[0].components[0].toJSON();
+    ok('event suggest: one button opens the events modal', btn.custom_id === 'suggest:open:events' && btn.label === 'Suggest an Event');
+    ok('event suggest: config carries the events chat channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).channels.eventsChat));
+  }
+
   sec(null);
   console.log(`SECTION-TIME total: ${secTimes.reduce((a, s) => a + s.ms, 0)}ms`);
   console.log(`\nRESULT: ${pass} pass, ${fail} fail`);
