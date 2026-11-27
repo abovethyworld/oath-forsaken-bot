@@ -31,10 +31,10 @@
 // (the assigned marker is cleared, so the sync can rank them
 // again), closes the removal entry, and closes the case.
 //
-// This is part 1: cases stay open until restored or until staff
-// close them by hand in the file. The day-7 automatic close
-// (deleting the parked link, archiving plugin data) is part 2 and
-// ships only after real leavers have passed through part 1.
+// Part 2 (closeExpiredCases, run daily from index.js): a case open
+// for 7 days is closed - plugin records archived, a tombstone
+// written to data/cleanup-closed.json without the link or role
+// snapshot, the live case deleted, one staff line posted.
 const fs = require('fs');
 const path = require('path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -50,6 +50,8 @@ const { ACCESS_ROLE_IDS, roleIdsOf } = require('./role-watch');
 
 const CASES_FILE = path.join(__dirname, '..', 'data', 'cleanup-cases.json');
 const RANKS_FILE = path.join(__dirname, '..', 'data', 'rank-holders.json');
+const CLOSED_FILE = path.join(__dirname, '..', 'data', 'cleanup-closed.json');
+const CLOSE_AFTER_MS = 7 * 24 * 3600 * 1000;
 const TAG = '[leaver-cleanup]';
 
 // =====================================================================
@@ -64,6 +66,7 @@ const TEXT = {
   openedPanel: (name, rsns) => `Cleanup: ${name} was removed from the clan by staff. Case opened - record marked left, link parked, comp roster rebuilding, and a Remove CC rank entry is on the checklist.${rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''} The Restore button below puts it all back.`,
   rejoin: (name) => `Cleanup: ${name} is back in the server and their cleanup case is still open. Restore puts back their record, link, roles and rank.`,
   restored: (name) => `Cleanup: ${name} was restored - record, link, roles and rank eligibility are back. The case is closed.`,
+  closed: (name, rsns) => `Cleanup: ${name}'s case has closed after 7 days - the parked link is deleted and their plugin data is archived.${rsns.length ? ` RSNs: ${rsns.join(', ')}.` : ''}`,
 };
 
 // ---- Case store -------------------------------------------------------
@@ -320,6 +323,51 @@ async function restoreCase(client, guild, userId, member) {
   }
 }
 
+// ---- Day-7 close ----------------------------------------------------------
+function loadClosed() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(CLOSED_FILE, 'utf8'));
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  } catch { /* none yet */ }
+  return {};
+}
+
+// Closes every case open 7+ days (by openedAt). Per case: archive plugin
+// records, write the tombstone (no priorLink / priorRoleIds), delete the
+// live case, post one staff line. A failure in the first two leaves the
+// case open. Idempotent; never throws. Returns the closed user ids.
+async function closeExpiredCases(client, guild, now = Date.now()) {
+  const closedIds = [];
+  try {
+    const due = Object.entries(loadCases())
+      .filter(([, c]) => c && typeof c.openedAt === 'number' && now - c.openedAt >= CLOSE_AFTER_MS);
+    for (const [userId, c] of due) {
+      try {
+        const rsns = Array.isArray(c.rsns) ? c.rsns : [];
+        require('./plugin-connect').archiveRecordsFor(rsns);
+        const closed = loadClosed();
+        closed[userId] = {
+          name: c.name, rsns, priorStanding: c.priorStanding, priorRank: c.priorRank,
+          openedBy: c.openedBy, openedAt: c.openedAt, closedAt: now, closedBy: 'day-7 sweep',
+        };
+        fs.mkdirSync(path.dirname(CLOSED_FILE), { recursive: true });
+        atomicWrite(CLOSED_FILE, closed);
+        const cases = loadCases();
+        delete cases[userId];
+        saveCases(cases);
+        closedIds.push(userId);
+        console.log(`${TAG} case closed for ${userId} (day-7)`);
+        await postToChecklist(client, { content: TEXT.closed(c.name || `user ${userId}`, rsns) });
+      } catch (err) {
+        console.error(`${TAG} day-7 close failed for ${userId}, case stays open:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error(`${TAG} day-7 sweep failed:`, err.message);
+  }
+  return closedIds;
+}
+
 // The Restore button (buttons.js routes kind 'cleanup'). Staff
 // only, like the panel it undoes.
 async function handleCleanupButton(interaction) {
@@ -367,5 +415,7 @@ module.exports = {
   onPanelRemove,
   onMemberRejoin,
   restoreCase,
+  closeExpiredCases,
+  CLOSED_FILE,
   handleCleanupButton,
 };
