@@ -92,8 +92,13 @@ jobs:
           node tools/card-stub.js &
           echo "CARD_API_URL=http://127.0.0.1:8799" >> "$GITHUB_ENV"
 
-      - name: Run the smoke suite
-        run: node tools/smoke-cards.js
+      # Card suite first (read-only deploy gate), then the logic
+      # suite. Both run through the sandbox runner: it copies the
+      # tree, generates its own fixtures and card stub, and fails if
+      # the checkout's data/ changed. Either suite failing fails
+      # this step (and so the build).
+      - name: Run the smoke suites (card, then logic)
+        run: bash tools/run-suites.sh all
 
   docker:
     needs: [guards, smoke]

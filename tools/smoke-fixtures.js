@@ -209,6 +209,25 @@ const PAGES = [
   ['Other', 'All Pets', null], // filled from petItems()
 ];
 
+// All [tab, page] pairs the bot source names: the pages above plus
+// every pair literal in showoff.js (boss/raid/clue/minigame pages,
+// the skill-card page map). Read as text so the generator never
+// loads the bot.
+const ALL_CLOG_PAGES = (() => {
+  const src = fs.readFileSync(path.join(ROOT, 'src', 'showoff.js'), 'utf8');
+  const seen = new Map();
+  for (const [tab, title] of PAGES) seen.set(`${tab}|${title}`, [tab, title]);
+  const re = /\[\s*'(Bosses|Raids|Clues|Minigames|Other)'\s*,\s*(?:'((?:[^'\\]|\\.)*)'|"([^"]*)")\s*\]/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const title = (m[2] !== undefined ? m[2].replace(/\\'/g, "'") : m[3]);
+    seen.set(`${m[1]}|${title}`, [m[1], title]);
+  }
+  return [...seen.values()];
+})();
+
+const ICON_IDS = new Set();
+
 function buildPages(acctIndex) {
   const pages = [];
   for (const [tab, title, counters] of PAGES) {
@@ -223,6 +242,7 @@ function buildPages(acctIndex) {
       name: it.name,
       quantity: (i + acctIndex) % 3 === 0 ? 0 : 1 + ((i * 7 + acctIndex) % 3),
     }));
+    for (const it of items) ICON_IDS.add(it.id);
     pages.push({ tab, title, items });
   }
   return pages;
@@ -302,6 +322,15 @@ function buildAccount(acct, acctIndex) {
     if (!tabAgg[p.tab]) tabAgg[p.tab] = { name: p.tab, obtained: 0, total: 0 };
     tabAgg[p.tab].obtained += obtained;
     tabAgg[p.tab].total += p.items.length;
+  }
+  // Every other clog page the bot can ask for (boards, skill cards,
+  // compare) is seeded as a cached not-found entry, which is what
+  // RuneProfile answers for a name it has never seen. Without it each
+  // missing page is one live request per account, queued behind
+  // RuneProfile's 2.5 s request pacing (minutes per run).
+  for (const [tab, title] of ALL_CLOG_PAGES) {
+    const key = `clog:${lower}:${tab}:${title}`;
+    if (!rp[key]) rp[key] = { fetchedAt: NOW, notFound: true };
   }
   const headlineTotal = totSum + 400;
   const headlineObtained = Math.min(obtSum, headlineTotal);
@@ -427,7 +456,10 @@ function main() {
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
     'base64');
   let iconCount = 0;
-  for (const id of Object.keys(LUCK.items || {})) {
+  // Also the literal-list pages (Tempoross, Fishing Trawler, Aerial
+  // Fishing): their item ids are not in the luck table.
+  const iconIds = new Set([...Object.keys(LUCK.items || {}), ...ICON_IDS].map(String));
+  for (const id of iconIds) {
     fs.writeFileSync(path.join(iconDir, `${id}.png`), TINY_PNG);
     iconCount++;
   }
