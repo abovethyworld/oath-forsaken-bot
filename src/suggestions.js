@@ -31,9 +31,11 @@ function isOnCooldown(userId) {
 }
 
 async function handleSuggestButton(interaction) {
-  // customId: 'suggest:open', 'suggest:open:anon' or 'suggest:open:events'
-  const anon = interaction.customId === 'suggest:open:anon';
-  const events = interaction.customId === 'suggest:open:events';
+  // customId: 'suggest:open', 'suggest:open:anon', 'suggest:open:events'
+  // or 'suggest:open:events:anon'
+  const eventsAnon = interaction.customId === 'suggest:open:events:anon';
+  const anon = interaction.customId === 'suggest:open:anon' || eventsAnon;
+  const events = interaction.customId === 'suggest:open:events' || eventsAnon;
 
   // Check the cooldown here, before the modal opens. A reply to the button
   // press renders reliably on mobile; a reply to the modal submit often
@@ -46,34 +48,37 @@ async function handleSuggestButton(interaction) {
   }
 
   const modal = new ModalBuilder()
-    .setCustomId(events ? 'suggest:modal:events' : anon ? 'suggest:modal:anon' : 'suggest:modal')
-    .setTitle(events ? 'Suggest an event' : anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
+    .setCustomId(eventsAnon ? 'suggest:modal:events:anon' : events ? 'suggest:modal:events' : anon ? 'suggest:modal:anon' : 'suggest:modal')
+    .setTitle(eventsAnon ? 'Suggest an event (anonymous)' : events ? 'Suggest an event' : anon ? 'Suggest an idea (anonymous)' : 'Suggest an idea');
+  const titleInput = new TextInputBuilder()
+    .setCustomId('suggest:title')
+    .setLabel('Title')
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true)
+    .setMaxLength(100);
+  const detailsInput = new TextInputBuilder()
+    .setCustomId('suggest:details')
+    .setLabel('Details')
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+    .setMaxLength(1000);
+  if (events) {
+    titleInput.setPlaceholder('e.g. Wintertodt mass');
+    detailsInput.setPlaceholder('What is it, when should we run it, anything else?');
+  }
   modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('suggest:title')
-        .setLabel('Title')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-        .setMaxLength(100)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId('suggest:details')
-        .setLabel('Details')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true)
-        .setMaxLength(1000)
-    )
+    new ActionRowBuilder().addComponents(titleInput),
+    new ActionRowBuilder().addComponents(detailsInput)
   );
   await interaction.showModal(modal);
 }
 
 async function handleSuggestModal(interaction) {
-  // customId: 'suggest:modal', 'suggest:modal:anon' or 'suggest:modal:events'
-  // (index.js only routes 'suggest' modals here).
-  const anon = interaction.customId === 'suggest:modal:anon';
-  const events = interaction.customId === 'suggest:modal:events';
+  // customId: 'suggest:modal', 'suggest:modal:anon', 'suggest:modal:events'
+  // or 'suggest:modal:events:anon' (index.js only routes 'suggest' modals here).
+  const eventsAnon = interaction.customId === 'suggest:modal:events:anon';
+  const anon = interaction.customId === 'suggest:modal:anon' || eventsAnon;
+  const events = interaction.customId === 'suggest:modal:events' || eventsAnon;
 
   const title = interaction.fields.getTextInputValue('suggest:title').trim();
   const details = interaction.fields.getTextInputValue('suggest:details').trim();
@@ -199,7 +204,12 @@ function eventSuggestPanelPayload() {
           .setCustomId('suggest:open:events')
           .setLabel('Suggest an Event')
           .setStyle(ButtonStyle.Danger)
-          .setEmoji('🎉')
+          .setEmoji('🎉'),
+        new ButtonBuilder()
+          .setCustomId('suggest:open:events:anon')
+          .setLabel('Suggest an Event Anonymously')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('🕵️')
       ),
     ],
   };

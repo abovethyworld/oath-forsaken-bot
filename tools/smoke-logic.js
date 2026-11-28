@@ -2758,6 +2758,11 @@ function sec(name) {
     ok('event suggest: panel carries the question', emb.color === 0x6b0e0e && emb.title === '⛧ Event Suggestions ⛧' && emb.description.includes('What events do you want to see us run?') && emb.description.includes('Skilling or') && emb.description.includes('PvM.') && emb.description.includes('<:bluepartyhat:1559102058555113583>') && emb.description.includes('\n\n'));
     const btn = p.components[0].components[0].toJSON();
     ok('event suggest: one button opens the events modal', btn.custom_id === 'suggest:open:events' && btn.label === 'Suggest an Event');
+    const anonBtn = p.components[0].components[1].toJSON();
+    ok('event suggest: second button opens the anonymous events modal', anonBtn.custom_id === 'suggest:open:events:anon' && anonBtn.label === 'Suggest an Event Anonymously');
+    const sgSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'suggestions.js'), 'utf8');
+    ok('event suggest: modal carries the placeholder hints', sgSrc.includes("setPlaceholder('e.g. Wintertodt mass')") && sgSrc.includes("setPlaceholder('What is it, when should we run it, anything else?')"));
+    ok('event suggest: events-anon wired through both handlers', sgSrc.includes("'suggest:modal:events:anon'") && sgSrc.includes("'suggest:open:events:anon'"));
     ok('event suggest: config carries the events chat channel', Boolean(require(path.join(__dirname, '..', 'src', 'config.js')).channels.eventsChat));
   }
 
