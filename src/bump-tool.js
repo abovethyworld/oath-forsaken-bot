@@ -1,18 +1,16 @@
-// Bump tool: a small working panel in the staff Bump Tool thread for
-// the OSRS forum recruitment thread. The forum rule is one bump at
-// least 2 hours after the last message in the thread.
+// Bump tool: the panel and reminders for the OSRS forum recruitment
+// thread, living in the public Bump channel. The forum rule is one
+// bump at least 2 hours after the last message in the thread.
 //
 // What it does:
 // - A pinned panel shows the last bump and when the next one is due
-//   (Discord timestamps, so they render live) and carries an
-//   "I bumped" button for bumps made between slots.
-// - The bump text sits pinned in the thread, ready to copy. It is
-//   never reposted.
-// - When a bump comes due, one short reminder lands: a ping and
-//   "Bump time." with the "I bumped" button. Only one reminder is
-//   ever live. Tapping "I bumped" records the bump, deletes the
-//   reminder, updates the panel, and answers with when the next
-//   bump is due.
+//   (Discord timestamps, so they render live), the top bumpers
+//   board, and an "I bumped" button.
+// - When a bump comes due, one short reminder lands in the channel:
+//   a ping to the Bumper role and "Bump time." with the "I bumped"
+//   button. Only one reminder is ever live. Tapping "I bumped"
+//   records the bump, deletes the reminder, updates the panel, and
+//   answers with when the next bump is due.
 // - The clock runs from the last logged bump. A reminder fires 2
 //   hours after a logged bump, or at a 9am, 2pm or 8pm New York
 //   slot when the last bump is already 2+ hours old (or none is
@@ -23,10 +21,7 @@
 //
 // A slot only posts if the check runs within 30 minutes after it,
 // so a bot restart late in the day never fires a stale bump into
-// the next slot's window. State lives in data/bump-tool.json. The
-// bump text itself lives in data/bump-tool-text.txt (runtime data,
-// read fresh when the pinned copy is posted) because it names the
-// clan chat, which the repo guard keeps out of committed files.
+// the next slot's window. State lives in data/bump-tool.json.
 const fs = require('node:fs');
 const path = require('node:path');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
@@ -37,7 +32,6 @@ const { isStaff } = require('./utils');
 
 const ZONE = 'America/New_York';
 const STATE_FILE = path.join(__dirname, '..', 'data', 'bump-tool.json');
-const TEXT_FILE = path.join(__dirname, '..', 'data', 'bump-tool-text.txt');
 const CATCH_UP_MINUTES = 30;
 const BUMP_GAP_HOURS = 2;
 
@@ -61,14 +55,6 @@ function saveState(state) {
   atomicWrite(STATE_FILE, state);
 }
 
-function readText() {
-  try {
-    return fs.readFileSync(TEXT_FILE, 'utf8').trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 function bumpButton(disabled = false) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -79,35 +65,10 @@ function bumpButton(disabled = false) {
   );
 }
 
-function panelContent(state) {
-  const s = settings();
-  const lines = [
-    '**Bump tool**',
-    `Forum thread: ${s.forumThreadUrl}`,
-    'One short ping lands here when the next bump is due. Tap **I bumped** after you post one and the ping deletes itself. The bump text is pinned in this thread.',
-  ];
-  if (state.lastBumpedAt) {
-    const last = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds());
-    const due = last + BUMP_GAP_HOURS * 3600;
-    lines.push(`Last bump: <t:${last}:f>`);
-    if (Math.floor(DateTime.now().toSeconds()) >= due) {
-      lines.push('Status: **Bump available now**');
-    } else {
-      lines.push(`Status: Next bump due <t:${due}:R>`);
-    }
-  } else {
-    lines.push('No bump logged yet. Status: **Bump available now**');
-  }
-  return lines.join('\n');
-}
-
-
 // ─── Public panel ─────────────────────────────────────────────────
-// A second home for the same bump state: a public channel where
-// members and Friends of the Clan can log bumps. No reminders and
-// no pings ever post here; the pinned panel just re-renders when a
-// bump is logged or when the ready window flips. Bump counts are
-// shared with the staff thread - one forum thread, one truth.
+// The panel lives in the public Bump channel, where members and
+// Friends of the Clan can log bumps. The pinned panel re-renders
+// when a bump is logged or when the ready window flips.
 function topBumpers(state) {
   const counts = state.counts || {};
   return Object.entries(counts)
@@ -197,29 +158,18 @@ async function ensurePublicPanel(client, state) {
   await refreshPublicPanel(client, loadState());
 }
 
-async function fetchThread(client) {
-  const s = settings();
-  if (!s.threadId) return null;
-  return client.channels.fetch(s.threadId).catch(() => null);
-}
 
-async function refreshPanel(client, state) {
-  if (!state.panelMessageId) return;
-  const thread = await fetchThread(client);
-  if (!thread) return;
-  const msg = await thread.messages.fetch(state.panelMessageId).catch(() => null);
-  if (msg) await msg.edit({ content: panelContent(state), components: [bumpButton()] }).catch(() => {});
-}
 
-// Post the one live reminder and remember it, so no second reminder
-// goes out for the same window and the bump tap can delete it.
+// Post the one live reminder in the Bump channel and remember it,
+// so no second reminder goes out for the same window and the bump
+// tap can delete it.
 async function postReminder(client, state) {
-  const thread = await fetchThread(client);
-  if (!thread) return false;
+  const channel = await fetchPublicChannel(client);
+  if (!channel) return false;
   const pingRoleId = settings().pingRoleId;
   const pingId = process.env.BUMP_TOOL_PING_USER_ID;
   const ping = pingRoleId ? `<@&${pingRoleId}> ` : pingId ? `<@${pingId}> ` : '';
-  const msg = await thread.send({
+  const msg = await channel.send({
     content: `${ping}**Bump time.**`,
     components: [bumpButton()],
   });
@@ -232,62 +182,17 @@ async function postReminder(client, state) {
 // logged from the panel while a reminder is still sitting there.
 async function deleteReminder(client, state) {
   if (!state.reminderMessageId) return;
-  const thread = await fetchThread(client);
-  if (thread) {
-    const msg = await thread.messages.fetch(state.reminderMessageId).catch(() => null);
+  const channel = await fetchPublicChannel(client);
+  if (channel) {
+    const msg = await channel.messages.fetch(state.reminderMessageId).catch(() => null);
     if (msg) await msg.delete().catch(() => {});
   }
   state.reminderMessageId = null;
   saveState(state);
 }
 
-// First run: explain the thread once, pin the panel, and pin the
-// bump text. If the state file was lost, adopt the messages already
-// in the thread instead of posting duplicates.
+// First run: post and pin the public panel if it is missing.
 async function ensureBumpTool(client) {
-  const thread = await fetchThread(client);
-  if (!thread) return;
-  const state = loadState();
-  if (!state.introPosted || !state.panelMessageId) {
-    const recent = await thread.messages.fetch({ limit: 10 }).catch(() => null);
-    if (recent) {
-      for (const msg of recent.values()) {
-        if (!msg.author.bot) continue;
-        if (!state.introPosted && msg.content.startsWith('**Bump tool.**')) state.introPosted = true;
-        if (!state.panelMessageId && msg.content.startsWith('**Bump tool**')) state.panelMessageId = msg.id;
-      }
-      saveState(state);
-    }
-  }
-  if (!state.introPosted) {
-    await thread.send([
-      '**Bump tool.** One short ping lands here when the next bump is due - tap **I bumped** after you post one and the ping deletes itself.',
-      'The bump text is pinned in this thread, ready to copy into the recruitment thread. One bump per slot, and only if the thread has had no message in the last 2 hours.',
-      `Forum thread: ${settings().forumThreadUrl}`,
-    ].join('\n'));
-    state.introPosted = true;
-    saveState(state);
-    console.log('Bump tool: intro posted.');
-  }
-  if (!state.panelMessageId) {
-    const panel = await thread.send({ content: panelContent(state), components: [bumpButton()] });
-    await panel.pin().catch(() => {});
-    state.panelMessageId = panel.id;
-    saveState(state);
-    console.log('Bump tool: panel posted and pinned.');
-  }
-  if (!state.textMessageId) {
-    const text = readText();
-    if (text) {
-      const msg = await thread.send(text);
-      await msg.pin().catch(() => {});
-      state.textMessageId = msg.id;
-      saveState(state);
-      console.log('Bump tool: bump text posted and pinned.');
-    }
-  }
-  // Keep the panel text current across restarts (status line, times).
-  await refreshPanel(client, state);
   await ensurePublicPanel(client, loadState());
 }
 
@@ -296,7 +201,7 @@ async function ensureBumpTool(client) {
 async function checkBumpTool(client) {
   await refreshPublicPanel(client, loadState()).catch(() => {});
   const s = settings();
-  if (!s.threadId || !Array.isArray(s.times)) return;
+  if (!s.publicChannelId || !Array.isArray(s.times)) return;
   const now = DateTime.now().setZone(ZONE);
   if (now.hour < 8) return;
   const state = loadState();
@@ -369,27 +274,17 @@ async function handleBumpButton(interaction) {
   const due = Math.floor(DateTime.fromISO(state.lastBumpedAt).toSeconds()) + BUMP_GAP_HOURS * 3600;
   const tappedId = interaction.message?.id;
   if (tappedId && tappedId === state.reminderMessageId) {
+    // Reminder tap: the tapped message is the reminder itself.
     state.reminderMessageId = null;
     saveState(state);
     await interaction.message.delete().catch(() => {});
-  } else if (tappedId && tappedId === state.publicPanelMessageId) {
-    // Public panel tap: clear the live staff reminder if one is sitting there.
-    await deleteReminder(interaction.client, loadState()).catch(() => {});
-  } else if (tappedId && tappedId !== state.panelMessageId) {
-    // A reminder left over from before this build: it carried the
-    // button too, so a bump tap clears it the same way.
-    await interaction.message.delete().catch(() => {});
   } else {
-    // Panel tap: clear the live reminder if one is sitting there.
+    // Panel tap (or a leftover reminder from an older build): clear
+    // the live reminder if one is sitting there.
     await deleteReminder(interaction.client, loadState()).catch(() => {});
   }
-  await refreshPanel(interaction.client, loadState()).catch(() => {});
   await refreshPublicPanel(interaction.client, loadState()).catch(() => {});
-  if (inPublic) {
-    await interaction.reply({ content: `Logged. Next bump ready <t:${due}:R>.`, ephemeral: true });
-  } else {
-    await interaction.reply({ content: `Logged. Next bump due <t:${due}:R> - I will ping you here then.`, ephemeral: true });
-  }
+  await interaction.reply({ content: `Logged. Next bump ready <t:${due}:R>.`, ephemeral: true });
 }
 
 module.exports = { ensureBumpTool, checkBumpTool, handleBumpButton, publicPanelEmbed, topBumpers };

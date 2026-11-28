@@ -2736,6 +2736,7 @@ function sec(name) {
     ok('bump ping: clan roles panel carries the bumper button and line', Boolean(clanPanel) && clanPanel.buttons.some((b) => b.roleId === '1575970815638241321') && clanPanel.description.includes('recruitment thread needs a bump'));
     const btSrc2 = fs.readFileSync(path.join(__dirname, '..', 'src', 'bump-tool.js'), 'utf8');
     ok('bump ping: reminder prefers the role ping', btSrc2.includes('pingRoleId ? `<@&${pingRoleId}> `'));
+    ok('bump ping: reminder posts in the public channel, no staff thread left', !btSrc2.includes('fetchThread') && btSrc2.includes('const channel = await fetchPublicChannel(client);'));
   }
 
   sec('AF. total level bracket roles');
